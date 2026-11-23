@@ -9,4 +9,12 @@ export function hasAppSecret(request: Request) {
   return request.headers.get("x-app-secret") === env("APP_SECRET");
 }
 
+/** The dashboard's Basic-auth check. In production a password must be set. */
+export function dashboardAccess(authorization: string | null): "ok" | "denied" | "unconfigured" {
+  const password = process.env.DASHBOARD_PASSWORD;
+  if (!password) return process.env.NODE_ENV === "production" ? "unconfigured" : "ok";
+  const given = atob((authorization ?? "").replace(/^Basic /, "")).split(":").slice(1).join(":");
+  return given === password ? "ok" : "denied";
+}
+
 export const DEMO_MODE = process.env.DEMO_MODE === "1";

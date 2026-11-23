@@ -12,7 +12,11 @@ export default async function Home() {
   await connection(); // read the files on every request
   const [residents, calls] = await Promise.all([listResidents(), listCalls()]);
   const rows = residents
-    .map((resident) => ({ resident, call: calls.find((c) => c.resident_id === resident.id) }))
+    .map((resident) => {
+      const own = calls.filter((c) => c.resident_id === resident.id);
+      // A later green call must not hide an alert nobody has handled yet.
+      return { resident, call: own.find((c) => c.risk !== "green" && !c.handled) ?? own[0] };
+    })
     // Unhandled red first, then yellow, then green and not-yet-called.
     .sort((a, b) => rank(a.call) - rank(b.call));
   const weather = residents[0] && describeWeather(await getWeather(residents[0].amedas_station));

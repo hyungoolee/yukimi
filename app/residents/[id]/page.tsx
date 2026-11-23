@@ -25,11 +25,10 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           type="tel"
           defaultValue={resident.phone}
           placeholder="+819012345678"
-          pattern="\+[0-9]{8,15}"
           className="w-48 rounded border border-zinc-300 px-2 py-1"
         />
         <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">保存</button>
-        <span className="text-zinc-500">国番号から（例：+81…）</span>
+        <span className="text-zinc-500">090… または +81…</span>
       </form>
 
       <h2 className="mt-8 font-medium">通話の記録</h2>

@@ -17,6 +17,7 @@ export async function placeCall(resident: Resident, attempt = 1) {
       conversation_initiation_client_data: {
         dynamic_variables: {
           resident_id: resident.id,
+          attempt: String(attempt),
           name: resident.name,
           introducer: resident.introducer,
           facts: resident.facts.join("、"),
