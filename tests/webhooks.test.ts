@@ -5,6 +5,7 @@ import type { Extraction } from "@/lib/types";
 
 // The model call is replaced; everything else (routes, rules, store, LINE requests) is real.
 const extraction: Extraction = {
+  answered_by_person: true,
   summary: "雪で玄関が開かず、きのう氷ですべって転び腰が痛い。暖房・食料・薬は足りている。",
   notes: { mood: "落ち着いている", health: "腰の痛み。ゆっくり歩ける", winter: "玄関が雪で開かない。暖房は動いている", needs: ["除雪"] },
   signals: {
@@ -18,7 +19,20 @@ vi.mock("@/lib/extract", () => ({ extract }));
 const placeCall = vi.fn(async () => "conv_retry");
 vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall }));
 
-const { POST: elevenlabs } = await import("@/app/api/webhooks/elevenlabs/route");
+// after() needs a real request; here its work is collected and awaited by the test.
+const background: Promise<unknown>[] = [];
+vi.mock("next/server", async (original) => ({
+  ...(await original<typeof import("next/server")>()),
+  after: (work: () => Promise<unknown>) => void background.push(work()),
+}));
+
+const { POST: elevenlabsRoute } = await import("@/app/api/webhooks/elevenlabs/route");
+const { POST: trigger } = await import("@/app/api/calls/trigger/route");
+const elevenlabs = async (request: Request) => {
+  const res = await elevenlabsRoute(request);
+  await Promise.all(background.splice(0));
+  return res;
+};
 const { POST: line } = await import("@/app/api/webhooks/line/route");
 const { POST: emergency } = await import("@/app/api/tools/emergency/route");
 const store = await import("@/lib/store");
@@ -46,7 +60,8 @@ function signedLine(events: object[]) {
 
 const say = (userId: string, text: string) =>
   line(signedLine([{ type: "message", replyToken: "r", source: { userId }, message: { type: "text", text } }]));
-const tap = (data: string) => line(signedLine([{ type: "postback", source: { userId: "U_family" }, postback: { data } }]));
+const tap = (data: string, userId = "U_family") =>
+  line(signedLine([{ type: "postback", source: { userId }, postback: { data } }]));
 const pushes = () => lineCalls.filter((c) => c.url.endsWith("/push")).map((c) => c.body);
 
 beforeEach(() => {
@@ -61,9 +76,13 @@ beforeEach(() => {
 
 describe("LINE roles", () => {
   it("registers teammates for every resident", async () => {
-    await say("U_helper", "民生委員");
-    await say("U_family", "家族");
-    await say("U_volunteer", "除雪");
+    await say("U_stranger", "家族");
+    await say("U_stranger", "家族 0000");
+    expect((await store.getResident("sato"))!.second_contact.line_id).toBe("");
+
+    await say("U_helper", "民生委員 1234");
+    await say("U_family", "家族 1234");
+    await say("U_volunteer", "除雪 1234");
     const sato = await store.getResident("sato");
     expect([sato!.helper.line_id, sato!.second_contact.line_id, sato!.snow_volunteer.line_id])
       .toEqual(["U_helper", "U_family", "U_volunteer"]);
@@ -103,17 +122,37 @@ describe("after a call", () => {
     expect(sato!.facts).toContain("健太の模試はよくできた");
   });
 
-  it("records the volunteer accepting the snow request", async () => {
-    await tap("snow_accept:conv_slip");
+  it("records the volunteer accepting the snow request, and nobody else", async () => {
+    await tap("snow_accept:conv_slip", "U_stranger");
+    expect((await store.getCall("conv_slip"))!.snow_accepted).toBeUndefined();
+    await tap("snow_accept:conv_slip", "U_volunteer");
     expect((await store.getCall("conv_slip"))!.snow_accepted).toBe(true);
   });
 
-  it("puts the call on the visit list when extraction fails", async () => {
+  it("puts the call on the visit list and tells the helper when extraction fails", async () => {
     extract.mockRejectedValueOnce(new Error("model unavailable"));
     const body = fixture.replace("conv_slip", "conv_broken").replace('"resident_id": "sato"', '"resident_id": "suzuki"');
     await elevenlabs(signedElevenLabs(body));
     expect(await store.getCall("conv_broken")).toMatchObject({ risk: "yellow", resident_id: "suzuki" });
-    expect(pushes()).toEqual([]);
+    expect(pushes().map((p) => p.to)).toEqual(["U_helper"]);
+  });
+
+  it("still records the call when LINE is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network down"); }));
+    const body = fixture.replace("conv_slip", "conv_offline").replace('"resident_id": "sato"', '"resident_id": "suzuki"');
+    await elevenlabs(signedElevenLabs(body));
+    const call = await store.getCall("conv_offline");
+    expect(call).toMatchObject({ risk: "red" });
+    expect(call!.actions.every((a) => !a.sent)).toBe(true);
+  });
+
+  it("treats a voicemail greeting as a missed call", async () => {
+    extract.mockResolvedValueOnce({ ...extraction, answered_by_person: false });
+    const body = fixture.replace("conv_slip", "conv_voicemail").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
+    await elevenlabs(signedElevenLabs(body));
+    expect(await store.getCall("conv_voicemail")).toBeNull();
+    expect(await store.getLadder("takahashi")).toEqual({ stage: "retry" });
+    await store.clearLadder("takahashi");
   });
 });
 
@@ -125,7 +164,7 @@ describe("in-call emergency", () => {
     expect((await emergency(request({ resident_id: "takahashi", kind: "emergency" }, "nope"))).status).toBe(401);
   });
 
-  it("alerts at once, returns the fixed wording, and is not alerted twice after the call", async () => {
+  it("alerts at once, returns the fixed wording, and the after-call alert still goes out", async () => {
     const res = await emergency(request({ resident_id: "takahashi", kind: "emergency", detail: "胸が苦しい" }));
     expect((await res.json()).say_exactly).toContain("119番");
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
@@ -136,7 +175,7 @@ describe("in-call emergency", () => {
     const body = fixture.replace("conv_slip", "conv_chest").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
     await elevenlabs(signedElevenLabs(body));
     expect((await store.getCall("conv_chest"))!.risk).toBe("red");
-    expect(pushes()).toEqual([]);
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
   });
 });
 
@@ -151,7 +190,8 @@ describe("missed-call ladder", () => {
     expect(await store.getLadder("suzuki")).toEqual({ stage: "retry" });
 
     await vi.advanceTimersByTimeAsync(20_000);
-    expect(placeCall).toHaveBeenCalledWith(expect.objectContaining({ id: "suzuki" }), 2);
+    // The timer reads the ladder file before it calls.
+    await vi.waitFor(() => expect(placeCall).toHaveBeenCalledWith(expect.objectContaining({ id: "suzuki" }), 2));
 
     await store.savePending("conv_a2", { resident_id: "suzuki", attempt: 2 });
     await failure("conv_a2");
@@ -166,9 +206,32 @@ describe("missed-call ladder", () => {
     expect(await store.getLadder("suzuki")).toBeNull();
   });
 
-  it("logs green when the second contact confirms the resident is OK", async () => {
+  it("skips the retry when the resident was reached in the meantime", async () => {
+    vi.useFakeTimers();
+    await store.savePending("conv_d1", { resident_id: "takahashi", attempt: 1 });
+    await failure("conv_d1");
+    await store.clearLadder("takahashi");
+    await vi.advanceTimersByTimeAsync(20_000);
+    vi.useRealTimers();
+    await new Promise((resolve) => setTimeout(resolve, 100)); // let the timer's file read finish
+    expect(placeCall).not.toHaveBeenCalled();
+  });
+
+  it("starts the ladder when a call cannot be placed", async () => {
+    placeCall.mockRejectedValueOnce(new Error("ElevenLabs down"));
+    const res = await trigger(new Request("http://test", {
+      method: "POST", body: JSON.stringify({ resident_id: "takahashi" }), headers: { "x-app-secret": "test-app-secret" },
+    }));
+    expect(res.status).toBe(502);
+    expect(await store.getLadder("takahashi")).toEqual({ stage: "retry" });
+    await store.clearLadder("takahashi");
+  });
+
+  it("logs green when the second contact confirms the resident is OK, ignoring strangers", async () => {
     await store.savePending("conv_b2", { resident_id: "sato", attempt: 2 });
     await failure("conv_b2");
+    await tap("ok:sato", "U_stranger");
+    expect(await store.getLadder("sato")).toEqual({ stage: "second_contact" });
     await tap("ok:sato");
     expect((await store.listCalls("sato"))[0]).toMatchObject({ kind: "confirmed_ok", risk: "green" });
   });

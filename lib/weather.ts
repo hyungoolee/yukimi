@@ -8,13 +8,19 @@ async function fetchLive(station: string): Promise<Weather> {
   const opts = { signal: AbortSignal.timeout(5000) };
   const latest = (await (await fetch(`${JMA}/latest_time.txt`, opts)).text()).trim();
   const stamp = latest.slice(0, 19).replace(/[-T:]/g, "");
-  const obs = (await (await fetch(`${JMA}/map/${stamp}.json`, opts)).json())[station];
+  // Point files cover three hours each and carry the day's minimum so far.
+  const block = String(Math.floor(Number(stamp.slice(8, 10)) / 3) * 3).padStart(2, "0");
+  const point = await (await fetch(`${JMA}/point/${station}/${stamp.slice(0, 8)}_${block}.json`, opts)).json();
+  const obs = point[stamp];
+  const low = obs?.minTemp?.[0];
+  // A missing reading must not look like a mild day: fall back to the saved data instead.
+  if (typeof low !== "number") throw new Error(`No minimum temperature for station ${station}`);
   return {
     station,
     date: latest.slice(0, 10),
     snowfall_24h_cm: obs.snow24h?.[0] ?? 0,
     snow_depth_cm: obs.snow?.[0] ?? 0,
-    low_c: obs.temp[0],
+    low_c: low,
   };
 }
 
@@ -34,7 +40,7 @@ export const COLD_C = -5;
 
 /** What the agent is told about this morning, and whether to run the winter check. */
 export function describeWeather(w: Weather) {
-  const text = `今朝の気温は${w.low_c}℃、この24時間の降雪は${w.snowfall_24h_cm}センチ、積雪は${w.snow_depth_cm}センチ`;
+  const text = `今朝の最低気温は${w.low_c}℃、この24時間の降雪は${w.snowfall_24h_cm}センチ、積雪は${w.snow_depth_cm}センチ`;
   const winter = w.snowfall_24h_cm >= HEAVY_SNOW_CM || w.low_c <= COLD_C;
   return {
     weather: text,

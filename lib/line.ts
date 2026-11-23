@@ -8,13 +8,18 @@ async function send(path: string, body: object): Promise<boolean> {
     console.warn("LINE_CHANNEL_ACCESS_TOKEN is not set; message not sent", JSON.stringify(body));
     return false;
   }
-  const res = await fetch(`${API}/${path}`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) console.error(`LINE ${path} failed (${res.status})`, await res.text());
-  return res.ok;
+  try {
+    const res = await fetch(`${API}/${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) console.error(`LINE ${path} failed (${res.status})`, await res.text());
+    return res.ok;
+  } catch (e) {
+    console.error(`LINE ${path} failed`, e);
+    return false;
+  }
 }
 
 /** Returns false when the message could not be sent (no LINE ID, no token, or LINE refused it). */

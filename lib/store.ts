@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { CallRecord, Resident, Weather } from "./types";
 
@@ -19,12 +19,19 @@ async function seed() {
 
 async function read<T>(dir: string, id: string): Promise<T | null> {
   await ensureSeeded();
-  return readFile(file(dir, id), "utf8").then((s) => JSON.parse(s) as T, () => null);
+  try {
+    return JSON.parse(await readFile(file(dir, id), "utf8")) as T;
+  } catch {
+    return null;
+  }
 }
 
 async function write(dir: string, id: string, data: unknown) {
   await mkdir(path.join(DATA_DIR, dir), { recursive: true });
-  await writeFile(file(dir, id), JSON.stringify(data, null, 2));
+  // Write then rename, so a reader never sees a half-written file.
+  const tmp = `${file(dir, id)}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, JSON.stringify(data, null, 2));
+  await rename(tmp, file(dir, id));
 }
 
 async function readAll<T>(dir: string): Promise<T[]> {

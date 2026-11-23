@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Extraction, Resident, Turn } from "./types";
 
 const ExtractionSchema = z.object({
+  answered_by_person: z.boolean(),
   summary: z.string(),
   notes: z.object({
     mood: z.string(),
@@ -28,6 +29,8 @@ const ExtractionSchema = z.object({
 });
 
 const SYSTEM = `You read the transcript of a daily check-in phone call between an AI caller ("agent") and an older person living alone in Hokkaido ("user"), and report what the resident said. A welfare volunteer reads your notes to decide whom to visit, and fixed rules turn your signals into alerts, so a missed signal means nobody goes to help.
+
+Set answered_by_person to false when the "user" side is a voicemail or answering-machine greeting (留守番電話), a recorded announcement, or someone other than the resident who says the resident is not there. Otherwise set it to true.
 
 Write summary, notes and new_facts in Japanese. summary is one or two sentences the caller can refer to tomorrow. new_facts are lasting personal details not already in the known facts (family, hobbies, health conditions, routines); leave it empty if there are none.
 
