@@ -1,0 +1,15 @@
+{
+  "id": "suzuki",
+  "name": "鈴木",
+  "phone": "",
+  "call_time": "09:30",
+  "introducer": "社協の木村さん",
+  "second_contact": { "name": "隣の高田さん", "phone": "", "line_id": "" },
+  "helper": { "name": "民生委員 田中", "line_id": "" },
+  "snow_volunteer": { "name": "山本", "line_id": "" },
+  "amedas_station": "岩見沢",
+  "facts": ["元漁師", "猫のタマと暮らしている", "週に一度デイサービスに通う"],
+  "recent_calls": [
+    { "date": "2026-11-25", "summary": "元気。タマが寒がって布団に入ってくると笑っていた。" }
+  ]
+}
