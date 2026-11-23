@@ -1,0 +1,22 @@
+{
+  "type": "post_call_transcription",
+  "event_timestamp": 1795700000,
+  "data": {
+    "agent_id": "agent_test",
+    "conversation_id": "conv_slip",
+    "status": "done",
+    "conversation_initiation_client_data": { "dynamic_variables": { "resident_id": "sato", "name": "佐藤" } },
+    "transcript": [
+      { "role": "agent", "message": "もしもし、佐藤さんですか。おはようございます。娘のゆきさんからご紹介いただいた、見守り電話です。" },
+      { "role": "user", "message": "はい、おはようございます。" },
+      { "role": "agent", "message": "昨夜は30センチ積もりましたね。玄関は出られますか？" },
+      { "role": "user", "message": "それがね、雪で玄関の戸が開かないの。きのう雪かきしようとして、氷ですべって転んでしまって。" },
+      { "role": "agent", "message": "転んでしまったんですね。どこか痛いところはありますか？" },
+      { "role": "user", "message": "腰が痛くてね。歩けるけど、ゆっくりだね。" },
+      { "role": "agent", "message": "暖房はついていますか？食べるものとお薬は足りていますか？" },
+      { "role": "user", "message": "ストーブはついてるよ。ごはんもあるし、薬もあるよ。" },
+      { "role": "agent", "message": "除雪のボランティアさんにお願いしておきますね。健太さんの模試はどうでしたか？" },
+      { "role": "user", "message": "よくできたって、きのう電話くれたよ。" }
+    ]
+  }
+}
