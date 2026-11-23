@@ -33,8 +33,10 @@ export async function missed(residentId: string, attempt: number) {
 
   if (attempt === 1) {
     // A ladder is already running (an extra manual call, or a double click): let it finish, don't restart it.
-    if (await getLadder(residentId)) return;
-    await saveLadder(residentId, { stage: "retry" });
+    // Only while it is fresh, though: a file left behind by a restart must not block alerts for good.
+    const active = await getLadder(residentId);
+    if (active && Date.now() - active.at < RETRY_MS + CONFIRM_MS + 60_000) return;
+    await saveLadder(residentId, { stage: "retry", at: Date.now() });
     later(RETRY_MS, async () => {
       // Someone may have reached the resident in the meantime.
       if ((await getLadder(residentId))?.stage !== "retry") return;
@@ -44,7 +46,7 @@ export async function missed(residentId: string, attempt: number) {
     return;
   }
 
-  await saveLadder(residentId, { stage: "second_contact" });
+  await saveLadder(residentId, { stage: "second_contact", at: Date.now() });
   await push(resident.second_contact.line_id, [
     buttons(`${resident.name}さんが見守りの電話に2回出ませんでした。今日、ご様子を確認できていますか？`, [
       { label: "無事です", data: `ok:${residentId}` },

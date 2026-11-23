@@ -70,7 +70,7 @@ export const getPending = (conversationId: string) => read<Pending>("pending", c
 export const clearPending = (conversationId: string) => rm(file("pending", conversationId), { force: true });
 
 // Where a resident is on the missed-call ladder.
-export type LadderState = { stage: "retry" | "second_contact" };
+export type LadderState = { stage: "retry" | "second_contact"; at: number };
 export const getLadder = (residentId: string) => read<LadderState>("ladder", residentId);
 export const saveLadder = (residentId: string, s: LadderState) => write("ladder", residentId, s);
 export const clearLadder = (residentId: string) => rm(file("ladder", residentId), { force: true });
