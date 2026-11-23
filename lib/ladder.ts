@@ -9,6 +9,9 @@ import type { CallRecord, Resident } from "./types";
 const RETRY_MS = DEMO_MODE ? 20_000 : 30 * 60_000;
 const CONFIRM_MS = DEMO_MODE ? 20_000 : 10 * 60_000;
 
+const later = (ms: number, step: () => Promise<void>) =>
+  setTimeout(() => step().catch((e) => console.error("Ladder step failed", e)), ms);
+
 const record = (resident: Resident, fields: Pick<CallRecord, "kind" | "risk" | "reasons" | "actions">) =>
   saveCall({ id: `${fields.kind}-${Date.now()}`, resident_id: resident.id, at: new Date().toISOString(), ...fields });
 
@@ -29,13 +32,15 @@ export async function missed(residentId: string, attempt: number) {
   if (!resident) return;
 
   if (attempt === 1) {
+    // A ladder is already running (an extra manual call, or a double click): let it finish, don't restart it.
+    if (await getLadder(residentId)) return;
     await saveLadder(residentId, { stage: "retry" });
-    setTimeout(async () => {
+    later(RETRY_MS, async () => {
       // Someone may have reached the resident in the meantime.
       if ((await getLadder(residentId))?.stage !== "retry") return;
       // Re-read: the phone number may have been corrected since the first attempt.
-      placeCall((await getResident(residentId)) ?? resident, 2).catch(() => missed(residentId, 2));
-    }, RETRY_MS);
+      await placeCall((await getResident(residentId)) ?? resident, 2).catch(() => missed(residentId, 2));
+    });
     return;
   }
 
@@ -46,11 +51,11 @@ export async function missed(residentId: string, attempt: number) {
       { label: "確認できません", data: `ng:${residentId}` },
     ]),
   ]);
-  setTimeout(async () => {
+  later(CONFIRM_MS, async () => {
     if ((await getLadder(residentId))?.stage === "second_contact") {
       await redAlert(resident, "電話に2回応答なし。第二連絡先からも返事なし");
     }
-  }, CONFIRM_MS);
+  });
 }
 
 /** The second contact tapped a button on the LINE check. */

@@ -28,13 +28,16 @@ vi.mock("next/server", async (original) => ({
 
 const { POST: elevenlabsRoute } = await import("@/app/api/webhooks/elevenlabs/route");
 const { POST: trigger } = await import("@/app/api/calls/trigger/route");
-const elevenlabs = async (request: Request) => {
-  const res = await elevenlabsRoute(request);
+const settled = (route: (request: Request) => Promise<Response>) => async (request: Request) => {
+  const res = await route(request);
   await Promise.all(background.splice(0));
   return res;
 };
+const elevenlabs = settled(elevenlabsRoute);
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 const { POST: line } = await import("@/app/api/webhooks/line/route");
-const { POST: emergency } = await import("@/app/api/tools/emergency/route");
+const { POST: emergencyRoute } = await import("@/app/api/tools/emergency/route");
+const emergency = settled(emergencyRoute);
 const store = await import("@/lib/store");
 
 const fixture = readFileSync("tests/fixtures/slip-on-ice.json", "utf8");
@@ -80,7 +83,7 @@ describe("LINE roles", () => {
     await say("U_stranger", "家族 0000");
     expect((await store.getResident("sato"))!.second_contact.line_id).toBe("");
 
-    await say("U_helper", "民生委員 1234");
+    await say("U_helper", "民生委員　１２３４"); // full-width space and digits, as a Japanese keyboard types them
     await say("U_family", "家族 1234");
     await say("U_volunteer", "除雪 1234");
     const sato = await store.getResident("sato");
@@ -179,6 +182,23 @@ describe("in-call emergency", () => {
   });
 });
 
+describe("in-call emergency with a bad resident ID", () => {
+  const request = (body: object) =>
+    new Request("http://test", { method: "POST", body: JSON.stringify(body), headers: { "x-app-secret": "test-app-secret" } });
+
+  it("still returns the wording and tells every helper when the resident is unknown", async () => {
+    const res = await emergency(request({ resident_id: "だれか", kind: "self_harm", detail: "もう生きていたくない" }));
+    expect((await res.json()).say_exactly).toContain("よりそいホットライン");
+    expect(pushes().map((p) => p.to)).toEqual(["U_helper"]);
+    expect(pushes()[0].messages[0].text).toContain("利用者を特定できませんでした");
+  });
+
+  it("finds the resident by name when the ID is their name", async () => {
+    await emergency(request({ resident_id: "高橋さん", kind: "emergency", detail: "倒れた" }));
+    expect((await store.listCalls("takahashi"))[0]).toMatchObject({ kind: "emergency", risk: "red" });
+  });
+});
+
 describe("missed-call ladder", () => {
   const failure = (conversationId: string) =>
     elevenlabs(signedElevenLabs(JSON.stringify({ type: "call_initiation_failure", data: { conversation_id: conversationId } })));
@@ -246,6 +266,30 @@ describe("missed-call ladder", () => {
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
   });
 
+  it("does not restart a ladder that is already waiting on the second contact", async () => {
+    await store.savePending("conv_e2", { resident_id: "suzuki", attempt: 2 });
+    await failure("conv_e2");
+    expect(await store.getLadder("suzuki")).toEqual({ stage: "second_contact" });
+    await store.savePending("conv_e3", { resident_id: "suzuki", attempt: 1 }); // someone presses "call now"
+    await failure("conv_e3");
+    expect(await store.getLadder("suzuki")).toEqual({ stage: "second_contact" });
+    await store.clearLadder("suzuki");
+  });
+
+  it("reads the attempt from the call's variables, and ignores other event types", async () => {
+    await store.savePending("conv_f2", { resident_id: "suzuki", attempt: 2 });
+    await elevenlabs(signedElevenLabs(JSON.stringify({ type: "post_call_audio", data: { conversation_id: "conv_f2" } })));
+    expect(await store.getPending("conv_f2")).toEqual({ resident_id: "suzuki", attempt: 2 });
+    await store.clearPending("conv_f2");
+
+    await elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "call_initiation_failure",
+      data: { conversation_id: "conv_f9", conversation_initiation_client_data: { dynamic_variables: { resident_id: "suzuki", attempt: "2" } } },
+    })));
+    expect(await store.getLadder("suzuki")).toEqual({ stage: "second_contact" });
+    await store.clearLadder("suzuki");
+  });
+
   it("treats a call where nobody spoke as missed", async () => {
     const silent = JSON.stringify({
       type: "post_call_transcription",
@@ -272,8 +316,12 @@ describe("phone number", () => {
     expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
     await savePhone(form({ resident_id: "takahashi", phone: "+81 090 1234 5678" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
-    await savePhone(form({ resident_id: "takahashi", phone: "090-1234-5678" }));
-    expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
+    await savePhone(form({ resident_id: "takahashi", phone: "080-1111-2222" }));
+    expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
+    await savePhone(form({ resident_id: "takahashi", phone: "not a number" }));
+    expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
+    await savePhone(form({ resident_id: "../calls/conv_slip", phone: "+819012345678" }));
+    expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
   });
 
   it("refuses to trigger a call for a resident with no number", async () => {
