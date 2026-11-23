@@ -270,6 +270,8 @@ describe("phone number", () => {
     const { savePhone } = await import("@/app/actions");
     await savePhone(form({ resident_id: "takahashi", phone: "+81 90-1234-5678" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
+    await savePhone(form({ resident_id: "takahashi", phone: "+81 090 1234 5678" }));
+    expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
     await savePhone(form({ resident_id: "takahashi", phone: "090-1234-5678" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
   });

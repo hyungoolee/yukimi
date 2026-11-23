@@ -13,7 +13,7 @@ pnpm dev
 
 ## Setup checklist
 
-Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set every value from `.env` on the host too, except `DATA_DIR`. `APP_URL` is the public address with `https://` and no trailing slash.
+Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set every value from `.env` on the host too, except `DATA_DIR`. Always set `DASHBOARD_PASSWORD` on a public deploy: without it, anyone with the address can change phone numbers and place calls. `APP_URL` is the public address with `https://` and no trailing slash.
 
 1. **ElevenLabs:** create an API key and choose a Japanese voice (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`).
 2. **Post-call webhook:** in ElevenLabs, create one pointing at `<APP_URL>/api/webhooks/elevenlabs` (`ELEVENLABS_WEBHOOK_ID`, `ELEVENLABS_WEBHOOK_SECRET`).
