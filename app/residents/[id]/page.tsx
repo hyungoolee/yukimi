@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
+import { savePhone } from "../../actions";
 import { japanTime, RiskBadge } from "../../ui";
 
 export default async function ResidentPage({ params }: PageProps<"/residents/[id]">) {
@@ -14,6 +15,22 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
       <Link href="/" className="text-sm text-zinc-500 hover:underline">← 見守りリスト</Link>
       <h1 className="mt-2 text-2xl font-semibold">{resident.name}さん</h1>
       <p className="mt-1 text-sm text-zinc-600">{resident.facts.join("、")}</p>
+
+      <form action={savePhone} className="mt-4 flex items-center gap-2 text-sm">
+        <input type="hidden" name="resident_id" value={resident.id} />
+        <label htmlFor="phone" className="text-zinc-500">電話番号</label>
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          defaultValue={resident.phone}
+          placeholder="+819012345678"
+          pattern="\+[0-9]{8,15}"
+          className="w-48 rounded border border-zinc-300 px-2 py-1"
+        />
+        <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">保存</button>
+        <span className="text-zinc-500">国番号から（例：+81…）</span>
+      </form>
 
       <h2 className="mt-8 font-medium">通話の記録</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">まだ通話がありません</p>}
