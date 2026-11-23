@@ -7,7 +7,10 @@ const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "s
 const file = (dir: string, id: string) => path.join(DATA_DIR, dir, `${id}.json`);
 
 // First run on an empty disk: copy the fictional seed residents in.
-async function ensureSeeded() {
+// One shared promise, so parallel reads on a fresh disk don't seed twice.
+let seeded: Promise<void> | undefined;
+const ensureSeeded = () => (seeded ??= seed());
+async function seed() {
   const existing = await readdir(path.join(DATA_DIR, "residents")).catch(() => []);
   if (existing.length > 0) return;
   await mkdir(DATA_DIR, { recursive: true });
