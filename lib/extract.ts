@@ -57,7 +57,7 @@ export async function extract(resident: Resident, transcript: Turn[]): Promise<E
     messages: [
       {
         role: "user",
-        content: `Known facts about ${resident.name}さん: ${resident.facts.join("、")}\n\nTranscript:\n${transcript
+        content: `Known facts about ${resident.name}さん: ${[`紹介者は${resident.introducer}`, ...resident.facts].join("、")}\n\nTranscript:\n${transcript
           .map((t) => `${t.role}: ${t.message}`)
           .join("\n")}`,
       },

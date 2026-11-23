@@ -9,6 +9,7 @@ export async function POST(request: Request) {
   const { resident_id } = await request.json();
   const resident = await getResident(resident_id);
   if (!resident) return new Response("Unknown resident", { status: 404 });
+  if (!resident.phone) return new Response("Resident has no phone number", { status: 400 });
   try {
     return Response.json({ conversation_id: await placeCall(resident) });
   } catch (e) {

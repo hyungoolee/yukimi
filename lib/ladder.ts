@@ -33,7 +33,8 @@ export async function missed(residentId: string, attempt: number) {
     setTimeout(async () => {
       // Someone may have reached the resident in the meantime.
       if ((await getLadder(residentId))?.stage !== "retry") return;
-      placeCall(resident, 2).catch(() => missed(residentId, 2));
+      // Re-read: the phone number may have been corrected since the first attempt.
+      placeCall((await getResident(residentId)) ?? resident, 2).catch(() => missed(residentId, 2));
     }, RETRY_MS);
     return;
   }
