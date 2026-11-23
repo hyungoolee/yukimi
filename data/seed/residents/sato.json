@@ -7,7 +7,7 @@
   "second_contact": { "name": "ゆき", "phone": "", "line_id": "" },
   "helper": { "name": "民生委員 田中", "line_id": "" },
   "snow_volunteer": { "name": "山本", "line_id": "" },
-  "amedas_station": "岩見沢",
+  "amedas_station": "15356",
   "facts": ["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"],
   "recent_calls": [
     { "date": "2026-11-25", "summary": "元気。孫の健太の模試の結果を気にしていた。庭のバラの雪囲いを済ませた。" },
