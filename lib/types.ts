@@ -40,6 +40,7 @@ export type Signals = {
 };
 
 export type Extraction = {
+  answered_by_person: boolean;
   summary: string;
   notes: { mood: string; health: string; winter: string; needs: string[] };
   signals: Signals;

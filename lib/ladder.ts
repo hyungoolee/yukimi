@@ -30,7 +30,11 @@ export async function missed(residentId: string, attempt: number) {
 
   if (attempt === 1) {
     await saveLadder(residentId, { stage: "retry" });
-    setTimeout(() => placeCall(resident, 2).catch(() => missed(residentId, 2)), RETRY_MS);
+    setTimeout(async () => {
+      // Someone may have reached the resident in the meantime.
+      if ((await getLadder(residentId))?.stage !== "retry") return;
+      placeCall(resident, 2).catch(() => missed(residentId, 2));
+    }, RETRY_MS);
     return;
   }
 
@@ -49,9 +53,10 @@ export async function missed(residentId: string, attempt: number) {
 }
 
 /** The second contact tapped a button on the LINE check. */
-export async function secondContactAnswered(residentId: string, ok: boolean) {
+export async function secondContactAnswered(residentId: string, ok: boolean, lineUserId: string | undefined) {
   const resident = await getResident(residentId);
-  if (!resident || (await getLadder(residentId))?.stage !== "second_contact") return;
+  if (!resident || !lineUserId || resident.second_contact.line_id !== lineUserId) return;
+  if ((await getLadder(residentId))?.stage !== "second_contact") return;
   if (!ok) return redAlert(resident, "電話に2回応答なし。第二連絡先も確認できず");
   await clearLadder(residentId);
   await record(resident, {
