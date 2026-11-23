@@ -154,7 +154,7 @@ describe("after a call", () => {
     const body = fixture.replace("conv_slip", "conv_voicemail").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
     await elevenlabs(signedElevenLabs(body));
     expect(await store.getCall("conv_voicemail")).toBeNull();
-    expect(await store.getLadder("takahashi")).toEqual({ stage: "retry" });
+    expect(await store.getLadder("takahashi")).toMatchObject({ stage: "retry" });
     await store.clearLadder("takahashi");
   });
 });
@@ -207,7 +207,7 @@ describe("missed-call ladder", () => {
     vi.useFakeTimers();
     await store.savePending("conv_a1", { resident_id: "suzuki", attempt: 1 });
     await failure("conv_a1");
-    expect(await store.getLadder("suzuki")).toEqual({ stage: "retry" });
+    expect(await store.getLadder("suzuki")).toMatchObject({ stage: "retry" });
 
     await vi.advanceTimersByTimeAsync(20_000);
     // The timer reads the ladder file before it calls.
@@ -244,7 +244,7 @@ describe("missed-call ladder", () => {
       method: "POST", body: JSON.stringify({ resident_id: "takahashi" }), headers: { "x-app-secret": "test-app-secret" },
     }));
     expect(res.status).toBe(502);
-    expect(await store.getLadder("takahashi")).toEqual({ stage: "retry" });
+    expect(await store.getLadder("takahashi")).toMatchObject({ stage: "retry" });
     await store.clearLadder("takahashi");
   });
 
@@ -252,7 +252,7 @@ describe("missed-call ladder", () => {
     await store.savePending("conv_b2", { resident_id: "sato", attempt: 2 });
     await failure("conv_b2");
     await tap("ok:sato", "U_stranger");
-    expect(await store.getLadder("sato")).toEqual({ stage: "second_contact" });
+    expect(await store.getLadder("sato")).toMatchObject({ stage: "second_contact" });
     await tap("ok:sato");
     expect((await store.listCalls("sato"))[0]).toMatchObject({ kind: "confirmed_ok", risk: "green" });
   });
@@ -269,10 +269,18 @@ describe("missed-call ladder", () => {
   it("does not restart a ladder that is already waiting on the second contact", async () => {
     await store.savePending("conv_e2", { resident_id: "suzuki", attempt: 2 });
     await failure("conv_e2");
-    expect(await store.getLadder("suzuki")).toEqual({ stage: "second_contact" });
+    expect(await store.getLadder("suzuki")).toMatchObject({ stage: "second_contact" });
     await store.savePending("conv_e3", { resident_id: "suzuki", attempt: 1 }); // someone presses "call now"
     await failure("conv_e3");
-    expect(await store.getLadder("suzuki")).toEqual({ stage: "second_contact" });
+    expect(await store.getLadder("suzuki")).toMatchObject({ stage: "second_contact" });
+    await store.clearLadder("suzuki");
+  });
+
+  it("restarts over a stale ladder file left by a server restart", async () => {
+    await store.saveLadder("suzuki", { stage: "second_contact", at: Date.now() - 2 * 60 * 60 * 1000 });
+    await store.savePending("conv_g1", { resident_id: "suzuki", attempt: 1 });
+    await failure("conv_g1");
+    expect(await store.getLadder("suzuki")).toMatchObject({ stage: "retry" });
     await store.clearLadder("suzuki");
   });
 
@@ -286,7 +294,7 @@ describe("missed-call ladder", () => {
       type: "call_initiation_failure",
       data: { conversation_id: "conv_f9", conversation_initiation_client_data: { dynamic_variables: { resident_id: "suzuki", attempt: "2" } } },
     })));
-    expect(await store.getLadder("suzuki")).toEqual({ stage: "second_contact" });
+    expect(await store.getLadder("suzuki")).toMatchObject({ stage: "second_contact" });
     await store.clearLadder("suzuki");
   });
 
@@ -297,7 +305,7 @@ describe("missed-call ladder", () => {
         transcript: [{ role: "agent", message: "もしもし、高橋さんですか。" }] },
     });
     await elevenlabs(signedElevenLabs(silent));
-    expect(await store.getLadder("takahashi")).toEqual({ stage: "retry" });
+    expect(await store.getLadder("takahashi")).toMatchObject({ stage: "retry" });
     expect(extract).not.toHaveBeenCalled();
   });
 });
@@ -319,6 +327,11 @@ describe("phone number", () => {
     await savePhone(form({ resident_id: "takahashi", phone: "080-1111-2222" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
     await savePhone(form({ resident_id: "takahashi", phone: "not a number" }));
+    await savePhone(form({ resident_id: "takahashi", phone: "010-1234-5678" })); // a Korean mobile in local format
+    expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
+    await savePhone(form({ resident_id: "takahashi", phone: "+82 10-1234-5678" }));
+    expect((await store.getResident("takahashi"))!.phone).toBe("+821012345678");
+    await savePhone(form({ resident_id: "takahashi", phone: "080-1111-2222" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
     await savePhone(form({ resident_id: "../calls/conv_slip", phone: "+819012345678" }));
     expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);

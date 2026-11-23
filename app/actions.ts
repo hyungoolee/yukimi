@@ -35,11 +35,12 @@ export async function markHandled(formData: FormData) {
 export async function savePhone(formData: FormData) {
   await requireAccess();
   const resident = await getResident(String(formData.get("resident_id")));
-  // Accept 090-1234-5678, +81 90…, and the common +81 090… slip; store +8190….
+  // Accept 090-1234-5678, 011-…, +81 90…, and the common +81 090… slip; store +81….
+  // Not 010…: that is no Japanese number (it is a Korean mobile prefix), so it needs its + country code.
   const phone = String(formData.get("phone"))
     .normalize("NFKC")
     .replace(/[\s-]/g, "")
-    .replace(/^(\+81)?0/, "+81");
+    .replace(/^(\+81)?0(?!10)/, "+81");
   // International format only, e.g. +819012345678.
   if (resident && (phone === "" || /^\+\d{8,15}$/.test(phone))) {
     await saveResident({ ...resident, phone });
