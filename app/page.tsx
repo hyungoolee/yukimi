@@ -43,8 +43,18 @@ export default async function Home() {
             <div className="mt-3 flex gap-2">
               <form action={callNow}>
                 <input type="hidden" name="resident_id" value={resident.id} />
-                <button className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50">今すぐ電話</button>
+                <button
+                  disabled={!resident.phone}
+                  className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50 disabled:opacity-40"
+                >
+                  今すぐ電話
+                </button>
               </form>
+              {!resident.phone && (
+                <Link href={`/residents/${resident.id}`} className="self-center text-sm text-zinc-500 hover:underline">
+                  電話番号を登録
+                </Link>
+              )}
               {call && call.risk !== "green" && !call.handled && (
                 <form action={markHandled}>
                   <input type="hidden" name="call_id" value={call.id} />

@@ -219,6 +219,7 @@ describe("missed-call ladder", () => {
 
   it("starts the ladder when a call cannot be placed", async () => {
     placeCall.mockRejectedValueOnce(new Error("ElevenLabs down"));
+    await store.saveResident({ ...(await store.getResident("takahashi"))!, phone: "+819000000000" });
     const res = await trigger(new Request("http://test", {
       method: "POST", body: JSON.stringify({ resident_id: "takahashi" }), headers: { "x-app-secret": "test-app-secret" },
     }));
@@ -254,5 +255,30 @@ describe("missed-call ladder", () => {
     await elevenlabs(signedElevenLabs(silent));
     expect(await store.getLadder("takahashi")).toEqual({ stage: "retry" });
     expect(extract).not.toHaveBeenCalled();
+  });
+});
+
+describe("phone number", () => {
+  const form = (fields: Record<string, string>) => {
+    const data = new FormData();
+    for (const [k, v] of Object.entries(fields)) data.set(k, v);
+    return data;
+  };
+
+  it("saves an international number and rejects anything else", async () => {
+    vi.doMock("next/cache", () => ({ revalidatePath: () => {} }));
+    const { savePhone } = await import("@/app/actions");
+    await savePhone(form({ resident_id: "takahashi", phone: "+81 90-1234-5678" }));
+    expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
+    await savePhone(form({ resident_id: "takahashi", phone: "090-1234-5678" }));
+    expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
+  });
+
+  it("refuses to trigger a call for a resident with no number", async () => {
+    const res = await trigger(new Request("http://test", {
+      method: "POST", body: JSON.stringify({ resident_id: "suzuki" }), headers: { "x-app-secret": "test-app-secret" },
+    }));
+    expect(res.status).toBe(400);
+    expect(placeCall).not.toHaveBeenCalled();
   });
 });

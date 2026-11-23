@@ -1,6 +1,7 @@
 // Creates or updates the ElevenLabs agent and its emergency tool from this folder.
 // Run: node --env-file=.env agent/setup.ts
-// Not yet run against the live API: check the printed result on first use.
+// Field names are checked against the ElevenLabs API reference, but this has not yet run
+// against the live API: read any error it prints on first use.
 import { readFileSync } from "node:fs";
 
 const need = (name: string) => {
@@ -56,9 +57,11 @@ const agentConfig = {
         // The fastest model that handles Japanese well; judge it on the M1 test call.
         llm: process.env.ELEVENLABS_LLM ?? "claude-haiku-5-5",
         tool_ids: [tool.id],
+        timezone: "Asia/Tokyo",
       },
     },
-    tts: { voice_id: need("ELEVENLABS_VOICE_ID") },
+    // Japanese needs one of the multilingual voice models.
+    tts: { voice_id: need("ELEVENLABS_VOICE_ID"), model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5" },
     // Older callers pause; wait longer before deciding they have finished.
     turn: { turn_timeout: 10 },
   },
