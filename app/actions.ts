@@ -25,7 +25,8 @@ export async function markHandled(formData: FormData) {
 /** Saves the number the check-in call goes to. Kept on the server's disk, never in the repo. */
 export async function savePhone(formData: FormData) {
   const resident = await getResident(String(formData.get("resident_id")));
-  const phone = String(formData.get("phone")).replace(/[\s-]/g, "");
+  // Strip spaces and hyphens, and the leading 0 people often keep after +81.
+  const phone = String(formData.get("phone")).replace(/[\s-]/g, "").replace(/^\+810/, "+81");
   // International format only, e.g. +819012345678.
   if (resident && (phone === "" || /^\+\d{8,15}$/.test(phone))) {
     await saveResident({ ...resident, phone });
