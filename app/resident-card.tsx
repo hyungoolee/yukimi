@@ -13,8 +13,9 @@ export function ResidentCard({
   call,
   lang,
   t,
+  flagGaps,
   children,
-}: Row & { lang: Lang; t: Strings; children?: React.ReactNode }) {
+}: Row & { lang: Lang; t: Strings; flagGaps: boolean; children?: React.ReactNode }) {
   return (
     <div className={call?.handled ? "opacity-60" : ""}>
       <div className="flex items-center gap-3">
@@ -27,7 +28,7 @@ export function ResidentCard({
         </span>
       </div>
       <CallStatus resident={resident} call={call} lang={lang} t={t} />
-      <CoverageLine resident={resident} t={t} />
+      {flagGaps && <CoverageLine resident={resident} t={t} />}
       <div className="mt-3 flex flex-wrap gap-2">
         <CallNowButton resident={resident} t={t} />
         {!resident.phone && (
