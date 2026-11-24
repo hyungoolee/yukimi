@@ -37,6 +37,22 @@ const ja = {
   showTranscript: "会話を見る",
   history: "これまでのまとめ",
   separator: "、",
+  list: "リスト",
+  map: "地図",
+  viewOnMap: "地図で見る",
+  viewInList: "リストで見る",
+  openInMaps: "地図アプリで開く",
+  unplaced: (n: number) => `位置未登録：${n}名（利用者のページで登録できます）`,
+  pickPin: "ピンを選ぶと、その方の状況が表示されます。",
+  noLocation: "この方の位置はまだ登録されていません。",
+  requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted") =>
+    `${volunteer}さんへ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
+  straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
+  mapLocations: (home: boolean, volunteer: boolean) =>
+    `地図上の位置（自宅：${home ? "登録済み" : "未登録"}、除雪ボランティア：${volunteer ? "登録済み" : "未登録"}）`,
+  home: "自宅",
+  volunteer: (name: string) => `除雪ボランティア ${name}さん`,
+  picker: { save: "この位置で保存", placed: "登録済み。地図をクリックで変更", unplaced: "地図をクリックして位置を決める" },
 };
 
 const en: typeof ja = {
@@ -75,6 +91,22 @@ const en: typeof ja = {
   showTranscript: "Show conversation",
   history: "Earlier summaries",
   separator: "; ",
+  list: "List",
+  map: "Map",
+  viewOnMap: "Show on map",
+  viewInList: "Show in list",
+  openInMaps: "Open in maps app",
+  unplaced: (n) => `Not on the map yet: ${n} (place them from each resident's page)`,
+  pickPin: "Choose a pin to see that resident's status.",
+  noLocation: "This resident has no location yet.",
+  requestStatus: (_volunteer, status) =>
+    `Snow volunteer: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
+  straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
+  mapLocations: (home, volunteer) =>
+    `Map locations (home: ${home ? "set" : "not set"}; snow volunteer: ${volunteer ? "set" : "not set"})`,
+  home: "Home",
+  volunteer: () => "Snow volunteer",
+  picker: { save: "Save this spot", placed: "Set. Click the map to change it", unplaced: "Click the map to choose a spot" },
 };
 
 export const strings = { ja, en };

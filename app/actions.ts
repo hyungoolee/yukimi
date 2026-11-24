@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
+import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
-import { getCall, getResident, resetDemoData, saveCall, saveResident } from "@/lib/store";
+import { getCall, getResident, listResidents, resetDemoData, saveCall, saveResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -46,6 +47,31 @@ export async function savePhone(formData: FormData) {
     await saveResident({ ...resident, phone });
   }
   revalidatePath(`/residents/${resident?.id}`);
+}
+
+/** Places a resident's home pin, or their snow volunteer's pin, from the click-to-place map. */
+export async function saveLocation(formData: FormData) {
+  await requireAccess();
+  const resident = await getResident(String(formData.get("resident_id")));
+  const location = { lat: Number(formData.get("lat")), lng: Number(formData.get("lng")) };
+  // Japan only; Number("") is 0, so an empty form is refused too.
+  const inJapan = location.lat > 20 && location.lat < 46 && location.lng > 122 && location.lng < 154;
+  if (!resident || !inJapan) return;
+
+  if (formData.get("who") === "snow_volunteer") {
+    // The volunteer sits in each resident's profile, as LINE registration writes them: update every copy.
+    const key = volunteerKey(resident.snow_volunteer);
+    for (const { id } of await listResidents()) {
+      // Re-read just before saving, so a call or a LINE registration finishing meanwhile isn't overwritten.
+      const fresh = await getResident(id);
+      if (fresh && key && volunteerKey(fresh.snow_volunteer) === key) {
+        await saveResident({ ...fresh, snow_volunteer: { ...fresh.snow_volunteer, location } });
+      }
+    }
+  } else {
+    await saveResident({ ...resident, location });
+  }
+  revalidatePath(`/residents/${resident.id}`);
 }
 
 /** Starts a check-in call in this browser tab, for when there is no phone line. */

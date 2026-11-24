@@ -1,79 +1,66 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { mapData, rankedRows, snowRequest, type Row } from "@/lib/dashboard";
 import { DEMO_MODE } from "@/lib/env";
+import type { Lang, Strings } from "@/lib/i18n";
 import { listCalls, listResidents } from "@/lib/store";
-import { reasonText } from "@/lib/i18n";
+import type { CallRecord } from "@/lib/types";
 import { getWeather } from "@/lib/weather";
-import { callNow, markHandled, resetDemo } from "./actions";
+import { resetDemo } from "./actions";
 import { getStrings } from "./lang";
+import { MapView } from "./map-view";
 import { Refresh } from "./refresh";
-import { japanTime, RiskBadge } from "./ui";
+import { ResidentCard } from "./resident-card";
 
-const RANK = { red: 0, yellow: 1, green: 2 };
+const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+const linkClass = "self-center text-sm text-zinc-500 hover:underline";
 
-export default async function Home() {
+export default async function Home({ searchParams }: PageProps<"/">) {
   await connection(); // read the files on every request
   const { lang, t } = await getStrings();
+  // The view and the selected resident live in the address, so switching views keeps the selection.
+  const params = await searchParams;
+  const view = one(params.view) === "map" ? "map" : "list";
+  const selected = one(params.selected);
+
   const [residents, calls] = await Promise.all([listResidents(), listCalls()]);
-  const rows = residents
-    .map((resident) => {
-      const own = calls.filter((c) => c.resident_id === resident.id);
-      // A later green call must not hide an alert nobody has handled yet.
-      return { resident, call: own.find((c) => c.risk !== "green" && !c.handled) ?? own[0] };
-    })
-    // Unhandled red first, then yellow, then green and not-yet-called.
-    .sort((a, b) => rank(a.call) - rank(b.call));
+  const rows = rankedRows(residents, calls);
   const weather = residents[0] && (await getWeather(residents[0].amedas_station));
+  const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <Refresh />
       <h1 className="text-2xl font-semibold">{t.title}</h1>
       {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
-      <ul className="mt-6 divide-y divide-zinc-200 rounded-lg border border-zinc-200">
-        {rows.map(({ resident, call }) => (
-          <li key={resident.id} className={`p-4 ${call?.handled ? "opacity-60" : ""}`}>
-            <div className="flex items-center gap-3">
-              <RiskBadge call={call} t={t} />
-              <Link href={`/residents/${resident.id}`} className="text-lg font-medium hover:underline">
-                {t.name(resident)}
-              </Link>
-              <span className="ml-auto text-sm text-zinc-500">
-                {call ? t.last(japanTime(call.at, lang)) : t.daily(resident.call_time)}
-              </span>
-            </div>
-            {call && call.reasons.length > 0 && <p className="mt-2 text-sm">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>}
-            {call?.actions.some((a) => a.type === "snow_request") && (
-              <p className="mt-1 text-sm text-zinc-600">
-                {t.snowRequest}
-                {call.snow_accepted ? t.snowAccepted(resident) : t.snowWaiting}
-              </p>
-            )}
-            <div className="mt-3 flex gap-2">
-              <form action={callNow}>
-                <input type="hidden" name="resident_id" value={resident.id} />
-                <button
-                  disabled={!resident.phone}
-                  className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50 disabled:opacity-40"
-                >
-                  {t.callNow}
-                </button>
-              </form>
-              {!resident.phone && (
-                <Link href={`/residents/${resident.id}`} className="self-center text-sm text-zinc-500 hover:underline">
-                  {t.addPhone}
-                </Link>
-              )}
-              {call && call.risk !== "green" && !call.handled && (
-                <form action={markHandled}>
-                  <input type="hidden" name="call_id" value={call.id} />
-                  <button className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50">{t.markHandled}</button>
-                </form>
-              )}
-            </div>
-          </li>
+      <nav className="mt-4 inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
+        {(["list", "map"] as const).map((v) => (
+          <Link
+            key={v}
+            href={href(v)}
+            aria-current={view === v ? "page" : undefined}
+            className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
+          >
+            {t[v]}
+          </Link>
         ))}
-      </ul>
+      </nav>
+
+      {view === "list" ? (
+        <ul className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200">
+          {rows.map((row) => (
+            <li key={row.resident.id} className={`p-4 ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
+              <ResidentCard {...row} lang={lang} t={t}>
+                <Link href={href("map", row.resident.id)} className={linkClass}>
+                  {t.viewOnMap}
+                </Link>
+              </ResidentCard>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} />
+      )}
       {DEMO_MODE && (
         <form action={resetDemo} className="mt-6 text-right">
           <button className="rounded border border-zinc-300 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50">
@@ -85,7 +72,60 @@ export default async function Home() {
   );
 }
 
-function rank(call?: { risk: keyof typeof RANK; handled?: boolean }) {
-  if (!call) return 3;
-  return RANK[call.risk] + (call.handled ? 3 : 0);
+function MapPanel({
+  rows,
+  calls,
+  selected,
+  listHref,
+  lang,
+  t,
+}: {
+  rows: Row[];
+  calls: CallRecord[];
+  selected?: string;
+  listHref: string;
+  lang: Lang;
+  t: Strings;
+}) {
+  const data = mapData(rows, calls);
+  const row = rows.find((r) => r.resident.id === selected);
+  const request = row && snowRequest(row.resident, calls);
+  const home = row?.resident.location;
+
+  return (
+    <div className="mt-4">
+      <MapView data={data} selected={selected} volunteerLabel={t.volunteer("")} />
+      {data.unplaced > 0 && <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>}
+      <div className="mt-4 rounded-lg border border-zinc-200 p-4">
+        {row ? (
+          <>
+            <ResidentCard {...row} lang={lang} t={t}>
+              <Link href={listHref} className={linkClass}>
+                {t.viewInList}
+              </Link>
+              {home && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${home.lat},${home.lng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={linkClass}
+                >
+                  {t.openInMaps}
+                </a>
+              )}
+            </ResidentCard>
+            {request && (
+              <p className="mt-2 text-sm text-zinc-600">
+                {t.requestStatus(request.volunteer, request.status)}
+                {request.km !== undefined && t.straightLine(request.km)}
+              </p>
+            )}
+            {!home && <p className="mt-2 text-sm text-zinc-500">{t.noLocation}</p>}
+          </>
+        ) : (
+          <p className="text-sm text-zinc-500">{t.pickPin}</p>
+        )}
+      </div>
+    </div>
+  );
 }
