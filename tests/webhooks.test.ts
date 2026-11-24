@@ -88,17 +88,27 @@ beforeEach(async () => {
 });
 
 describe("LINE roles", () => {
-  it("registers teammates for every resident", async () => {
-    await say("U_stranger", "家族");
-    await say("U_stranger", "家族 0000");
-    expect((await store.getResident("sato"))!.second_contact.line_id).toBe("");
+  it("registers each person with their own code, once", async () => {
+    const code = async (id: string) => (await store.renewCode(id))!.code!;
+    const helperCode = await code("p_tanaka");
+    await say("U_stranger", "家族 1234"); // the old shared code
+    await say("U_stranger", helperCode === "00000000" ? "11111111" : "00000000");
+    expect((await store.getPerson("p_tanaka"))!.line_id).toBeUndefined();
 
-    await say("U_helper", "民生委員　１２３４"); // full-width space and digits, as a Japanese keyboard types them
-    await say("U_family", "家族 1234");
-    await say("U_volunteer", "除雪 1234");
+    // Full-width digits, as a Japanese keyboard types them.
+    await say("U_helper", helperCode.replace(/\d/g, (d) => String.fromCharCode(d.charCodeAt(0) + 0xfee0)));
+    await say("U_stranger", helperCode); // a used code registers nobody else
+    await say("U_volunteer", await code("p_yamamoto"));
+    // In these tests one LINE account plays every resident's family contact.
+    for (const id of ["p_yuki", "p_takada", "p_masaru"]) await say("U_family", await code(id));
+
+    expect(await store.getPerson("p_tanaka")).toMatchObject({ line_id: "U_helper" });
+    expect((await store.getPerson("p_tanaka"))!.code).toBeUndefined();
     const sato = await store.getResident("sato");
     expect([sato!.helper.line_id, sato!.second_contact.line_id, sato!.snow_volunteer.line_id])
       .toEqual(["U_helper", "U_family", "U_volunteer"]);
+    expect((await store.getResident("takahashi"))!.second_contact).toMatchObject({ id: "p_masaru", line_id: "U_family" });
+    expect(lineCalls.at(-1)!.body.messages[0].text).toBe("登録しました（まさるさん）");
   });
 
   it("rejects a bad signature", async () => {
@@ -477,7 +487,8 @@ describe("demo reset", () => {
     await store.saveLadder("sato", { stage: "retry", at: Date.now() });
     // A disk set up before the map existed has no pins; one resident has been placed by hand.
     const suzuki = (await store.getResident("suzuki"))!;
-    await store.saveResident({ ...suzuki, location: undefined, snow_volunteer: { ...suzuki.snow_volunteer, location: undefined } });
+    await store.saveResident({ ...suzuki, location: undefined });
+    await store.updatePerson("p_yamamoto", (p) => ({ ...p, location: undefined }));
     await store.saveResident({ ...(await store.getResident("takahashi"))!, location: { lat: 43.3, lng: 141.9 } });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
     expect((await store.getResident("sato"))!.facts).toContain("健太の模試はよくできた");
