@@ -6,9 +6,10 @@ import type { Fact, Resident } from "./types";
  * locked intake facts, with an ID derived from the text so it is the same on every read until saved.
  */
 export function normalizeResident(raw: Resident): Resident {
-  const facts = (raw.facts as (Fact | string)[]).map((f): Fact =>
+  // The position is part of the hash, so two facts with the same text still get different IDs.
+  const facts = (raw.facts as (Fact | string)[]).map((f, i): Fact =>
     typeof f === "string"
-      ? { id: createHash("sha1").update(f).digest("hex").slice(0, 8), text: f, since: "", source: "intake", locked: true }
+      ? { id: createHash("sha1").update(`${i}:${f}`).digest("hex").slice(0, 8), text: f, since: "", source: "intake", locked: true }
       : f,
   );
   return { ...raw, facts };

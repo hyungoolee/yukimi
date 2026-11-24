@@ -20,6 +20,7 @@ export const MAX_FACTS = 30;
 const MAX_FACT_CHANGES_PER_CALL = 3; // each of: added, updated, retired
 const MAX_CARE_NOTES = 300;
 const LOG_KEPT = 100;
+const RETIRED_KEPT = 50;
 
 const newId = () => randomUUID().slice(0, 8);
 const clean = (text: unknown) => String(text ?? "").replace(/\s+/g, " ").trim();
@@ -70,6 +71,9 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
   // Locked facts (from intake or the helper) are not the model's to change.
   const editable = (id: string) => facts.find((f) => f.id === id && !f.locked);
   const has = (text: string) => facts.some((f) => f.text === text);
+  // What the helper took out stays out: the model can't bring it back by hearing it again.
+  const removedByHelper = new Set(retired.filter((f) => f.reason === "helper").map((f) => f.text));
+  const alreadyRefused = new Set((resident.memory_log ?? []).filter((e) => e.op === "refuse").map((e) => e.text));
 
   for (const { id, text } of changes.update.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const fact = editable(id);
@@ -87,16 +91,18 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
   }
   for (const text of changes.add.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const t = clean(text);
-    if (!fits(t) || has(t) || NOT_A_NOTE.test(t)) continue;
+    if (!fits(t) || has(t) || NOT_A_NOTE.test(t) || removedByHelper.has(t)) continue;
     if (facts.length >= MAX_FACTS) {
-      log.push({ op: "refuse", text: t }); // full: recorded so a person can decide
+      // Full: recorded once so a person can decide, not on every call.
+      if (!alreadyRefused.has(t)) log.push({ op: "refuse", text: t });
+      alreadyRefused.add(t);
       continue;
     }
     const added: Fact = { id: newId(), text: t, since: today, source: "call" };
     facts.push(added);
     log.push({ op: "add", fact: added.id, text: t });
   }
-  return logged({ ...resident, facts, retired_facts: retired }, by, log);
+  return logged({ ...resident, facts, retired_facts: retired.slice(-RETIRED_KEPT) }, by, log);
 }
 
 /** Applies what the model proposed after a call, within the limits above. `by` names the call for the log. */
@@ -170,13 +176,16 @@ export function restoreFact(resident: Resident, id: string): Resident {
 export function deleteFact(resident: Resident, id: string): Resident {
   const fact = (resident.retired_facts ?? []).find((f) => f.id === id);
   if (!fact) return resident;
-  // Every earlier wording of this fact goes too, not just its last one.
-  const scrub = (e: MemoryChange): MemoryChange => (e.fact === id ? { at: e.at, by: e.by, op: e.op } : e);
+  // Every earlier wording of this fact goes too, and any note that the same text was once refused.
+  const log = resident.memory_log ?? [];
+  const wordings = new Set([fact.text, ...log.filter((e) => e.fact === id).flatMap((e) => [e.text, e.before])]);
+  const scrub = (e: MemoryChange): MemoryChange =>
+    e.fact === id || (e.op === "refuse" && wordings.has(e.text)) ? { at: e.at, by: e.by, op: e.op } : e;
   return logged(
     {
       ...resident,
       retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
-      memory_log: (resident.memory_log ?? []).map(scrub),
+      memory_log: log.map(scrub),
     },
     "helper",
     [{ op: "delete" }],
@@ -186,5 +195,6 @@ export function deleteFact(resident: Resident, id: string): Resident {
 export function setCareNotes(resident: Resident, text: string): Resident {
   const t = clean(text).slice(0, MAX_CARE_NOTES);
   if (t === clean(resident.care_notes)) return resident;
-  return logged({ ...resident, care_notes: t }, "helper", [{ op: "care_notes", text: t }]);
+  // The log records that the notes changed, not what they said: clearing them must leave nothing behind.
+  return logged({ ...resident, care_notes: t }, "helper", [{ op: "care_notes" }]);
 }
