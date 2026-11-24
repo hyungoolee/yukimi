@@ -3,6 +3,7 @@ import { dailyObservations, daysBefore, findTrends, isConcern, lastWeek, withTre
 import type { Observations, RulesOutput } from "@/lib/types";
 
 const TODAY = "2026-11-26";
+const mealTrend = { id: "not_eating", reason: "3日続けて食事をとれていない", risk: "red" } as const;
 const blank: Observations = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" };
 /** Days ago -> that day's observations, as findTrends wants them (newest first). */
 const days = (byAge: Record<number, Partial<Observations>>) =>
@@ -50,7 +51,7 @@ describe("trend rules", () => {
   });
 
   it("fires red on the third day running", () => {
-    expect(findTrends(notEating(0, 1, 2), TODAY)).toEqual([{ reason: "3日続けて食事をとれていない", risk: "red", fires: true }]);
+    expect(findTrends(notEating(0, 1, 2), TODAY)).toEqual([{ ...mealTrend, fires: true }]);
   });
 
   it("is ongoing, not firing, on days four and five, and fires again on day six", () => {
@@ -74,21 +75,26 @@ describe("trend rules", () => {
   });
 
   it("is not thrown off by one bad day long ago", () => {
-    expect(findTrends(notEating(0, 1, 2, 20), TODAY)).toEqual([{ reason: "3日続けて食事をとれていない", risk: "red", fires: true }]);
+    expect(findTrends(notEating(0, 1, 2, 20), TODAY)).toEqual([{ ...mealTrend, fires: true }]);
     expect(findTrends(notEating(0, 1, 2, 6), TODAY)[0].fires).toBe(true); // a 4-day gap ends the run
     expect(findTrends(notEating(0, 1, 2, 5), TODAY)[0].fires).toBe(false); // a 3-day gap doesn't: this is day four
   });
 
+  it("starts the cadence on the first qualifying day even when older gaps are individually short", () => {
+    expect(findTrends(notEating(0, 1, 4, 7), TODAY)).toEqual([{ ...mealTrend, fires: true }]);
+    expect(findTrends(notEating(0, 1, 2, 3, 4, 7, 10), TODAY)).toEqual([{ ...mealTrend, fires: true }]);
+  });
+
   it("stays ongoing without firing when today's call did not cover meals", () => {
     const todayUnknown = days({ 0: { slept_well: "yes" }, 1: { ate: "no" }, 2: { ate: "no" }, 3: { ate: "no" } });
-    expect(findTrends(todayUnknown, TODAY)).toEqual([{ reason: "3日続けて食事をとれていない", risk: "red", fires: false }]);
+    expect(findTrends(todayUnknown, TODAY)).toEqual([{ ...mealTrend, fires: false }]);
   });
 
   it("flags three days of low mood or bad sleep as yellow", () => {
     const low = days({ 0: { low_mood: "yes", slept_well: "no" }, 1: { low_mood: "yes", slept_well: "no" }, 2: { low_mood: "yes", slept_well: "no" } });
     expect(findTrends(low, TODAY)).toEqual([
-      { reason: "気分の落ち込みが3日続いている", risk: "yellow", fires: true },
-      { reason: "3日続けて眠れていない", risk: "yellow", fires: true },
+      { id: "low_mood", reason: "気分の落ち込みが3日続いている", risk: "yellow", fires: true },
+      { id: "poor_sleep", reason: "3日続けて眠れていない", risk: "yellow", fires: true },
     ]);
   });
 
@@ -102,33 +108,39 @@ describe("adding trends to today's result", () => {
   const yellow: RulesOutput = { risk: "yellow", reasons: ["食事をとれていない"], actions: [] };
 
   it("raises to red and alerts helper and family when a red trend fires", () => {
-    expect(withTrends(yellow, [{ reason: "3日続けて食事をとれていない", risk: "red", fires: true }])).toEqual({
+    expect(withTrends(yellow, [{ ...mealTrend, fires: true }])).toEqual({
       risk: "red",
       reasons: ["食事をとれていない", "3日続けて食事をとれていない"],
-      actions: [{ type: "alert", to: ["helper", "second_contact"] }],
+      actions: [{
+        type: "alert", to: ["helper", "second_contact"],
+        reasonsByRole: { helper: [mealTrend.reason], second_contact: [mealTrend.reason] },
+      }],
     });
   });
 
   it("keeps an ongoing trend at its risk level, without alerting again", () => {
-    expect(withTrends(yellow, [{ reason: "3日続けて食事をとれていない", risk: "red", fires: false }])).toEqual({
+    expect(withTrends(yellow, [{ ...mealTrend, fires: false }])).toEqual({
       risk: "red",
       reasons: ["食事をとれていない", "3日続けて食事をとれていない（継続中）"],
       actions: [],
     });
   });
 
-  it("keeps an existing alert's recipients and other actions, and never lowers the risk", () => {
+  it("keeps an acute reason with its recipient when the trend adds recipients", () => {
     const red: RulesOutput = {
       risk: "red", reasons: ["死にたい気持ちの訴え"],
       actions: [{ type: "alert", to: ["helper"] }, { type: "snow_request", to: ["snow_volunteer"] }],
     };
     const out = withTrends(red, [
-      { reason: "3日続けて食事をとれていない", risk: "red", fires: true },
-      { reason: "3日続けて眠れていない", risk: "yellow", fires: true },
+      { ...mealTrend, fires: true },
+      { id: "poor_sleep", reason: "3日続けて眠れていない", risk: "yellow", fires: true },
     ]);
     expect(out.risk).toBe("red");
     expect(out.actions).toEqual([
-      { type: "alert", to: ["helper", "second_contact"] },
+      {
+        type: "alert", to: ["helper", "second_contact"],
+        reasonsByRole: { helper: ["死にたい気持ちの訴え", mealTrend.reason], second_contact: [mealTrend.reason] },
+      },
       { type: "snow_request", to: ["snow_volunteer"] },
     ]);
   });
