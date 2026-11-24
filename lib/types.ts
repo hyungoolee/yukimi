@@ -68,5 +68,7 @@ export type CallRecord = {
   transcript?: Turn[];
   extraction?: Extraction;
   handled?: boolean;
+  acknowledged_by?: string; // who tapped "確認しました" on a red alert
+  alert_rounds?: number; // how many times an unacknowledged red alert was sent again
   snow_accepted?: boolean;
 };
