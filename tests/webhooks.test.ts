@@ -12,13 +12,13 @@ const extraction: Extraction = {
     emergency: false, self_harm: false, fall_recent: true, pain: true, cant_move: false, snowed_in: true,
     heater_problem: false, not_eating: false, confused: false, money_request: false, low_mood: false,
   },
-  new_facts: ["健太の模試はよくできた"],
   english: { summary: "Snowed in; slipped on ice yesterday and her hip hurts.", mood: "Calm", health: "Hip pain", winter: "Door blocked by snow", needs: ["Snow clearing"] },
 };
 const extract = vi.fn(async () => extraction);
 vi.mock("@/lib/extract", () => ({ extract }));
 // The second model call, for memory. By default it proposes nothing.
-const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ resolved: [], new_follow_ups: [] }));
+const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ fact_changes: noFacts, resolved: [], new_follow_ups: [] }));
+const noFacts: import("@/lib/curate").Curation["fact_changes"] = { add: [], update: [], retire: [] };
 vi.mock("@/lib/curate", () => ({ curate }));
 const placeCall = vi.fn(async () => "conv_retry");
 vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall }));
@@ -142,7 +142,7 @@ describe("after a call", () => {
 
     const sato = await store.getResident("sato");
     expect(sato!.recent_calls[0].summary).toBe(extraction.summary);
-    expect(sato!.facts).toContain("健太の模試はよくできた");
+    expect(sato!.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
   });
 
   it("records the volunteer accepting the snow request, and nobody else", async () => {
@@ -491,14 +491,17 @@ describe("demo reset", () => {
     await store.updatePerson("p_yamamoto", (p) => ({ ...p, location: undefined }));
     await store.saveResident({ ...(await store.getResident("takahashi"))!, location: { lat: 43.3, lng: 141.9 } });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
-    expect((await store.getResident("sato"))!.facts).toContain("健太の模試はよくできた");
+    await store.updateResident("sato", (r) => ({
+      ...r, care_notes: "夫の話はしない", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
+    }));
 
     await resetDemo();
 
     expect(await store.listCalls()).toEqual([]);
     expect(await store.getLadder("sato")).toBeNull();
     const sato = (await store.getResident("sato"))!;
-    expect(sato.facts).not.toContain("健太の模試はよくできた");
+    expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
+    expect([sato.care_notes, sato.retired_facts, sato.memory_log]).toEqual(["", [], []]);
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
@@ -635,12 +638,12 @@ describe("one writer at a time", () => {
     const before = (await store.getResident("sato"))!;
     await Promise.all([
       store.updateResident("sato", (r) => ({ ...r, phone: "+819011110000" })),
-      store.updateResident("sato", (r) => ({ ...r, facts: [...r.facts, "同時に書かれた事実"] })),
+      store.updateResident("sato", (r) => ({ ...r, care_notes: "同時に書かれた注意" })),
       store.updateResident("sato", (r) => ({ ...r, location: { lat: 43.2, lng: 141.77 } })),
     ]);
     const after = (await store.getResident("sato"))!;
     expect(after.phone).toBe("+819011110000");
-    expect(after.facts).toContain("同時に書かれた事実");
+    expect(after.care_notes).toBe("同時に書かれた注意");
     expect(after.location).toEqual({ lat: 43.2, lng: 141.77 });
     await store.saveResident(before);
   });
@@ -737,7 +740,7 @@ describe("follow-ups after a call", () => {
     elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
 
   it("saves what the model proposes, hands it to the next call, and lets the helper remove it", async () => {
-    curate.mockResolvedValueOnce({ resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
     await call("conv_fu1", "takahashi");
     const saved = (await store.getResident("takahashi"))!.follow_ups!;
     expect(saved.map((f) => f.text)).toEqual(["腰の痛みはその後どうか"]);
@@ -759,7 +762,7 @@ describe("follow-ups after a call", () => {
     await store.updateResident("takahashi", (r) => ({
       ...r, follow_ups: [{ id: "hip", text: "腰の痛みはその後どうか", created: "2026-11-01", expires: "2099-01-01" }],
     }));
-    curate.mockResolvedValueOnce({ resolved: ["hip"], new_follow_ups: [] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: ["hip"], new_follow_ups: [] });
     await call("conv_fu2", "takahashi");
     expect(curate.mock.calls[0][1]).toEqual([expect.objectContaining({ id: "hip" })]);
     expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
@@ -811,7 +814,7 @@ describe("follow-ups after a call", () => {
   const deferred = () => {
     let finish!: (c: import("@/lib/curate").Curation) => void;
     curate.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
-    return (text: string) => finish({ resolved: [], new_follow_ups: [{ text, days: 3 }] });
+    return (text: string) => finish({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text, days: 3 }] });
   };
 
   it("drops a slow curation when the demo was reset in the meantime", async () => {
@@ -830,7 +833,7 @@ describe("follow-ups after a call", () => {
     const older = call("conv_fu9", "takahashi");
     await vi.waitFor(() => expect(curate).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 5)); // the newer call's record gets a later time
-    curate.mockResolvedValueOnce({ resolved: [], new_follow_ups: [{ text: "新しい通話からの確認", days: 3 }] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "新しい通話からの確認", days: 3 }] });
     await call("conv_fu10", "takahashi");
     finishOlder("古い通話からの確認");
     await older;
@@ -844,5 +847,49 @@ describe("follow-ups after a call", () => {
     const { resetDemo } = await import("@/app/actions");
     await resetDemo();
     expect((await store.getResident("sato"))!.follow_ups).toEqual([]);
+  });
+});
+
+describe("the helper's memory edits", () => {
+  const form = (fields: Record<string, string>) => {
+    const data = new FormData();
+    for (const [k, v] of Object.entries(fields)) data.set(k, v);
+    return data;
+  };
+
+  it("adds, edits, retires, restores and deletes a fact, and saves care notes", async () => {
+    const actions = await import("@/app/actions");
+    const facts = async () => (await store.getResident("suzuki"))!;
+    await actions.addFactAction(form({ resident_id: "suzuki", text: "毎週木曜に書道教室に通う" }));
+    const added = (await facts()).facts.at(-1)!;
+    expect(added).toMatchObject({ text: "毎週木曜に書道教室に通う", source: "helper", locked: true });
+
+    await actions.editFactAction(form({ resident_id: "suzuki", fact_id: added.id, text: "毎週金曜に書道教室に通う" }));
+    expect((await facts()).facts.at(-1)!.text).toBe("毎週金曜に書道教室に通う");
+
+    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect((await facts()).facts.map((f) => f.id)).not.toContain(added.id);
+    await actions.restoreFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect((await facts()).facts.map((f) => f.id)).toContain(added.id);
+
+    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    await actions.deleteFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect(JSON.stringify(await facts())).not.toContain("書道教室"); // neither wording survives, in the log either
+
+    await actions.saveCareNotes(form({ resident_id: "suzuki", text: "奥さんの話はこちらからしない" }));
+    expect((await facts()).care_notes).toBe("奥さんの話はこちらからしない");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    expect((await actions.startBrowserCall("suzuki")).variables).toMatchObject({
+      care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
+    });
+  });
+
+  it("does nothing for a resident that doesn't exist or a path-style id", async () => {
+    const actions = await import("@/app/actions");
+    await actions.addFactAction(form({ resident_id: "nobody", text: "x" }));
+    const call = JSON.stringify(await store.getCall("conv_slip"));
+    await actions.addFactAction(form({ resident_id: "../calls/conv_slip", text: "x" }));
+    expect(JSON.stringify(await store.getCall("conv_slip"))).toBe(call); // the call record was not rewritten as a resident
+    expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
   });
 });

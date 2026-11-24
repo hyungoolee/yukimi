@@ -72,7 +72,7 @@ describe("people in the store", () => {
     vi.stubEnv("DATA_DIR", dir);
     const fresh = await import("@/lib/store");
     const sato = (await fresh.getResident("sato"))!;
-    expect(sato).toMatchObject({ phone: "+819011112222", facts: ["覚えていること"], helper: { id: "p_tanaka" }, second_contact: { id: "p_yuki" } });
+    expect(sato).toMatchObject({ phone: "+819011112222", facts: [{ text: "覚えていること" }], helper: { id: "p_tanaka" }, second_contact: { id: "p_yuki" } });
     expect((await fresh.getResident("mine"))!.helper).toEqual({ name: "" });
     await fresh.updatePerson("p_tanaka", (p) => ({ ...p, line_id: "U_kept" }));
 

@@ -16,6 +16,23 @@ export type Person = {
 export type Contact = Omit<Person, "id" | "code"> & { id?: string };
 export type Role = "helper" | "second_contact" | "snow_volunteer";
 
+/**
+ * A lasting detail about the resident. Intake facts (given by family or the 社協 at sign-up) and
+ * anything the helper has written or edited are locked: the model can't change or retire them.
+ */
+export type Fact = { id: string; text: string; since: string; source: "intake" | "call" | "helper"; locked?: boolean };
+export type RetiredFact = Fact & { retired: string; reason: string };
+
+/** One entry in the record of what changed in a resident's memory, and who changed it. */
+export type MemoryChange = {
+  at: string; // ISO time
+  by: string; // "helper", or "call:<call id>"
+  op: "add" | "update" | "retire" | "restore" | "delete" | "refuse" | "care_notes";
+  fact?: string; // the fact's id, so deleting a fact for good can clear every trace of its text here
+  text?: string;
+  before?: string;
+};
+
 /** Something worth asking about on a later call, until `expires` (Japan dates). */
 export type FollowUp = { id: string; text: string; created: string; expires: string };
 
@@ -30,7 +47,12 @@ export type Resident = {
   snow_volunteer: Contact;
   amedas_station: string; // JMA station code
   location?: LatLng; // home, shown on the coordinator's map
-  facts: string[];
+  facts: Fact[]; // older files hold plain strings; lib/resident.ts converts them on read
+  retired_facts?: RetiredFact[]; // kept, hidden from the agent, restorable
+  care_notes?: string; // written by the helper: what to avoid or handle gently
+  memory_log?: MemoryChange[]; // newest last
+  /** Hashes of facts the helper retired or deleted. The model can't write these back; the text isn't kept. */
+  blocked_facts?: string[];
   recent_calls: { date: string; summary: string }[];
   /** Absent on files from before follow-ups existed. Read through lib/memory.ts. */
   follow_ups?: FollowUp[];
@@ -67,7 +89,8 @@ export type Extraction = {
   signals: Signals;
   /** Absent on records from before observations were recorded. */
   observations?: Observations;
-  new_facts: string[];
+  /** Only on records from before facts were curated by lib/curate.ts. */
+  new_facts?: string[];
   /** The same summary and notes in English, for the dashboard's English view. Absent on older records. */
   english?: { summary: string; mood: string; health: string; winter: string; needs: string[] };
 };
