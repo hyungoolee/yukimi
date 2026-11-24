@@ -67,6 +67,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             micError: t.micError,
             agent: t.captionAgent,
             you: t.captionYou,
+            waiting: t.captionWaiting,
           }}
         />
         {DEMO_MODE && (
