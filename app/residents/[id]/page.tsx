@@ -7,6 +7,7 @@ import { savePhone, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { japanTime, RiskBadge } from "../../ui";
+import { LocationPicker } from "./location-picker";
 
 export default async function ResidentPage({ params }: PageProps<"/residents/[id]">) {
   const { id } = await params;
@@ -48,6 +49,20 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </form>
         )}
       </div>
+
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm text-zinc-500">
+          {t.mapLocations(!!resident.location, !!resident.snow_volunteer.location)}
+        </summary>
+        <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
+        <LocationPicker
+          residentId={resident.id}
+          who="snow_volunteer"
+          label={t.volunteer(resident.snow_volunteer.name)}
+          initial={resident.snow_volunteer.location}
+          labels={t.picker}
+        />
+      </details>
 
       <h2 className="mt-8 font-medium">{t.callLog}</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">{t.noCalls}</p>}
