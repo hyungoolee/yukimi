@@ -81,7 +81,7 @@ export const clearLadder = (residentId: string) => rm(file("ladder", residentId)
  */
 export async function resetDemoData() {
   await ensureSeeded();
-  await Promise.all(["calls", "ladder", "pending"].map((dir) => rm(path.join(/* turbopackIgnore: true */ DATA_DIR, dir), { recursive: true, force: true })));
+  await Promise.all(["calls", "ladder", "pending", "tasks"].map((dir) => rm(path.join(/* turbopackIgnore: true */ DATA_DIR, dir), { recursive: true, force: true })));
   for (const current of await readAll<Resident>("residents")) {
     const seed = JSON.parse(
       await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
@@ -89,6 +89,23 @@ export async function resetDemoData() {
     if (seed) await saveResident({ ...current, facts: seed.facts, recent_calls: seed.recent_calls });
   }
 }
+
+// Work that must happen later (ladder steps, alert re-sends). Kept on disk so a restart doesn't lose it.
+export type Task = {
+  id: string;
+  due: number; // epoch ms
+  kind: "ladder_retry" | "ladder_confirm" | "alert_recheck";
+  resident_id: string;
+  call_id?: string;
+  round?: number;
+  ladder_at?: number; // which ladder this step belongs to, so a step from an old ladder can't act on a new one
+};
+export async function schedule(task: Omit<Task, "id">) {
+  const id = `${task.kind}-${task.resident_id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  await write("tasks", id, { ...task, id });
+}
+export const listTasks = () => readAll<Task>("tasks");
+export const deleteTask = (id: string) => rm(file("tasks", id), { force: true });
 
 export async function getSavedWeather(): Promise<Weather> {
   await ensureSeeded();

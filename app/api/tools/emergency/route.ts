@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { sendAlert } from "@/lib/actions";
+import { sendRedAlert } from "@/lib/actions";
 import { hasAppSecret } from "@/lib/env";
 import { CRISIS_MESSAGE, EMERGENCY_MESSAGE } from "@/lib/fixed";
 import { push, text } from "@/lib/line";
@@ -37,9 +37,10 @@ async function alertPeople(who: string, selfHarm: boolean, detail: string) {
 
   const to: Role[] = selfHarm ? ["helper"] : ["helper", "second_contact"];
   const reasons = [`${what}：${detail}`];
-  const sent = await sendAlert(resident, to, reasons);
+  const id = `emergency-${Date.now()}`;
+  const sent = await sendRedAlert(resident, id, to, reasons);
   await saveCall({
-    id: `emergency-${Date.now()}`,
+    id,
     resident_id: resident.id,
     at: new Date().toISOString(),
     kind: "emergency",

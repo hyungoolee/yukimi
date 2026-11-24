@@ -63,7 +63,7 @@ export async function POST(request: Request) {
           kind: "call",
           risk: rules.risk,
           reasons: rules.reasons,
-          actions: resident ? await runActions(resident, id, rules.reasons, rules.actions) : [],
+          actions: resident ? await runActions(resident, id, rules.risk, rules.reasons, rules.actions) : [],
           transcript: data.transcript,
         });
       } catch (again) {
