@@ -122,6 +122,7 @@ export const clearLadder = (residentId: string) => rm(file("ladder", residentId)
 /**
  * Back to a clean demo: no calls or ladders, and each resident's memory as seeded.
  * Phone numbers and LINE registrations are kept, so nobody has to set up again.
+ * Map pins are kept too; a demo resident with no pin yet gets the made-up one from the seed data.
  */
 export async function resetDemoData() {
   await ensureSeeded();
@@ -130,7 +131,14 @@ export async function resetDemoData() {
     const seed = JSON.parse(
       await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
     ) as Resident | null;
-    if (seed) await updateResident(current.id, (r) => ({ ...r, facts: seed.facts, recent_calls: seed.recent_calls }));
+    if (!seed) continue;
+    await updateResident(current.id, (r) => ({
+      ...r,
+      facts: seed.facts,
+      recent_calls: seed.recent_calls,
+      location: r.location ?? seed.location,
+      snow_volunteer: { ...r.snow_volunteer, location: r.snow_volunteer.location ?? seed.snow_volunteer.location },
+    }));
   }
 }
 

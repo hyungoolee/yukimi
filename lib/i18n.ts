@@ -59,6 +59,9 @@ const ja = {
   openInMaps: "地図アプリで開く",
   unplaced: (n: number) => `位置未登録：${n}名（利用者のページで登録できます）`,
   pickPin: "ピンを選ぶと、その方の状況が表示されます。",
+  mapEmpty: "まだ誰も地図に登録されていません。",
+  mapEmptyHelp: "それぞれのページの「地図上の位置」で、自宅の場所を登録してください：",
+  mapEmptyDemo: "デモ用の位置を入れるには、下の「デモをリセット」を押してください。",
   noLocation: "この方の位置はまだ登録されていません。",
   requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted") =>
     `${volunteer}さんへ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
@@ -128,6 +131,9 @@ const en: typeof ja = {
   openInMaps: "Open in maps app",
   unplaced: (n) => `Not on the map yet: ${n} (place them from each resident's page)`,
   pickPin: "Choose a pin to see that resident's status.",
+  mapEmpty: "Nobody is on the map yet.",
+  mapEmptyHelp: "Place each home under \"Map locations\" on the resident's page:",
+  mapEmptyDemo: "To fill in the demo locations, press \"Reset demo\" below.",
   noLocation: "This resident has no location yet.",
   requestStatus: (_volunteer, status) =>
     `Snow volunteer: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
