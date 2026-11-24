@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { DEMO_MODE } from "@/lib/env";
 import { listCalls, listResidents } from "@/lib/store";
 import { reasonText } from "@/lib/i18n";
 import { getWeather } from "@/lib/weather";
-import { callNow, markHandled } from "./actions";
+import { callNow, markHandled, resetDemo } from "./actions";
 import { getStrings } from "./lang";
 import { Refresh } from "./refresh";
 import { japanTime, RiskBadge } from "./ui";
@@ -73,6 +74,13 @@ export default async function Home() {
           </li>
         ))}
       </ul>
+      {DEMO_MODE && (
+        <form action={resetDemo} className="mt-6 text-right">
+          <button className="rounded border border-zinc-300 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50">
+            {t.resetDemo}
+          </button>
+        </form>
+      )}
     </main>
   );
 }
