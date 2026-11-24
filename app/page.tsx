@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { criticalCount } from "@/lib/coverage";
-import { mapData, rankedRows, snowRequest, type Row } from "@/lib/dashboard";
+import { mapData, rankedRows, snowRequest, volunteerKey, type MapData, type Row } from "@/lib/dashboard";
 import { DEMO_MODE, LINE_READY } from "@/lib/env";
 import type { Lang, Strings } from "@/lib/i18n";
 import { listCalls, listResidents } from "@/lib/store";
@@ -23,6 +23,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const view = one(params.view) === "map" ? "map" : "list";
   const selected = one(params.selected);
+  const volunteer = one(params.volunteer); // a volunteer pin chosen on the map instead of a resident
 
   const [residents, calls] = await Promise.all([listResidents(), listCalls()]);
   const rows = rankedRows(residents, calls);
@@ -87,7 +88,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           ))}
         </ul>
       ) : (
-        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} flagGaps={flagGaps} />
+        <MapPanel rows={rows} calls={calls} selected={selected} volunteer={volunteer} listHref={href("list")} lang={lang} t={t} flagGaps={flagGaps} />
       )}
       {DEMO_MODE && (
         <form action={resetDemo} className="mt-6 text-right">
@@ -104,6 +105,7 @@ function MapPanel({
   rows,
   calls,
   selected,
+  volunteer,
   listHref,
   lang,
   t,
@@ -112,6 +114,7 @@ function MapPanel({
   rows: Row[];
   calls: CallRecord[];
   selected?: string;
+  volunteer?: string;
   listHref: string;
   lang: Lang;
   t: Strings;
@@ -121,6 +124,7 @@ function MapPanel({
   const row = rows.find((r) => r.resident.id === selected);
   const request = row && snowRequest(row.resident, calls);
   const home = row?.resident.location;
+  const helper = !row ? data.volunteers.find((v) => v.key === volunteer) : undefined;
 
   return (
     <div className="mt-4">
@@ -142,7 +146,7 @@ function MapPanel({
           {DEMO_MODE && <p className="mt-1 text-zinc-600">{t.mapEmptyDemo}</p>}
         </div>
       )}
-      <MapView data={data} selected={selected} volunteerLabel={t.volunteer("{name}")} />
+      <MapView data={data} selected={selected} volunteer={helper?.key} volunteerLabel={t.volunteer("{name}")} />
       {data.unplaced > 0 && data.pins.length > 0 && (
         <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>
       )}
@@ -179,10 +183,54 @@ function MapPanel({
               </p>
             )}
           </>
+        ) : helper ? (
+          <VolunteerCard volunteer={helper} rows={rows} calls={calls} t={t} />
         ) : (
           <p className="text-sm text-zinc-500">{t.pickPin}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+/** A volunteer chosen on the map: who they clear snow for, with any open request, and their own page. */
+function VolunteerCard({
+  volunteer,
+  rows,
+  calls,
+  t,
+}: {
+  volunteer: MapData["volunteers"][number];
+  rows: Row[];
+  calls: CallRecord[];
+  t: Strings;
+}) {
+  const served = rows.filter(({ resident }) => volunteerKey(resident.snow_volunteer) === volunteer.key);
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-3">
+        <span className="text-lg font-medium">{volunteer.name}</span>
+        <span className="text-zinc-500">{t.role.snow_volunteer}</span>
+        {volunteer.id && (
+          <Link href={`/people/${encodeURIComponent(volunteer.id)}`} className="ml-auto text-zinc-500 hover:underline">
+            {t.openPerson}
+          </Link>
+        )}
+      </div>
+      <p className="mt-2 text-zinc-500">{t.servesList}</p>
+      <ul className="mt-1 space-y-1">
+        {served.map(({ resident }) => {
+          const request = snowRequest(resident, calls);
+          return (
+            <li key={resident.id}>
+              <Link href={`/?view=map&selected=${encodeURIComponent(resident.id)}`} scroll={false} className="hover:underline">
+                {t.name(resident)}
+              </Link>
+              {request && <span className="ml-2 text-zinc-600">{t.requestStatus(request.volunteer, request.status)}</span>}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
