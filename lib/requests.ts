@@ -77,6 +77,10 @@ export type OpenRequest = {
   /** The call whose record holds the request now (the newest reminder). */
   callId: string;
   status: "not_sent" | "sent" | "accepted";
+  /** When it was first asked (ISO time). */
+  since: string;
+  /** The coordinators have been told that nobody has taken it. */
+  escalated: boolean;
   /** Who took it, or else who was asked. */
   who: string;
   slot?: Slot;
@@ -99,10 +103,17 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       // "Handled" is about the alert. Someone who has said they are coming is still coming.
       if (action.done || (call.handled && action.accepted_by === undefined)) return [];
       if (now.getTime() - new Date(call.at).getTime() > STALE_MS) return [];
+      const requestId = (action.type === "request" && action.request_id) || call.id;
+      // A reminder is a fresh record, so these two are read from every record of the same request.
+      const records = calls.flatMap((c) =>
+        c.actions.filter((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId).map((a) => ({ at: c.at, a })),
+      );
       return [{
         kind,
-        requestId: (action.type === "request" && action.request_id) || call.id,
+        requestId,
         callId: call.id,
+        since: records.at(-1)?.at ?? call.at,
+        escalated: records.some((r) => r.a.escalated_at),
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
         who: action.accepted_by || resident[REQUESTS[kind].role].name,
         slot: action.slot,

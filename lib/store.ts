@@ -3,7 +3,7 @@ import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/pro
 import path from "node:path";
 import { ROLES } from "./coverage";
 import { normalizeResident } from "./resident";
-import type { AlertReasons, CallRecord, Contact, Person, Resident, Role, Weather } from "./types";
+import type { AlertReasons, CallRecord, Contact, Person, RequestKind, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
 const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "seed");
@@ -269,9 +269,10 @@ export async function resetDemoData() {
 export type Task = {
   id: string;
   due: number; // epoch ms
-  kind: "ladder_retry" | "ladder_confirm" | "alert_recheck";
+  kind: "ladder_retry" | "ladder_confirm" | "alert_recheck" | "request_check";
   resident_id: string;
-  call_id?: string;
+  call_id?: string; // for request_check: the call that first asked
+  request_kind?: RequestKind;
   round?: number;
   reasonsByRole?: AlertReasons; // for alert_recheck, even if the call record is missing
   to?: Role[]; // legacy alert_recheck tasks used the same reasons for every recipient

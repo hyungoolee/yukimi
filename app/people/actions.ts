@@ -28,7 +28,8 @@ export async function editPerson(formData: FormData) {
   await requireAccess();
   const name = field(formData, "name");
   if (!name) return;
-  await updatePerson(field(formData, "person_id"), (p) => ({ ...p, name, phone: field(formData, "phone") || undefined }));
+  const coordinator = formData.get("coordinator") === "on" || undefined;
+  await updatePerson(field(formData, "person_id"), (p) => ({ ...p, name, phone: field(formData, "phone") || undefined, coordinator }));
   revalidatePath("/", "layout");
 }
 
