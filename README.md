@@ -24,4 +24,6 @@ Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set
 7. **Phone number:** open a resident on the dashboard and save the number to call, in international format (`+81…`).
 8. **First call:** press 今すぐ電話.
 
+No phone line yet? Skip steps 4 and 7: open a resident and press ブラウザで通話 to take the call in the browser tab. With `DEMO_MODE=1`, 電話に出ない（デモ） starts the missed-call ladder as if the call rang out.
+
 For the demo, set `DEMO_MODE=1` (the missed-call ladder runs in under a minute) and `WEATHER_SOURCE=saved` (uses `data/seed/weather.json`).
