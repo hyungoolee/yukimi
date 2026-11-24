@@ -27,6 +27,8 @@ export async function POST(request: Request) {
   await clearPending(data.conversation_id);
   const residentId: string | undefined = variables?.resident_id ?? pending?.resident_id;
   if (!residentId) return new Response("No resident for this conversation", { status: 422 });
+  // A test call from ElevenLabs' console (agent/setup.ts placeholder): nothing to record.
+  if (residentId === "test") return Response.json({ received: true });
   const attempt = Number(variables?.attempt) || pending?.attempt || 1;
   // A call taken in the browser has no phone to retry: a silent or abandoned one is simply dropped.
   const byPhone = variables?.channel !== "browser";
