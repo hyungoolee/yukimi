@@ -305,4 +305,15 @@ describe("review fixes for the editor", () => {
     expect(r.facts).toEqual([expect.objectContaining({ text: "猫を飼っている", locked: true })]);
     expect(r.retired_facts).toEqual([]);
   });
+
+  it("deleting for good clears the text from the log even under a merged copy's old id", () => {
+    let r = withFacts([]);
+    r = applyCuration(r, adding("猫を飼っている"), TODAY);
+    const first = r.facts[0].id;
+    r = applyCuration(r, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, retire: [{ id: first, reason: "古い" }] } }, TODAY);
+    r = restoreFact(applyCuration(r, adding("猫を飼っている"), TODAY), first);
+    const kept = r.facts[0].id;
+    r = deleteFact(retireFact(r, kept, TODAY), kept);
+    expect(JSON.stringify(r.memory_log)).not.toContain("猫");
+  });
 });
