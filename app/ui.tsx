@@ -9,15 +9,9 @@ const BADGE: Record<Risk, string> = {
 
 export function RiskBadge({ call, t }: { call?: CallRecord; t: Strings }) {
   if (!call) return <span className="rounded px-2 py-0.5 text-xs bg-zinc-200 text-zinc-700">{t.badge.none}</span>;
-  const badge = <span className={`rounded px-2 py-0.5 text-xs font-medium ${BADGE[call.risk]}`}>{t.badge[call.risk]}</span>;
-  if (!call.handled) return badge;
-  // Keep what the call was, faded, and say plainly that someone dealt with it.
-  return (
-    <span className="inline-flex items-center gap-2">
-      <span className="opacity-50">{badge}</span>
-      <span className="text-sm text-emerald-700">✓ {t.handled}</span>
-    </span>
-  );
+  // The risk labels are instructions ("check now"), which no longer apply once someone has dealt with the call.
+  if (call.handled) return <span className="text-sm text-emerald-700">✓ {t.handled}</span>;
+  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${BADGE[call.risk]}`}>{t.badge[call.risk]}</span>;
 }
 
 export const japanTime = (iso: string, lang: Lang) =>
