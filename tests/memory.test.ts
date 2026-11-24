@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addFact, applyCuration, careNotesLine, deleteFact, editFact, factsLine, followUpsLine, MAX_FACTS, openFollowUps,
-  removeFollowUp, replaceFacts, restoreFact, retireFact, setCareNotes,
+  removeFollowUp, restoreFact, retireFact, setCareNotes,
 } from "@/lib/memory";
 import type { Curation } from "@/lib/curate";
 import { normalizeResident } from "@/lib/resident";
@@ -245,20 +245,6 @@ describe("facts edited by the helper", () => {
     const id = r.facts.at(-1)!.id;
     r = deleteFact(retireFact(editFact(r, id, "書道を30年習っている"), id, TODAY), id);
     expect(JSON.stringify(r)).not.toContain("書道");
-  });
-
-  it("takes the whole list as text: gone lines retired, new lines added, the rest untouched", () => {
-    const two = { ...base, facts: [fact("k", "孫の健太が大学受験中"), fact("d", "木曜にデイサービス")] };
-    const r = replaceFacts(two, "孫の健太が大学受験中\n\n  金曜にデイサービス \n金曜にデイサービス", TODAY) as Resident;
-    expect(r.facts.map((f) => [f.id, f.text])).toEqual([["k", "孫の健太が大学受験中"], [expect.any(String), "金曜にデイサービス"]]);
-    expect(r.retired_facts).toEqual([expect.objectContaining({ id: "d", text: "木曜にデイサービス" })]);
-    expect((r.memory_log ?? []).map((e) => e.op)).toEqual(["retire", "add"]);
-    expect(replaceFacts(two, "孫の健太が大学受験中\n木曜にデイサービス", TODAY)).toBe(two); // nothing changed
-  });
-
-  it("refuses a too-long line or too many lines, changing nothing", () => {
-    expect(replaceFacts(base, "あ".repeat(81), TODAY)).toBe("too_long");
-    expect(replaceFacts(base, Array.from({ length: MAX_FACTS + 1 }, (_, i) => `事実${i}`).join("\n"), TODAY)).toBe("too_many");
   });
 
   it("saves care notes, trimmed and capped, and gives the agent a value either way", () => {

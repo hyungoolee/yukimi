@@ -6,7 +6,7 @@ import { acceptRequest } from "@/lib/actions";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
-import { deleteFact, removeFollowUp, replaceFacts, restoreFact, setCareNotes } from "@/lib/memory";
+import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
 import { isRequestKind, REQUESTS, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
@@ -159,26 +159,10 @@ async function editMemory(formData: FormData, change: (resident: Resident, value
   revalidatePath(`/residents/${residentId}`);
 }
 
+export const addFactAction = async (formData: FormData) => editMemory(formData, (r, text) => addFact(r, text, japanDate()));
+export const retireFactAction = async (formData: FormData) => editMemory(formData, (r, id) => retireFact(r, id, japanDate()));
 export const restoreFactAction = async (formData: FormData) => editMemory(formData, restoreFact);
 export const deleteFactAction = async (formData: FormData) => editMemory(formData, deleteFact);
-
-export type MemoryResult = { error?: "too_long" | "too_many"; facts: string; notes: string };
-
-/** The helper's edit of the whole memory: the facts as text, one per line, and the care notes. */
-export async function saveMemory(_previous: MemoryResult | undefined, formData: FormData): Promise<MemoryResult> {
-  await requireAccess();
-  const residentId = String(formData.get("resident_id"));
-  const facts = String(formData.get("facts") ?? "");
-  const notes = String(formData.get("care_notes") ?? "");
-  let error: MemoryResult["error"];
-  await updateResident(residentId, (r) => {
-    const next = replaceFacts(r, facts, japanDate());
-    if (typeof next === "string") {
-      error = next; // all or nothing: a refused list leaves the care notes unsaved too
-      return r;
-    }
-    return setCareNotes(next, notes);
-  });
-  if (!error) revalidatePath(`/residents/${residentId}`);
-  return { error, facts, notes }; // typed text comes back, so a refused edit isn't wiped by the form reset
-}
+export const saveCareNotes = async (formData: FormData) => editMemory(formData, setCareNotes);
+export const editFactAction = async (formData: FormData) =>
+  editMemory(formData, (r, id) => editFact(r, id, String(formData.get("text") ?? "")));
