@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyRules } from "@/lib/rules";
-import type { Signals, Weather } from "@/lib/types";
+import { MEASURES, unanswered } from "@/lib/measures";
+import type { Observations, Signals, Weather } from "@/lib/types";
 
 const none: Signals = {
   emergency: false, self_harm: false, fall_recent: false, pain: false, cant_move: false, snowed_in: false,
@@ -10,37 +11,50 @@ const cold: Weather = { station: "15356", date: "2026-11-26", snowfall_24h_cm: 3
 const mild: Weather = { ...cold, low_c: 3 };
 const rules = (s: Partial<Signals>, w = cold) => applyRules({ ...none, ...s }, w);
 
-describe("a call that ends before the winter checks", () => {
-  const all = { heating: true, exit: true, supplies: true };
-  const reason = "冬の確認が終わる前に通話が終了";
+describe("a call that ends before a required question", () => {
+  const reason = (labels: string) => `通話が終わる前に確認できなかった：${labels}`;
 
-  it("is yellow and tells the helper when a check was never answered", () => {
-    expect(applyRules(none, cold, { ...all, supplies: false })).toEqual({
-      risk: "yellow", reasons: [reason],
-      actions: [{ type: "alert", to: ["helper"], reasonsByRole: { helper: [reason] } }],
+  it("is yellow and tells the helper which questions went unanswered, in table order", () => {
+    expect(applyRules(none, cold, ["has_supplies", "slept_well"])).toEqual({
+      risk: "yellow", reasons: [reason("睡眠、食料・薬")],
+      actions: [{ type: "alert", to: ["helper"], reasonsByRole: { helper: [reason("睡眠、食料・薬")] } }],
     });
   });
 
-  it("is left alone when every check was answered, or when the agent was not asked to run them", () => {
-    expect(applyRules(none, cold, all).risk).toBe("green");
+  it("is left alone when nothing went unanswered", () => {
+    expect(applyRules(none, cold, []).risk).toBe("green");
     expect(applyRules(none, cold).risk).toBe("green");
   });
 
-  it("puts the helper's alert before a snow request", () => {
-    const out = applyRules({ ...none, snowed_in: true }, cold, { ...all, supplies: false });
-    expect(out.actions.map((a) => a.type)).toEqual(["alert", "snow_request"]);
-    expect(out.actions[0]).toMatchObject({ to: ["helper"], reasonsByRole: { helper: ["雪で玄関から出られない", reason] } });
-  });
-
   it("adds nothing to a call that is already red", () => {
-    const out = applyRules({ ...none, emergency: true }, cold, { heating: false, exit: false, supplies: false });
-    expect(out.reasons).not.toContain(reason);
+    const out = applyRules({ ...none, emergency: true }, cold, ["heating_ok", "can_get_out", "has_supplies"]);
+    expect(out.reasons).toEqual(["緊急の訴え（119番を案内）"]);
     expect(out.actions).toHaveLength(1);
   });
 
-  it("gives the helper the other yellow reasons too", () => {
-    const out = applyRules({ ...none, not_eating: true }, cold, { ...all, exit: false });
-    expect(out.actions).toEqual([{ type: "alert", to: ["helper"], reasonsByRole: { helper: ["食事をとれていない", reason] } }]);
+  it("gives the helper the other yellow reasons too, and puts the alert before a snow request", () => {
+    const out = applyRules({ ...none, snowed_in: true }, cold, ["has_supplies"]);
+    expect(out.actions.map((a) => a.type)).toEqual(["alert", "snow_request"]);
+    expect(out.actions[0]).toMatchObject({ to: ["helper"], reasonsByRole: { helper: ["雪で玄関から出られない", reason("食料・薬")] } });
+  });
+});
+
+describe("which questions are required", () => {
+  const all = Object.fromEntries(MEASURES.map((m) => [m.field, "unknown"])) as Observations;
+
+  it("is sleep on any call, plus heating, the door and supplies when the winter checks were asked for", () => {
+    expect(unanswered(all, false)).toEqual(["slept_well"]);
+    expect(unanswered(all, true)).toEqual(["slept_well", "heating_ok", "can_get_out", "has_supplies"]);
+  });
+
+  it("counts any answer, good or bad, and treats a field missing from an older record as unanswered", () => {
+    expect(unanswered({ ...all, slept_well: "no", heating_ok: "no", can_get_out: "yes" }, true)).toEqual(["has_supplies"]);
+    expect(unanswered({}, false)).toEqual(["slept_well"]);
+  });
+
+  it("has an English form naming the questions", async () => {
+    const { reasonText } = await import("@/lib/i18n");
+    expect(reasonText("en", "通話が終わる前に確認できなかった：睡眠、食料・薬")).toBe("Not confirmed before the call ended: Sleep, Food and medicine");
   });
 });
 
