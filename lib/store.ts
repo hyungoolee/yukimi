@@ -1,6 +1,7 @@
+import { randomInt } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AlertReasons, CallRecord, Resident, Role, Weather } from "./types";
+import type { AlertReasons, CallRecord, Contact, Person, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
 const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "seed");
@@ -16,9 +17,22 @@ let seeded: Promise<void> | undefined;
 const ensureSeeded = () => (seeded ??= seed());
 async function seed() {
   const existing = await readdir(path.join(DATA_DIR, "residents")).catch(() => []);
-  if (existing.length > 0) return;
-  await mkdir(DATA_DIR, { recursive: true });
-  await cp(SEED_DIR, DATA_DIR, { recursive: true });
+  if (existing.length === 0) {
+    await mkdir(DATA_DIR, { recursive: true });
+    await cp(SEED_DIR, DATA_DIR, { recursive: true });
+    return;
+  }
+  // A disk from before people had their own files holds names inside each resident. Nobody had
+  // registered for real then, so such a resident takes its three people from the seed data.
+  for (const name of existing.filter((n) => n.endsWith(".json"))) {
+    const at = path.join(DATA_DIR, "residents", name);
+    const old = JSON.parse(await readFile(at, "utf8")) as Stored;
+    if (ROLES.every((role) => typeof old[role] === "string")) continue;
+    await cp(path.join(SEED_DIR, "people"), path.join(DATA_DIR, "people"), { recursive: true, force: false });
+    const fresh = JSON.parse(await readFile(path.join(SEED_DIR, "residents", name), "utf8").catch(() => "{}")) as Partial<Stored>;
+    const roles = Object.fromEntries(ROLES.map((role) => [role, fresh[role] ?? ""]));
+    await write("residents", name.slice(0, -5), { ...old, ...roles });
+  }
 }
 
 async function read<T>(dir: string, id: string): Promise<T | null> {
@@ -47,13 +61,69 @@ async function readAll<T>(dir: string): Promise<T[]> {
   return items.filter((x) => x !== null);
 }
 
-export const getResident = (id: string) => read<Resident>("residents", id);
-export const saveResident = (r: Resident) => write("residents", r.id, r);
-
-// One writer per resident at a time. Kept on globalThis so route handlers and server actions,
+// One writer per file at a time. Kept on globalThis so route handlers and server actions,
 // which Next may load as separate copies of this module, share the same queue.
 const queues: Map<string, Promise<unknown>> = ((globalThis as { yukimiQueues?: Map<string, Promise<unknown>> }).yukimiQueues ??=
   new Map());
+function queued<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const run = (queues.get(key) ?? Promise.resolve()).catch(() => {}).then(work);
+  queues.set(key, run);
+  void run.finally(() => queues.get(key) === run && queues.delete(key)).catch(() => {});
+  return run;
+}
+
+export const getPerson = (id: string) => read<Person>("people", id);
+export const listPeople = async () => (await readAll<Person>("people")).sort((a, b) => a.name.localeCompare(b.name, "ja"));
+export const deletePerson = (id: string) => rm(file("people", id), { force: true });
+const newCode = () => String(randomInt(1e8)).padStart(8, "0");
+/** A new person, with the code they register on LINE with. */
+export async function addPerson(name: string, phone?: string) {
+  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, code: newCode() };
+  await write("people", person.id, person);
+  return person;
+}
+/** Reads a person, applies `change` and saves, one writer at a time. `change` returns null to leave them as they are. */
+export function updatePerson(id: string, change: (person: Person) => Person | null) {
+  return queued(`people/${id}`, async () => {
+    const person = await getPerson(id);
+    const next = person && change(person);
+    if (next) await write("people", id, next);
+    return next;
+  });
+}
+/** A fresh registration code, replacing any old one. */
+export const renewCode = (id: string) => updatePerson(id, (p) => ({ ...p, code: newCode() }));
+
+const ROLES: Role[] = ["helper", "second_contact", "snow_volunteer"];
+/** A resident as saved: each role holds a person's id, or "" when the post is vacant. */
+type Stored = Omit<Resident, Role> & Record<Role, string>;
+
+// The rest of the app reads a resident with the three people filled in.
+async function withPeople(stored: Stored): Promise<Resident> {
+  const contact = async (id: string): Promise<Contact> => {
+    const person = id ? await getPerson(id) : null;
+    if (!person) return { name: "" };
+    const contact: Person = { ...person };
+    delete contact.code; // the registration code stays on the person's own page
+    return contact;
+  };
+  const [helper, second_contact, snow_volunteer] = await Promise.all(ROLES.map((role) => contact(stored[role])));
+  return { ...stored, helper, second_contact, snow_volunteer };
+}
+
+export async function getResident(id: string) {
+  const stored = await read<Stored>("residents", id);
+  return stored && withPeople(stored);
+}
+/** Saves the resident and who holds each role. A person's own details are saved with updatePerson. */
+export function saveResident(r: Resident) {
+  for (const role of ROLES) {
+    // Only the id is kept, so details typed into a role here would be lost without a sound.
+    if (r[role].name && !r[role].id) throw new Error(`${role} of ${r.id} is not a saved person`);
+  }
+  const roles = Object.fromEntries(ROLES.map((role) => [role, r[role].id ?? ""]));
+  return write("residents", r.id, { ...r, ...roles });
+}
 
 /**
  * Reads a resident, applies `change` and saves, without another writer getting in between.
@@ -61,21 +131,24 @@ const queues: Map<string, Promise<unknown>> = ((globalThis as { yukimiQueues?: M
  * Returns the saved resident, or null if there is no such resident.
  */
 export function updateResident(id: string, change: (resident: Resident) => Resident): Promise<Resident | null> {
-  const run = (queues.get(id) ?? Promise.resolve())
-    .catch(() => {})
-    .then(async () => {
-      const resident = await getResident(id);
-      if (!resident) return null;
-      const next = change(resident);
-      await saveResident(next);
-      return next;
-    });
-  queues.set(id, run);
-  void run.finally(() => queues.get(id) === run && queues.delete(id)).catch(() => {});
-  return run;
+  return queued(`residents/${id}`, async () => {
+    const resident = await getResident(id);
+    if (!resident) return null;
+    const next = change(resident);
+    await saveResident(next);
+    return next;
+  });
+}
+/** Puts a person in a role for a resident; an empty id leaves the post vacant. */
+export function assign(residentId: string, roles: Partial<Record<Role, string>>) {
+  return queued(`residents/${residentId}`, async () => {
+    const stored = await read<Stored>("residents", residentId);
+    if (stored) await write("residents", residentId, { ...stored, ...roles });
+  });
 }
 export async function listResidents() {
-  return (await readAll<Resident>("residents")).sort((a, b) => a.call_time.localeCompare(b.call_time));
+  const stored = await readAll<Stored>("residents");
+  return (await Promise.all(stored.map(withPeople))).sort((a, b) => a.call_time.localeCompare(b.call_time));
 }
 
 export const getCall = (id: string) => read<CallRecord>("calls", id);
@@ -142,10 +215,14 @@ export const clearLadder = (residentId: string) => rm(file("ladder", residentId)
 export async function resetDemoData() {
   await ensureSeeded();
   await Promise.all(["calls", "ladder", "pending", "tasks", TREND_FIRINGS].map((dir) => rm(path.join(/* turbopackIgnore: true */ DATA_DIR, dir), { recursive: true, force: true })));
-  for (const current of await readAll<Resident>("residents")) {
-    const seed = JSON.parse(
-      await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
-    ) as Resident | null;
+  const seedFile = async <T>(dir: string, id: string) =>
+    JSON.parse(await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, dir, `${id}.json`), "utf8").catch(() => "null")) as T | null;
+  for (const { id } of await readAll<Person>("people")) {
+    const seed = await seedFile<Person>("people", id);
+    if (seed?.location) await updatePerson(id, (p) => (p.location ? null : { ...p, location: seed.location }));
+  }
+  for (const current of await readAll<Stored>("residents")) {
+    const seed = await seedFile<Stored>("residents", current.id);
     if (!seed) continue;
     await updateResident(current.id, (r) => ({
       ...r,
@@ -153,7 +230,6 @@ export async function resetDemoData() {
       recent_calls: seed.recent_calls,
       follow_ups: [],
       location: r.location ?? seed.location,
-      snow_volunteer: { ...r.snow_volunteer, location: r.snow_volunteer.location ?? seed.snow_volunteer.location },
     }));
   }
 }

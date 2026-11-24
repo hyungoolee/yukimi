@@ -4,23 +4,9 @@
   "phone": "",
   "call_time": "09:00",
   "introducer": "娘のゆきさん",
-  "second_contact": {
-    "name": "ゆき",
-    "phone": "",
-    "line_id": ""
-  },
-  "helper": {
-    "name": "民生委員 田中",
-    "line_id": ""
-  },
-  "snow_volunteer": {
-    "name": "山本",
-    "line_id": "",
-    "location": {
-      "lat": 43.1975,
-      "lng": 141.779
-    }
-  },
+  "second_contact": "p_yuki",
+  "helper": "p_tanaka",
+  "snow_volunteer": "p_yamamoto",
   "amedas_station": "15356",
   "facts": [
     "孫の健太が大学受験中",
