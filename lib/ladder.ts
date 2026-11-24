@@ -41,7 +41,10 @@ export async function missed(residentId: string, attempt: number) {
       // Someone may have reached the resident in the meantime.
       if ((await getLadder(residentId))?.stage !== "retry") return;
       // Re-read: the phone number may have been corrected since the first attempt.
-      await placeCall((await getResident(residentId)) ?? resident, 2).catch(() => missed(residentId, 2));
+      const current = (await getResident(residentId)) ?? resident;
+      // No number to retry: go straight to asking the second contact.
+      if (!current.phone) return missed(residentId, 2);
+      await placeCall(current, 2).catch(() => missed(residentId, 2));
     });
     return;
   }

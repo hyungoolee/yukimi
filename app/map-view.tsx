@@ -8,7 +8,15 @@ import type { MapData } from "@/lib/dashboard";
 import { DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, RISK_COLOR, VOLUNTEER_COLOR } from "./map-style";
 
 /** The coordinator's map: residents by risk, volunteers, and a line for each open snow request. */
-export function MapView({ data, selected }: { data: MapData; selected?: string }) {
+export function MapView({
+  data,
+  selected,
+  volunteerLabel,
+}: {
+  data: MapData;
+  selected?: string;
+  volunteerLabel: string;
+}) {
   const router = useRouter();
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<LeafletMap | null>(null);
@@ -19,18 +27,26 @@ export function MapView({ data, selected }: { data: MapData; selected?: string }
   // Create the map once. Leaflet needs a browser, so it is loaded here, not on the server.
   useEffect(() => {
     let cancelled = false;
+    let observer: ResizeObserver | undefined;
     import("leaflet").then(({ default: L }) => {
       if (cancelled || !container.current) return;
       const m = L.map(container.current, { center: [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], zoom: 12 });
       L.tileLayer(GSI_TILES, GSI_OPTIONS).addTo(m);
       layer.current = L.layerGroup().addTo(m);
       map.current = m;
+      // Leaflet only measures its box once; tell it when the box changes size.
+      observer = new ResizeObserver(() => m.invalidateSize());
+      observer.observe(container.current);
       setReady(true);
     });
     return () => {
       cancelled = true;
+      observer?.disconnect();
       map.current?.remove();
       map.current = null;
+      layer.current = null;
+      fitted.current = false;
+      setReady(false);
     };
   }, []);
 
@@ -57,7 +73,7 @@ export function MapView({ data, selected }: { data: MapData; selected?: string }
       for (const v of data.volunteers) {
         L.marker([v.location.lat, v.location.lng], {
           icon: icon(pinHtml(VOLUNTEER_COLOR, "diamond")),
-          title: `除雪ボランティア ${v.name}さん`,
+          title: volunteerLabel,
         }).addTo(group);
       }
       for (const p of data.pins) {
@@ -65,7 +81,7 @@ export function MapView({ data, selected }: { data: MapData; selected?: string }
           icon: icon(pinHtml(RISK_COLOR[p.risk ?? "none"], "circle", p.id === selected, p.handled)),
           zIndexOffset: 1000, // residents above volunteers
         })
-          .on("click", () => router.replace(`/?view=map&selected=${p.id}`, { scroll: false }))
+          .on("click", () => router.replace(`/?view=map&selected=${encodeURIComponent(p.id)}`, { scroll: false }))
           .addTo(group);
       }
 
@@ -74,12 +90,15 @@ export function MapView({ data, selected }: { data: MapData; selected?: string }
       if (!fitted.current && points.length > 0) {
         fitted.current = true;
         m.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 15, animate: false });
+        // Arriving from the list with someone chosen: keep the frame's zoom, but centre on them.
+        const chosen = data.pins.find((p) => p.id === selected);
+        if (chosen) m.panTo([chosen.location.lat, chosen.location.lng], { animate: false });
       }
     });
     return () => {
       stale = true;
     };
-  }, [ready, data, selected, router]);
+  }, [ready, data, selected, router, volunteerLabel]);
 
   // Bring the selected resident into view.
   const selectedPin = data.pins.find((p) => p.id === selected);

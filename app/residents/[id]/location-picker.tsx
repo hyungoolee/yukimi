@@ -13,11 +13,13 @@ export function LocationPicker({
   who,
   label,
   initial,
+  labels,
 }: {
   residentId: string;
   who: "home" | "snow_volunteer";
   label: string;
   initial?: LatLng;
+  labels: { save: string; placed: string; unplaced: string };
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState<LatLng | undefined>();
@@ -40,7 +42,13 @@ export function LocationPicker({
         marker = (marker ?? L.marker(e.latlng, { icon }).addTo(map)).setLatLng(e.latlng);
         setPicked({ lat: e.latlng.lat, lng: e.latlng.lng });
       });
-      remove = () => map.remove();
+      // The picker starts inside a closed section, so its box is 0×0 until opened: re-measure on resize.
+      const observer = new ResizeObserver(() => map.invalidateSize());
+      observer.observe(container.current);
+      remove = () => {
+        observer.disconnect();
+        map.remove();
+      };
     });
     return () => {
       cancelled = true;
@@ -59,9 +67,9 @@ export function LocationPicker({
       <div className="flex items-center gap-2">
         <span className="text-zinc-500">{label}</span>
         <button disabled={!picked} className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50 disabled:opacity-40">
-          この位置で保存
+          {labels.save}
         </button>
-        <span className="text-zinc-500">{initial ? "登録済み。地図をクリックで変更" : "地図をクリックして位置を決める"}</span>
+        <span className="text-zinc-500">{initial ? labels.placed : labels.unplaced}</span>
       </div>
       <div ref={container} className="z-0 mt-2 h-56 w-full rounded-lg border border-zinc-200" />
     </form>
