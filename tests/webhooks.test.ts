@@ -487,3 +487,14 @@ describe("demo reset", () => {
     expect(sato.helper.line_id).toBe("U_helper");
   });
 });
+
+describe("demo script", () => {
+  it("has every line in Japanese, romaji and English, and never trips the emergency rule", async () => {
+    const { DEMO_SCRIPT } = await import("@/lib/demo-script");
+    expect(DEMO_SCRIPT.length).toBeGreaterThan(4);
+    for (const line of DEMO_SCRIPT) {
+      for (const text of [line.when.ja, line.when.en, line.say, line.romaji, line.meaning]) expect(text).not.toBe("");
+      expect(line.say).not.toMatch(/胸|息|立てない|動けない|死/);
+    }
+  });
+});
