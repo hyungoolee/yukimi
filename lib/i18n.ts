@@ -78,9 +78,9 @@ const ja = {
   people: "連絡体制",
   peopleIntro: "もしものとき、だれに知らせが届くか。届かないところを先に表示します。",
   lineNotReady: "LINEが設定されていないため、通知はだれにも届きません。",
-  coverageBanner: (n: number) => `${n}名：緊急の通知がだれにも届きません`,
+  coverageBanner: (n: number) => `${n}名：一部の通知がだれにも届きません`,
   coverageOk: "全員、緊急の通知が届く人がいます。",
-  cardNoReach: "この方の通知は、届かない相手がいます",
+  cardNoReach: "この方の一部の通知は、だれにも届きません",
   redReaches: (n: number) => (n === 0 ? "緊急の通知：だれにも届きません" : `緊急の通知：${n}人に届きます`),
   gap: {
     red_reaches_nobody: "民生委員にも家族にも連絡できません",
@@ -96,7 +96,6 @@ const ja = {
   testSending: "送信中…",
   testSent: "送信しました（届いたか、ご本人に確認してください）",
   testFailed: "送信できませんでした",
-  testMessage: "【テスト】見守り電話からのテストメッセージです。対応は不要です。",
 };
 
 const en: typeof ja = {
@@ -175,7 +174,7 @@ const en: typeof ja = {
   people: "Who gets told",
   peopleIntro: "Who is told if something goes wrong, with the gaps first.",
   lineNotReady: "LINE is not set up, so no alert can reach anyone.",
-  coverageBanner: (n) => `${n} resident${n === 1 ? "" : "s"}: a red alert would reach nobody`,
+  coverageBanner: (n) => `${n} resident${n === 1 ? "" : "s"}: some alerts would reach nobody`,
   coverageOk: "Every resident has someone a red alert would reach.",
   cardNoReach: "Some alerts for this resident would reach nobody",
   redReaches: (n) => (n === 0 ? "Red alert: reaches nobody" : `Red alert: reaches ${n} ${n === 1 ? "person" : "people"}`),
@@ -193,7 +192,6 @@ const en: typeof ja = {
   testSending: "Sending…",
   testSent: "Sent (ask them whether it arrived)",
   testFailed: "Could not be sent",
-  testMessage: "【テスト】見守り電話からのテストメッセージです。対応は不要です。",
 };
 
 export const strings = { ja, en };

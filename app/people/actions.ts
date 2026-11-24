@@ -2,10 +2,12 @@
 
 import { headers } from "next/headers";
 import { dashboardAccess } from "@/lib/env";
-import { strings } from "@/lib/i18n";
+import { ROLES } from "@/lib/coverage";
 import { push, text } from "@/lib/line";
 import { getResident } from "@/lib/store";
 import type { Role } from "@/lib/types";
+
+const TEST_MESSAGE = "【テスト】見守り電話からのテストメッセージです。対応は不要です。";
 
 export type TestResult = { status: "sent" | "failed" } | undefined;
 
@@ -18,7 +20,7 @@ export async function sendTestMessage(_previous: TestResult, formData: FormData)
   if (dashboardAccess((await headers()).get("authorization")) !== "ok") throw new Error("Unauthorized");
   const resident = await getResident(String(formData.get("resident_id")));
   const role = String(formData.get("role")) as Role;
-  const contact = resident && ["helper", "second_contact", "snow_volunteer"].includes(role) ? resident[role] : undefined;
-  const sent = await push(contact?.line_id, [text(strings.ja.testMessage)]);
+  const contact = resident && ROLES.includes(role) ? resident[role] : undefined;
+  const sent = await push(contact?.line_id, [text(TEST_MESSAGE)]);
   return { status: sent ? "sent" : "failed" };
 }
