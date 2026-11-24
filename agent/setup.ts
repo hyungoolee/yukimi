@@ -66,6 +66,7 @@ const agentConfig = {
           recent_calls: "2026-11-25：元気。孫の健太の模試の結果を気にしていた。",
           follow_ups: "なし",
           care_notes: "なし",
+          briefing: "なし",
           weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
           winter_check: "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。",
         },

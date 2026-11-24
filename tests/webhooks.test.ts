@@ -820,6 +820,7 @@ describe("the helper's memory edits", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     expect((await actions.startBrowserCall("suzuki")).variables).toMatchObject({
       care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
+      briefing: expect.any(String),
     });
   });
 
