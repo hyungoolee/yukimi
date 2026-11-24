@@ -2,5 +2,7 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { runDue } = await import("./lib/tick");
-  setInterval(() => runDue().catch((e) => console.error("Scheduled work failed", e)), 5000);
+  // Kept on globalThis so a dev reload can't start a second ticker and double every re-send.
+  const g = globalThis as { yukimiTicker?: ReturnType<typeof setInterval> };
+  g.yukimiTicker ??= setInterval(() => runDue().catch((e) => console.error("Scheduled work failed", e)), 5000);
 }
