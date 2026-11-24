@@ -39,7 +39,7 @@ export function coverage(resident: Resident) {
 
 /** How many residents have an alert that would reach nobody. */
 export const criticalCount = (residents: Resident[]) =>
-  residents.filter((r) => coverage(r).level === "critical").length;
+  residents.filter((r) => r.active !== false && coverage(r).level === "critical").length;
 
 /** Each person with the roles they hold and everyone they serve. */
 export function served(person: Person, residents: Resident[]) {
