@@ -678,5 +678,97 @@
         "もうはいたから出られるよ。体もどこも痛くないし、元気だよ。"
       ]
     ]
+  },
+  {
+    "id": "hangs-up-early",
+    "about": "Answers, says the heater is on, then has to go before the other checks",
+    "resident": "sato",
+    "expected": "yellow",
+    "expected_reasons": [
+      "冬の確認が終わる前に通話が終了"
+    ],
+    "snow_request": false,
+    "winter_covered": {
+      "heating": true,
+      "exit": false,
+      "supplies": false
+    },
+    "transcript": [
+      [
+        "agent",
+        "もしもし、佐藤さんですか。おはようございます。娘のゆきさんからご紹介いただいた、見守り電話です。"
+      ],
+      [
+        "user",
+        "はい、佐藤です。おはようございます。"
+      ],
+      [
+        "agent",
+        "今朝はマイナス十二度まで冷えましたね。暖房はちゃんと動いていますか。"
+      ],
+      [
+        "user",
+        "ええ、ストーブはついてますよ。あ、ごめんなさい、お客さんが来たので切りますね。"
+      ],
+      [
+        "agent",
+        "わかりました。玄関の雪はいかがですか。"
+      ]
+    ]
+  },
+  {
+    "id": "all-checks-done",
+    "about": "Short, well, answers every winter check",
+    "resident": "sato",
+    "expected": "green",
+    "expected_reasons": [],
+    "snow_request": false,
+    "winter_covered": {
+      "heating": true,
+      "exit": true,
+      "supplies": true
+    },
+    "transcript": [
+      [
+        "agent",
+        "もしもし、佐藤さんですか。おはようございます。娘のゆきさんからご紹介いただいた、見守り電話です。"
+      ],
+      [
+        "user",
+        "はい、おはようございます。"
+      ],
+      [
+        "agent",
+        "今朝は冷えましたね。暖房はちゃんと動いていますか。"
+      ],
+      [
+        "user",
+        "ストーブはついてますよ。"
+      ],
+      [
+        "agent",
+        "玄関の雪はいかがですか。外に出られそうでしょうか。"
+      ],
+      [
+        "user",
+        "朝のうちにはいたから、出られますよ。"
+      ],
+      [
+        "agent",
+        "食べ物やお薬は足りていますか。"
+      ],
+      [
+        "user",
+        "どっちも足りてます。"
+      ],
+      [
+        "agent",
+        "体調はいかがですか。"
+      ],
+      [
+        "user",
+        "元気ですよ。じゃあ、これで。"
+      ]
+    ]
   }
 ]

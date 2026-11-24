@@ -1,5 +1,6 @@
 import { getSavedWeather } from "./store";
 import type { Weather } from "./types";
+import { COLD_C, HEAVY_SNOW_CM, needsWinterCheck } from "./rules";
 
 const JMA = "https://www.jma.go.jp/bosai/amedas/data";
 
@@ -35,13 +36,12 @@ export async function getWeather(station: string): Promise<Weather> {
   }
 }
 
-export const HEAVY_SNOW_CM = 10;
-export const COLD_C = -5;
+export { COLD_C, HEAVY_SNOW_CM };
 
 /** What the agent is told about this morning, and whether to run the winter check. */
 export function describeWeather(w: Weather) {
   const text = `今朝の最低気温は${w.low_c}℃、この24時間の降雪は${w.snowfall_24h_cm}センチ、積雪は${w.snow_depth_cm}センチ`;
-  const winter = w.snowfall_24h_cm >= HEAVY_SNOW_CM || w.low_c <= COLD_C;
+  const winter = needsWinterCheck(w);
   return {
     weather: text,
     winter_check: winter

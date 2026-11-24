@@ -30,7 +30,7 @@ export async function processCall(residentId: string, callId: string, transcript
   let judged = false; // true only when the rules ran on a real extraction
   try {
     extraction = await extract(resident, transcript);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station));
+    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), extraction.winter_covered);
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);

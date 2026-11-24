@@ -308,6 +308,7 @@ const REASONS_EN: [string, string][] = [
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],
   ["電話に2回応答なし。第二連絡先も確認できず", "No answer twice; the second contact can't confirm"],
   ["自動判定に失敗。通話メモを確認してください", "Automatic check failed; please read the call notes"],
+  ["冬の確認が終わる前に通話が終了", "Call ended before the winter checks were finished"],
   ["通話の処理に失敗。確認してください", "Processing the call failed; please check"],
 ];
 

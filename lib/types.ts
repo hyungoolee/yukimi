@@ -88,6 +88,9 @@ export type Signals = {
 
 export type { Observations, Tri } from "./measures";
 
+/** Which winter checks the resident answered on a call, whatever the answer was. */
+export type WinterCovered = { heating: boolean; exit: boolean; supplies: boolean };
+
 export type Extraction = {
   answered_by_person: boolean;
   summary: string;
@@ -95,6 +98,8 @@ export type Extraction = {
   signals: Signals;
   /** Absent on records from before observations were recorded. */
   observations?: Observations;
+  /** Absent on records from before this was recorded. */
+  winter_covered?: WinterCovered;
   /** Only on records from before facts were curated by lib/curate.ts. */
   new_facts?: string[];
   /** The same summary and notes in English, for the dashboard's English view. Absent on older records. */
