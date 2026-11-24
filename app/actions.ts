@@ -6,6 +6,7 @@ import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
+import { removeFollowUp } from "@/lib/memory";
 import { translateToEnglish } from "@/lib/translate";
 import { getResident, listResidents, resetDemoData, updateCall, updateResident } from "@/lib/store";
 
@@ -105,6 +106,14 @@ export async function resetDemo() {
   await requireAccess();
   if (DEMO_MODE) await resetDemoData();
   revalidatePath("/", "layout");
+}
+
+/** The helper drops a follow-up that no longer needs asking. */
+export async function deleteFollowUp(formData: FormData) {
+  await requireAccess();
+  const residentId = String(formData.get("resident_id"));
+  await updateResident(residentId, (r) => removeFollowUp(r, String(formData.get("follow_up_id"))));
+  revalidatePath(`/residents/${residentId}`);
 }
 
 /** English for one line of a live call, shown as a caption. Empty if the translation fails. */
