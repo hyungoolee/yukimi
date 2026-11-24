@@ -58,10 +58,19 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         <span className="text-zinc-500">{t.phoneHint}</span>
       </form>
 
-      <div className="mt-4 flex items-center gap-2 text-sm">
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
         <BrowserCall
           residentId={resident.id}
-          labels={{ start: t.browserCall, connecting: t.connecting, end: t.endCall, micError: t.micError }}
+          translate={lang === "en"}
+          labels={{
+            start: t.browserCall,
+            connecting: t.connecting,
+            end: t.endCall,
+            micError: t.micError,
+            agent: t.captionAgent,
+            you: t.captionYou,
+            waiting: t.captionWaiting,
+          }}
         />
         {DEMO_MODE && (
           <form action={simulateNoAnswer}>

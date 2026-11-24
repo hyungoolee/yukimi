@@ -6,7 +6,8 @@ import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
-import { getCall, getResident, listResidents, resetDemoData, saveCall, updateResident } from "@/lib/store";
+import { translateToEnglish } from "@/lib/translate";
+import { getResident, listResidents, resetDemoData, updateCall, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -27,8 +28,7 @@ export async function callNow(formData: FormData) {
 
 export async function markHandled(formData: FormData) {
   await requireAccess();
-  const call = await getCall(String(formData.get("call_id")));
-  if (call) await saveCall({ ...call, handled: true });
+  await updateCall(String(formData.get("call_id")), () => ({ handled: true }));
   revalidatePath("/");
 }
 
@@ -101,4 +101,13 @@ export async function resetDemo() {
   await requireAccess();
   if (DEMO_MODE) await resetDemoData();
   revalidatePath("/", "layout");
+}
+
+/** English for one line of a live call, shown as a caption. Empty if the translation fails. */
+export async function translateCaption(text: string) {
+  await requireAccess();
+  return translateToEnglish(text.slice(0, 1000)).catch((e) => {
+    console.error("Caption translation failed", e);
+    return "";
+  });
 }
