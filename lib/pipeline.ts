@@ -44,7 +44,11 @@ export async function processCall(residentId: string, callId: string, transcript
         { at: now.toISOString(), observations: extraction.observations },
         ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
       ]);
-      rules = withTrends(rules, findTrends(days, japanDate(now)));
+      const today = japanDate(now);
+      // A second call on the same day must not send the same trend alert again.
+      const raisedToday = new Set(earlier.filter((c) => japanDate(new Date(c.at)) === today).flatMap((c) => c.reasons));
+      const trends = findTrends(days, today).map((t) => (raisedToday.has(t.reason) ? { ...t, fires: false } : t));
+      rules = withTrends(rules, trends);
     } catch (e) {
       console.error("Trend rules failed; using today's call alone", e);
     }

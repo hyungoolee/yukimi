@@ -59,11 +59,11 @@ Set each signal to true only when the resident's own words support it. When the 
 - confused: wrong about the day or season, repeats the same story within the call, or does not recognize this service.
 - money_request: someone else (a caller, visitor or message) asked them for money, a transfer, or bank or card details.
 
-Each observation covers the time since yesterday's call. Answer "yes" or "no" only from the resident's own words, and "unknown" when it did not come up or the answer is unclear. Never guess: "unknown" is always safe, a wrong "no" is not.
-- ate: "no" when they have not eaten today, or say they are not eating or have been skipping meals. "yes" when they say they have eaten. When the only thing they say is that they have not had breakfast yet this morning, answer "unknown".
-- slept_well: "no" when they say they slept badly or could not sleep last night; "yes" when they say they slept well.
-- went_out: "yes" when they say they have been outside the house since yesterday's call; "no" when they say they have not.
-- pain_or_injury: "yes" when they report physical pain or an injury now, including an injury that does not hurt (swelling, a bruise, a cut). "no" when they say nothing hurts.
+Each observation is "yes", "no" or "unknown", taken only from the resident's own words. Use "unknown" when the subject did not come up. When what they said points to the worrying answer, give that answer: do not soften it to "unknown". As with the signals, when the resident corrects or denies something, go with the correction.
+- ate (since yesterday's call): "no" when they have not eaten today, or say they are not eating or have been skipping meals. "yes" when they say they have eaten. When the only thing they say is that they have not had breakfast yet this morning, answer "unknown".
+- slept_well (last night): "no" when they say they slept badly or could not sleep; "yes" when they say they slept well.
+- went_out (since yesterday's call): "yes" when they say they have been outside the house; "no" when they say they have not.
+- pain_or_injury (now): "yes" when they report physical pain or an injury now. "no" when they say nothing hurts and they are not injured.
 - low_mood: "yes" when they say they are lonely, hopeless, or that there is no point. "no" when they say they feel well or cheerful.`;
 
 /** Turns a call transcript into notes and yes/no signals. Throws if the model returns nothing usable. */
