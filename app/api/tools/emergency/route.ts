@@ -21,6 +21,8 @@ export async function POST(request: Request) {
 }
 
 async function alertPeople(who: string, selfHarm: boolean, detail: string) {
+  // A test call from ElevenLabs' console (agent/setup.ts placeholder): nobody to alert.
+  if (who === "test") return console.log("Emergency tool called from a test call; no alert sent");
   const what = selfHarm ? "死にたい気持ちの訴え" : "緊急の訴え（119番を案内）";
   const residents = await listResidents();
   const resident = residents.find((r) => r.id === who || r.name === who.replace(/さん$/, ""));
