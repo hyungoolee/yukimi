@@ -5,7 +5,7 @@ import { DEMO_SCRIPT } from "@/lib/demo-script";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { deleteFollowUp, simulateNoAnswer } from "../../actions";
+import { deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-card";
@@ -47,7 +47,10 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">{t.back}</Link>
-      <h1 className="mt-2 text-2xl font-semibold">{t.name(resident)}</h1>
+      <h1 className="mt-2 text-2xl font-semibold">
+        {t.name(resident)}
+        {resident.active === false && <span className="ml-3 rounded bg-zinc-200 px-2 py-0.5 align-middle text-sm font-normal">{t.inactive}</span>}
+      </h1>
 
 
       <section className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(current)}`}>
@@ -218,6 +221,12 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         phone={resident.phone}
         labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint }}
       />
+      <form action={setActive} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+        <input type="hidden" name="resident_id" value={resident.id} />
+        <input type="hidden" name="active" value={resident.active === false ? "1" : "0"} />
+        <SubmitButton pending={t.saving}>{resident.active === false ? t.resumeService : t.stopService}</SubmitButton>
+        <span className="text-zinc-500">{resident.active === false ? t.inactiveHelp : t.stopServiceHelp}</span>
+      </form>
       <details className="mt-4">
         <summary className="cursor-pointer text-sm text-zinc-500">
           {t.mapLocations(!!resident.location, !!resident.snow_volunteer.location)}

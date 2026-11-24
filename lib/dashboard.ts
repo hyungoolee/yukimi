@@ -10,13 +10,14 @@ export type Row = { resident: Resident; call?: CallRecord };
 export function rankedRows(residents: Resident[], calls: CallRecord[]): Row[] {
   // Handled alerts go last, below residents not yet called: nobody needs to act on them.
   const rank = (call?: CallRecord) => (!call ? 3 : call.handled ? 4 : RANK[call.risk]);
+  const order = (row: Row) => (row.resident.active === false ? 5 : rank(row.call)); // no longer in the service: at the bottom
   return residents
     .map((resident) => {
       const own = calls.filter((c) => c.resident_id === resident.id);
       // A later green call must not hide an alert nobody has handled yet.
       return { resident, call: own.find((c) => c.risk !== "green" && !c.handled) ?? own[0] };
     })
-    .sort((a, b) => rank(a.call) - rank(b.call));
+    .sort((a, b) => order(a) - order(b));
 }
 
 /** Straight-line distance. Roads, and winter closures, are not considered. */

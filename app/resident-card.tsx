@@ -17,18 +17,18 @@ export function ResidentCard({
   children,
 }: Row & { lang: Lang; t: Strings; flagGaps: boolean; children?: React.ReactNode }) {
   return (
-    <div className={call?.handled ? "opacity-60" : ""}>
+    <div className={call?.handled || resident.active === false ? "opacity-60" : ""}>
       <div className="flex items-center gap-3">
         <RiskBadge call={call} t={t} />
         <Link href={`/residents/${resident.id}`} className="text-lg font-medium hover:underline">
           {t.name(resident)}
         </Link>
         <span className="ml-auto text-sm text-zinc-500">
-          {call ? t.last(japanTime(call.at, lang)) : t.daily(resident.call_time)}
+          {resident.active === false ? t.inactive : call ? t.last(japanTime(call.at, lang)) : t.daily(resident.call_time)}
         </span>
       </div>
       <CallStatus resident={resident} call={call} lang={lang} t={t} />
-      {flagGaps && <CoverageLine resident={resident} t={t} />}
+      {flagGaps && resident.active !== false && <CoverageLine resident={resident} t={t} />}
       <div className="mt-3 flex flex-wrap gap-2">
         <CallNowButton resident={resident} t={t} />
         {!resident.phone && (
@@ -82,7 +82,7 @@ export function CallNowButton({ resident, t }: { resident: Resident; t: Strings 
   return (
     <form action={callNow}>
       <input type="hidden" name="resident_id" value={resident.id} />
-      <SubmitButton disabled={!resident.phone} pending={t.calling}>
+      <SubmitButton disabled={!resident.phone || resident.active === false} pending={t.calling}>
         {t.callNow}
       </SubmitButton>
     </form>
