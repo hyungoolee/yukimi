@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
+import { DEMO_SCRIPT } from "@/lib/demo-script";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
@@ -67,6 +68,36 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </form>
         )}
       </div>
+
+      {DEMO_MODE && (
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm text-zinc-500">{t.demoScript}</summary>
+          <p className="mt-2 text-sm text-zinc-600">{t.demoScriptIntro}</p>
+          <table className="mt-2 w-full text-left text-sm">
+            <thead>
+              <tr className="text-zinc-500">
+                <th className="py-1 pr-3 font-normal">{t.demoScriptWhen}</th>
+                <th className="py-1 font-normal">{t.demoScriptSay}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.includes(line.needsFact!))).map(
+                (line) => (
+                  <tr key={line.say} className="border-t border-zinc-200 align-top">
+                    <td className="py-2 pr-3 text-zinc-600">{line.when[lang]}</td>
+                    <td className="py-2">
+                      <div className="text-base">{line.say}</div>
+                      <div className="text-zinc-600">{line.romaji}</div>
+                      <div className="text-zinc-500">{line.meaning}</div>
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+          <p className="mt-2 text-sm text-amber-700">{t.demoScriptAvoid}</p>
+        </details>
+      )}
 
       <details className="mt-4">
         <summary className="cursor-pointer text-sm text-zinc-500">
