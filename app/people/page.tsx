@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { coverage, criticalCount, people, reach, ROLES, type Reach } from "@/lib/coverage";
+import { coverage, criticalCount, reach, ROLES, served, type Reach } from "@/lib/coverage";
 import { LINE_READY } from "@/lib/env";
-import { listResidents } from "@/lib/store";
+import { listPeople, listResidents } from "@/lib/store";
 import { getStrings } from "../lang";
 import { Refresh } from "../refresh";
+import { SubmitButton } from "../submit-button";
+import { assignRoles, createPerson } from "./actions";
 import { TestMessage } from "./test-message";
 
 const DOT: Record<Reach, string> = { registered: "bg-emerald-600", unregistered: "bg-red-600", none: "bg-red-600" };
@@ -13,7 +15,7 @@ const DOT: Record<Reach, string> = { registered: "bg-emerald-600", unregistered:
 export default async function PeoplePage() {
   await connection(); // read the files on every request
   const { t } = await getStrings();
-  const residents = await listResidents();
+  const [residents, everyone] = await Promise.all([listResidents(), listPeople()]);
   const critical = criticalCount(residents);
   const rank = { critical: 0, warning: 1, ok: 2 };
   const rows = residents
@@ -50,21 +52,32 @@ export default async function PeoplePage() {
                 {t.redReaches(redAlertReaches)}
               </span>
             </div>
-            <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1 text-sm sm:grid-cols-[5rem_1fr_5rem_1fr_5rem_1fr]">
+            {/* Keyed on who holds the roles, so the menus show a saved change instead of what they held before. */}
+            <form
+              key={ROLES.map((role) => resident[role].id).join()}
+              action={assignRoles}
+              className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 text-sm"
+            >
+              <input type="hidden" name="resident_id" value={resident.id} />
               {ROLES.map((role) => {
                 const state = reach(resident[role]);
                 return (
-                  <div key={role} className="contents">
-                    <dt className="text-zinc-500">{t.role[role]}</dt>
-                    <dd>
+                  <label key={role} className="flex flex-col gap-0.5">
+                    <span className="text-zinc-500">
                       <span className={`mr-1.5 inline-block size-2 rounded-full ${DOT[state]}`} />
-                      {resident[role].name || "—"}
-                      <span className="ml-1 text-zinc-500">（{t.reach[state]}）</span>
-                    </dd>
-                  </div>
+                      {t.role[role]}（{t.reach[state]}）
+                    </span>
+                    <select name={role} defaultValue={resident[role].id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
+                      <option value="">{t.vacant}</option>
+                      {everyone.map((person) => (
+                        <option key={person.id} value={person.id}>{person.name}</option>
+                      ))}
+                    </select>
+                  </label>
                 );
               })}
-            </dl>
+              <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
+            </form>
             {gaps.length > 0 && (
               <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
                 {gaps.map((gap) => (
@@ -78,26 +91,40 @@ export default async function PeoplePage() {
 
       <h2 className="mt-8 font-medium">{t.peopleList}</h2>
       <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm">
-        {people(residents).map((person) => (
-          <li key={person.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
-            <span className={`inline-block size-2 rounded-full ${DOT[person.reach]}`} />
-            <span className="font-medium">{person.name}</span>
-            <span className="text-zinc-500">
-              {person.roles.map((role) => t.role[role]).join(t.separator)}・{t.serves(person.residents.length)}・
-              {t.reach[person.reach]}
-            </span>
-            {person.reach === "registered" && LINE_READY && (
-              <span className="ml-auto">
-                <TestMessage
-                  residentId={person.at.residentId}
-                  role={person.at.role}
-                  labels={{ send: t.testSend, sending: t.testSending, sent: t.testSent, failed: t.testFailed }}
-                />
+        {everyone.map((person) => {
+          const state = reach(person);
+          const { roles, residents: theirs } = served(person, residents);
+          return (
+            <li key={person.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+              <span className={`inline-block size-2 rounded-full ${DOT[state]}`} />
+              <Link href={`/people/${person.id}`} className="font-medium hover:underline">{person.name}</Link>
+              <span className="text-zinc-500">
+                {[...roles.map((role) => t.role[role]), t.serves(theirs.length), t.reach[state]].join("・")}
               </span>
-            )}
-          </li>
-        ))}
+              {state === "registered" && LINE_READY && (
+                <span className="ml-auto">
+                  <TestMessage
+                    personId={person.id}
+                    labels={{ send: t.testSend, sending: t.testSending, sent: t.testSent, failed: t.testFailed }}
+                  />
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
+
+      <form action={createPerson} className="mt-4 flex flex-wrap items-end gap-3 text-sm">
+        <label className="flex flex-col gap-0.5">
+          <span className="text-zinc-500">{t.personName}</span>
+          <input name="name" required maxLength={60} className="rounded border border-zinc-300 px-2 py-1" />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-zinc-500">{t.personPhone}</span>
+          <input name="phone" maxLength={60} className="rounded border border-zinc-300 px-2 py-1" />
+        </label>
+        <SubmitButton pending={t.saving}>{t.addPerson}</SubmitButton>
+      </form>
     </main>
   );
 }

@@ -10,4 +10,3 @@ process.env.APP_SECRET = "test-app-secret";
 process.env.ELEVENLABS_WEBHOOK_SECRET = "test-webhook-secret";
 process.env.LINE_CHANNEL_SECRET = "test-line-secret";
 process.env.LINE_CHANNEL_ACCESS_TOKEN = "test-line-token";
-process.env.REGISTER_CODE = "1234";
