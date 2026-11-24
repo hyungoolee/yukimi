@@ -826,7 +826,9 @@ describe("the helper's memory edits", () => {
   it("does nothing for a resident that doesn't exist or a path-style id", async () => {
     const actions = await import("@/app/actions");
     await actions.addFactAction(form({ resident_id: "nobody", text: "x" }));
+    const call = JSON.stringify(await store.getCall("conv_slip"));
     await actions.addFactAction(form({ resident_id: "../calls/conv_slip", text: "x" }));
+    expect(JSON.stringify(await store.getCall("conv_slip"))).toBe(call); // the call record was not rewritten as a resident
     expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
   });
 });
