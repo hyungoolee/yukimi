@@ -231,6 +231,10 @@ describe("in-call emergency", () => {
     expect((await res.json()).say_exactly).toContain("いちいちきゅう番");
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
     expect((await store.listCalls("takahashi"))[0]).toMatchObject({ kind: "emergency", risk: "red" });
+    // The resident may not manage the call herself: the people alerted are asked to make it.
+    const alert = pushes().find((p) => p.to === "U_helper")!.messages[0].text;
+    expect(alert).toContain("代わりに119番に電話して");
+    expect(alert).toContain((await store.getResident("takahashi"))!.phone);
 
     lineCalls.length = 0;
     extract.mockResolvedValueOnce({ ...extraction, signals: { ...extraction.signals, emergency: true, snowed_in: false } });
