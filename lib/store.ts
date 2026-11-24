@@ -111,7 +111,7 @@ export async function resetDemoData() {
     const seed = JSON.parse(
       await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
     ) as Resident | null;
-    if (seed) await updateResident(current.id, (r) => ({ ...r, facts: seed.facts, recent_calls: seed.recent_calls }));
+    if (seed) await updateResident(current.id, (r) => ({ ...r, facts: seed.facts, recent_calls: seed.recent_calls, follow_ups: [] }));
   }
 }
 

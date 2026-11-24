@@ -5,12 +5,13 @@ import { DEMO_SCRIPT } from "@/lib/demo-script";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { savePhone, simulateNoAnswer } from "../../actions";
+import { deleteFollowUp, savePhone, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { japanTime, RiskBadge } from "../../ui";
 import { LocationPicker } from "./location-picker";
 import { WeekGrid } from "./week-grid";
+import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
 
 // English view: the model's English copy when the record has one (older records don't).
@@ -114,6 +115,25 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           labels={t.picker}
         />
       </details>
+
+      {openFollowUps(resident, japanDate()).length > 0 && (
+        <>
+          <h2 className="mt-8 font-medium">{t.followUps}</h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {openFollowUps(resident, japanDate()).map((f) => (
+              <li key={f.id} className="flex items-center gap-3">
+                <span>{f.text}</span>
+                <span className="text-zinc-500">{t.followUpUntil(f.expires)}</span>
+                <form action={deleteFollowUp}>
+                  <input type="hidden" name="resident_id" value={resident.id} />
+                  <input type="hidden" name="follow_up_id" value={f.id} />
+                  <button className="text-zinc-500 underline hover:text-zinc-800">{t.remove}</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h2 className="mt-8 font-medium">{t.week}</h2>
       <WeekGrid

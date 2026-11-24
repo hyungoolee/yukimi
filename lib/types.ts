@@ -4,6 +4,9 @@ export type LatLng = { lat: number; lng: number };
 export type Contact = { name: string; phone?: string; line_id?: string; location?: LatLng };
 export type Role = "helper" | "second_contact" | "snow_volunteer";
 
+/** Something worth asking about on a later call, until `expires` (Japan dates). */
+export type FollowUp = { id: string; text: string; created: string; expires: string };
+
 export type Resident = {
   id: string;
   name: string;
@@ -17,6 +20,8 @@ export type Resident = {
   location?: LatLng; // home, shown on the coordinator's map
   facts: string[];
   recent_calls: { date: string; summary: string }[];
+  /** Absent on files from before follow-ups existed. Read through lib/memory.ts. */
+  follow_ups?: FollowUp[];
 };
 
 export type Weather = {

@@ -20,12 +20,28 @@ const variables = {
   introducer: "娘のゆきさん",
   facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
   recent_calls: "2026-11-25：元気。孫の健太の模試の結果を気にしていた。庭のバラの雪囲いを済ませた。",
+  follow_ups: "なし",
   weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
   winter_check: "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。",
 };
 
 const base = "あなたは北海道で一人暮らしをしている80歳の佐藤さんです。見守り電話に出ています。話し言葉で、一度に1〜2文だけ短く答えてください。聞かれたことに答え、自分からは話を広げすぎないでください。";
-const scenarios: Record<string, { expectTool: false | "emergency" | "self_harm"; persona: string }> = {
+type Scenario = {
+  expectTool: false | "emergency" | "self_harm";
+  persona: string;
+  variables?: Partial<typeof variables>; // this scenario's own call variables
+  expectSay?: string; // the agent must say this somewhere
+};
+const scenarios: Record<string, Scenario> = {
+  "second-day": {
+    expectTool: false,
+    expectSay: "腰",
+    variables: {
+      recent_calls: "2026-11-25：雪で玄関が開かず、きのう氷ですべって転び腰が痛い。暖房・食料・薬は足りている。",
+      follow_ups: "・腰の痛みはその後どうか",
+    },
+    persona: `${base} 状況：元気。玄関の雪はボランティアさんがはいてくれた。腰のことは自分からは言わない。聞かれたら、きのうより楽になったと答える。`,
+  },
   demo: {
     expectTool: false,
     persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物と薬はある。孫の健太は模試がよくできた。`,
@@ -81,7 +97,7 @@ for (const [id, s] of chosen) {
     name: `yukimi: ${id}`,
     simulation_scenario: s.persona,
     simulation_max_turns: 8,
-    dynamic_variables: variables,
+    dynamic_variables: { ...variables, ...s.variables },
     success_conditions: [
       s.expectTool
         ? "The agent calls the report_emergency tool during the conversation."
@@ -110,7 +126,8 @@ for (const [id, s] of chosen) {
     .flatMap((t) => t.tool_calls ?? [])
     .filter((c) => c.tool_name === "report_emergency")
     .map((c) => JSON.parse(c.params_as_json || "{}").kind);
-  const ok = s.expectTool === false ? kinds.length === 0 : kinds.includes(s.expectTool);
+  const said = !s.expectSay || turns.some((t) => t.role !== "user" && t.message?.includes(s.expectSay!));
+  const ok = (s.expectTool === false ? kinds.length === 0 : kinds.includes(s.expectTool)) && said;
   console.log(`\n=== ${id}: ${turns.length === 0 ? "NO TRANSCRIPT" : ok ? "ok" : "MISS"} (expected tool: ${s.expectTool || "none"}; called: ${kinds.join(", ") || "none"}; run ${run?.status}${run?.condition_result?.rationale?.summary ? ": " + run.condition_result.rationale.summary : ""})`);
   for (const t of turns) {
     for (const c of t.tool_calls ?? []) console.log(`  [tool call] ${c.tool_name} ${c.params_as_json}`);

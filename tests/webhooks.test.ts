@@ -17,6 +17,9 @@ const extraction: Extraction = {
 };
 const extract = vi.fn(async () => extraction);
 vi.mock("@/lib/extract", () => ({ extract }));
+// The second model call, for memory. By default it proposes nothing.
+const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ resolved: [], new_follow_ups: [] }));
+vi.mock("@/lib/curate", () => ({ curate }));
 const placeCall = vi.fn(async () => "conv_retry");
 vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall }));
 
@@ -71,6 +74,7 @@ const pushes = () => lineCalls.filter((c) => c.url.endsWith("/push")).map((c) =>
 beforeEach(() => {
   lineCalls.length = 0;
   extract.mockClear();
+  curate.mockClear();
   placeCall.mockClear();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     lineCalls.push({ url, body: JSON.parse(String(init.body)) });
@@ -567,5 +571,68 @@ describe("trends across days", () => {
     extract.mockResolvedValueOnce({ ...extraction, observations: { ...blank, pain_or_injury: "yes" } });
     await elevenlabs(signedElevenLabs(fixture.replace("conv_slip", "conv_after_bad").replace('"resident_id": "sato"', '"resident_id": "takahashi"')));
     expect(await store.getCall("conv_after_bad")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
+  });
+});
+
+describe("follow-ups after a call", () => {
+  const call = (id: string, residentId: string) =>
+    elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
+
+  it("saves what the model proposes, hands it to the next call, and lets the helper remove it", async () => {
+    curate.mockResolvedValueOnce({ resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
+    await call("conv_fu1", "takahashi");
+    const saved = (await store.getResident("takahashi"))!.follow_ups!;
+    expect(saved.map((f) => f.text)).toEqual(["腰の痛みはその後どうか"]);
+    expect(curate).toHaveBeenCalledWith(expect.objectContaining({ id: "takahashi" }), [], expect.any(Array), expect.any(String));
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    const { startBrowserCall, deleteFollowUp } = await import("@/app/actions");
+    expect((await startBrowserCall("takahashi")).variables.follow_ups).toBe("・腰の痛みはその後どうか");
+    expect((await startBrowserCall("suzuki")).variables.follow_ups).toBe("なし");
+
+    const data = new FormData();
+    data.set("resident_id", "takahashi");
+    data.set("follow_up_id", saved[0].id);
+    await deleteFollowUp(data);
+    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+  });
+
+  it("shows the model the open follow-ups, and closes the ones it says are settled", async () => {
+    await store.updateResident("takahashi", (r) => ({
+      ...r, follow_ups: [{ id: "hip", text: "腰の痛みはその後どうか", created: "2026-11-01", expires: "2099-01-01" }],
+    }));
+    curate.mockResolvedValueOnce({ resolved: ["hip"], new_follow_ups: [] });
+    await call("conv_fu2", "takahashi");
+    expect(curate.mock.calls[0][1]).toEqual([expect.objectContaining({ id: "hip" })]);
+    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+  });
+
+  it("when curation fails: the call, its alerts and its summary are all still there, with no extra alert", async () => {
+    curate.mockRejectedValueOnce(new Error("model unavailable"));
+    const before = (await store.getResident("suzuki"))!.follow_ups;
+    await call("conv_fu3", "suzuki");
+    expect(await store.getCall("conv_fu3")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
+    expect(await store.getCall("conv_fu3-error")).toBeNull();
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper", "U_volunteer"]);
+    const after = (await store.getResident("suzuki"))!;
+    expect(after.recent_calls[0].summary).toBe(extraction.summary);
+    expect(after.follow_ups).toEqual(before);
+  });
+
+  it("does not curate a voicemail, a silent call or a console test call", async () => {
+    extract.mockResolvedValueOnce({ ...extraction, answered_by_person: false });
+    await call("conv_fu4", "takahashi");
+    await call("conv_fu5", "test");
+    expect(curate).not.toHaveBeenCalled();
+    await store.clearLadder("takahashi");
+  });
+
+  it("clears follow-ups on a demo reset", async () => {
+    await store.updateResident("sato", (r) => ({
+      ...r, follow_ups: [{ id: "x", text: "腰", created: "2026-11-01", expires: "2099-01-01" }],
+    }));
+    const { resetDemo } = await import("@/app/actions");
+    await resetDemo();
+    expect((await store.getResident("sato"))!.follow_ups).toEqual([]);
   });
 });

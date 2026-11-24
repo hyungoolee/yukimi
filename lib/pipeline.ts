@@ -1,6 +1,7 @@
 import { runActions } from "./actions";
 import { extract } from "./extract";
 import { missed } from "./ladder";
+import { curateMemory } from "./memory";
 import { applyRules } from "./rules";
 import { clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
 import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
@@ -74,4 +75,8 @@ export async function processCall(residentId: string, callId: string, transcript
       facts: [...new Set([...fresh.facts, ...new_facts])],
     }));
   }
+
+  // Last, and on its own: the call is already judged, alerted and saved. If curation fails,
+  // memory is simply left as it was, and nobody is alerted about it.
+  await curateMemory(residentId, transcript).catch((e) => console.error("Memory curation failed", e));
 }
