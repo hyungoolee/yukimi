@@ -170,9 +170,28 @@ describe("facts proposed by the model", () => {
     expect(ops(r)).toEqual(["refuse"]);
   });
 
-  it("can't bring back a fact the helper took out", () => {
+  it("can't bring back a fact the helper took out, as a new fact or by rewording another", () => {
+    const retired = retireFact(withFacts([fact("h", "夫と二人暮らし"), fact("c", "猫を飼っている")]), "h", TODAY);
+    const out = propose(retired, { add: ["夫と二人暮らし", "庭に畑がある"], update: [{ id: "c", text: "夫と二人暮らし" }] });
+    expect(factTexts(out)).toEqual(["猫を飼っている", "庭に畑がある"]);
+  });
+
+  it("keeps it out after the helper deletes it for good, and after fifty other retirements", () => {
+    let r: Resident = deleteFact(retireFact(withFacts([fact("h", "夫と二人暮らし")]), "h", TODAY), "h");
+    expect(JSON.stringify(r)).not.toContain("夫");
+    for (let i = 0; i < 60; i++) {
+      r = propose(r, { add: [`事実${i}`] });
+      r = propose(r, { retire: [{ id: r.facts[0].id, reason: "x" }] });
+    }
+    expect(factTexts(propose(r, { add: ["夫と二人暮らし"] }))).toEqual([]);
+  });
+
+  it("lets the helper put it back, by restoring it or typing it again", () => {
     const retired = retireFact(withFacts([fact("h", "夫と二人暮らし")]), "h", TODAY);
-    expect(factTexts(propose(retired, { add: ["夫と二人暮らし", "猫を飼っている"] }))).toEqual(["猫を飼っている"]);
+    expect(restoreFact(retired, "h").blocked_facts).toEqual([]);
+    const typed = addFact(deleteFact(retired, "h"), "夫と二人暮らし", TODAY);
+    expect(factTexts(typed)).toEqual(["夫と二人暮らし"]);
+    expect(typed.blocked_facts).toEqual([]);
   });
 
   it("keeps at most fifty retired facts", () => {

@@ -152,7 +152,7 @@ export async function resetDemoData() {
     if (seed) {
       const { facts, recent_calls } = normalizeResident(seed);
       await updateResident(current.id, (r) => ({
-        ...r, facts, recent_calls, follow_ups: [], retired_facts: [], care_notes: "", memory_log: [],
+        ...r, facts, recent_calls, follow_ups: [], retired_facts: [], care_notes: "", memory_log: [], blocked_facts: [],
       }));
     }
   }
