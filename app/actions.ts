@@ -2,13 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { removeFollowUp } from "@/lib/memory";
 import { translateToEnglish } from "@/lib/translate";
-import { getResident, listResidents, resetDemoData, updateCall, updateResident } from "@/lib/store";
+import { getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -64,15 +63,8 @@ export async function saveLocation(formData: FormData) {
   if (!resident || !inJapan) return;
 
   if (formData.get("who") === "snow_volunteer") {
-    // The volunteer sits in each resident's profile, as LINE registration writes them: update every copy.
-    const key = volunteerKey(resident.snow_volunteer);
-    for (const { id } of await listResidents()) {
-      await updateResident(id, (fresh) =>
-        key && volunteerKey(fresh.snow_volunteer) === key
-          ? { ...fresh, snow_volunteer: { ...fresh.snow_volunteer, location } }
-          : fresh,
-      );
-    }
+    // The pin belongs to the person, so it moves for every resident they help.
+    if (resident.snow_volunteer.id) await updatePerson(resident.snow_volunteer.id, (p) => ({ ...p, location }));
   } else {
     await updateResident(resident.id, (fresh) => ({ ...fresh, location }));
   }

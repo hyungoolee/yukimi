@@ -2,7 +2,18 @@ import type { Observations } from "./measures";
 // Shared formats from the Build plan. Change only with the whole team.
 
 export type LatLng = { lat: number; lng: number };
-export type Contact = { name: string; phone?: string; line_id?: string; location?: LatLng };
+/** Someone who is told about a resident: a helper, a family contact or a snow helper. One file each. */
+export type Person = {
+  id: string;
+  name: string;
+  phone?: string;
+  line_id?: string;
+  location?: LatLng;
+  /** Their LINE registration code, until they use it. */
+  code?: string;
+};
+/** A person as they appear in a resident's role. No id and an empty name: the post is vacant. */
+export type Contact = Omit<Person, "id" | "code"> & { id?: string };
 export type Role = "helper" | "second_contact" | "snow_volunteer";
 
 /** Something worth asking about on a later call, until `expires` (Japan dates). */

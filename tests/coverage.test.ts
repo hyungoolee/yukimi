@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runActions } from "@/lib/actions";
-import { coverage, criticalCount, people, reach } from "@/lib/coverage";
+import { coverage, criticalCount, reach, served } from "@/lib/coverage";
 import { needsReview } from "@/lib/pipeline";
 import { applyRules } from "@/lib/rules";
 import type { Contact, Resident, Signals, Weather } from "@/lib/types";
 
-const on = (name: string, id = `U_${name}`): Contact => ({ name, line_id: id });
-const off = (name: string): Contact => ({ name });
+const on = (name: string, id = `U_${name}`): Contact => ({ id: name, name, line_id: id });
+const off = (name: string): Contact => ({ id: name, name });
 const resident = (id: string, extra: Partial<Resident> = {}): Resident => ({
   id, name: id, phone: "+819000000000", call_time: "09:00", introducer: "", amedas_station: "15356", facts: [],
   recent_calls: [], helper: on("tanaka"), second_contact: on(`family-${id}`), snow_volunteer: on("yamamoto"), ...extra,
@@ -85,18 +85,12 @@ describe("coverage agrees with what the alert code sends", () => {
   });
 });
 
-describe("people", () => {
-  it("lists a person shared by several residents once, with everyone they serve", () => {
-    const list = people([resident("a"), resident("b"), resident("c")]);
-    const tanaka = list.find((p) => p.name === "tanaka")!;
-    expect(tanaka.residents.map((r) => r.id)).toEqual(["a", "b", "c"]);
-    expect(tanaka).toMatchObject({ roles: ["helper"], reach: "registered", at: { residentId: "a", role: "helper" } });
-    expect(list.filter((p) => p.name === "yamamoto")).toHaveLength(1);
-    expect(list).toHaveLength(5); // one helper, one snow helper, three family contacts
-  });
-
-  it("leaves out a vacant post, and keeps a named person who isn't registered", () => {
-    const list = people([resident("a", { helper: { name: "" }, second_contact: off("yuki") })]);
-    expect(list.map((p) => [p.name, p.reach])).toEqual([["yuki", "unregistered"], ["yamamoto", "registered"]]);
+describe("served", () => {
+  it("gives the roles a person holds and everyone they serve", () => {
+    const all = [resident("a"), resident("b", { helper: off("other") }), resident("c", { snow_volunteer: { id: "tanaka", name: "tanaka" } })];
+    const { roles, residents } = served({ id: "tanaka", name: "tanaka" }, all);
+    expect(roles).toEqual(["helper", "snow_volunteer"]);
+    expect(residents.map((r) => r.id)).toEqual(["a", "c"]);
+    expect(served({ id: "nobody", name: "x" }, all)).toEqual({ roles: [], residents: [] });
   });
 });

@@ -108,6 +108,20 @@ const ja = {
   testSending: "送信中…",
   testSent: "送信しました（届いたか、ご本人に確認してください）",
   testFailed: "送信できませんでした",
+  vacant: "空席",
+  backToPeople: "← 連絡体制",
+  addPerson: "人を追加",
+  personName: "名前",
+  personPhone: "電話番号（任意）",
+  lineRegistration: "LINE登録",
+  codeHelp: "このコードをご本人に伝えてください。見守り電話のLINEを友だちに追加して、コードを送ると登録されます。",
+  noCode: "登録コードはまだありません。",
+  newCode: "新しいコードを作る",
+  unregister: "LINE登録を取り消す",
+  servesList: "担当している方",
+  servesNobody: "だれも担当していません",
+  deletePerson: "この人を削除",
+  deleteBlocked: "担当している方がいる間は削除できません",
 };
 
 const en: typeof ja = {
@@ -216,6 +230,20 @@ const en: typeof ja = {
   testSending: "Sending…",
   testSent: "Sent (ask them whether it arrived)",
   testFailed: "Could not be sent",
+  vacant: "Vacant",
+  backToPeople: "← Who gets told",
+  addPerson: "Add a person",
+  personName: "Name",
+  personPhone: "Phone (optional)",
+  lineRegistration: "LINE registration",
+  codeHelp: "Give this code to the person. They add the Yukimi LINE account as a friend and send it the code.",
+  noCode: "No registration code yet.",
+  newCode: "New code",
+  unregister: "Remove LINE registration",
+  servesList: "Residents they serve",
+  servesNobody: "Serves nobody",
+  deletePerson: "Delete this person",
+  deleteBlocked: "Can't be deleted while they serve someone",
 };
 
 export const strings = { ja, en };
