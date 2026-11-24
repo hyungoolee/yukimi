@@ -44,7 +44,7 @@ export async function processCall(residentId: string, callId: string, transcript
     kind: "call",
     risk: rules.risk,
     reasons: rules.reasons,
-    actions: await runActions(resident, callId, rules.reasons, rules.actions),
+    actions: await runActions(resident, callId, rules.risk, rules.reasons, rules.actions),
     transcript,
     extraction,
   });
