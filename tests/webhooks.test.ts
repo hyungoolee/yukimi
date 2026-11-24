@@ -40,6 +40,9 @@ const { POST: line } = await import("@/app/api/webhooks/line/route");
 const { POST: emergencyRoute } = await import("@/app/api/tools/emergency/route");
 const emergency = settled(emergencyRoute);
 const store = await import("@/lib/store");
+const { runDue } = await import("@/lib/tick");
+/** Runs scheduled work as if this many seconds had passed. */
+const after = (seconds: number) => runDue(Date.now() + seconds * 1000);
 
 const fixture = readFileSync("tests/fixtures/slip-on-ice.json", "utf8");
 type LinePush = {
@@ -215,38 +218,29 @@ describe("missed-call ladder", () => {
     elevenlabs(signedElevenLabs(JSON.stringify({ type: "call_initiation_failure", data: { conversation_id: conversationId } })));
 
   it("retries, asks the second contact, then alerts when nobody confirms", async () => {
-    vi.useFakeTimers();
     await store.saveResident({ ...(await store.getResident("suzuki"))!, phone: "+819000000001" });
     await store.savePending("conv_a1", { resident_id: "suzuki", attempt: 1 });
     await failure("conv_a1");
     expect(await store.getLadder("suzuki")).toMatchObject({ stage: "retry" });
 
-    await vi.advanceTimersByTimeAsync(20_000);
-    // The timer reads the ladder file before it calls.
-    await vi.waitFor(() => expect(placeCall).toHaveBeenCalledWith(expect.objectContaining({ id: "suzuki" }), 2));
+    await after(21);
+    expect(placeCall).toHaveBeenCalledWith(expect.objectContaining({ id: "suzuki" }), 2);
 
     await store.savePending("conv_a2", { resident_id: "suzuki", attempt: 2 });
     await failure("conv_a2");
     expect(pushes()[0].messages[0].template.actions.map((a) => a.data)).toEqual(["ok:suzuki", "ng:suzuki"]);
 
-    await vi.advanceTimersByTimeAsync(20_000);
-    vi.useRealTimers();
-    // The timer's file writes finish a moment after the clock is advanced.
-    await vi.waitFor(async () =>
-      expect((await store.listCalls("suzuki"))[0]).toMatchObject({ kind: "missed", risk: "red" }),
-    );
+    await after(21);
+    expect((await store.listCalls("suzuki"))[0]).toMatchObject({ kind: "missed", risk: "red" });
     expect(await store.getLadder("suzuki")).toBeNull();
     await store.saveResident({ ...(await store.getResident("suzuki"))!, phone: "" });
   });
 
   it("skips the retry when the resident was reached in the meantime", async () => {
-    vi.useFakeTimers();
     await store.savePending("conv_d1", { resident_id: "takahashi", attempt: 1 });
     await failure("conv_d1");
     await store.clearLadder("takahashi");
-    await vi.advanceTimersByTimeAsync(20_000);
-    vi.useRealTimers();
-    await new Promise((resolve) => setTimeout(resolve, 100)); // let the timer's file read finish
+    await after(21);
     expect(placeCall).not.toHaveBeenCalled();
   });
 
@@ -418,13 +412,11 @@ describe("calls without a phone line", () => {
   });
 
   it("skips the retry call and asks the second contact when the resident has no phone number", async () => {
-    vi.useFakeTimers();
     await store.clearLadder("suzuki");
     await store.savePending("conv_h1", { resident_id: "suzuki", attempt: 1 });
     await elevenlabs(signedElevenLabs(JSON.stringify({ type: "call_initiation_failure", data: { conversation_id: "conv_h1" } })));
-    await vi.advanceTimersByTimeAsync(20_000);
-    vi.useRealTimers();
-    await vi.waitFor(async () => expect(await store.getLadder("suzuki")).toMatchObject({ stage: "second_contact" }));
+    await after(21);
+    expect(await store.getLadder("suzuki")).toMatchObject({ stage: "second_contact" });
     expect(placeCall).not.toHaveBeenCalled();
     await store.clearLadder("suzuki");
   });
@@ -485,6 +477,64 @@ describe("demo reset", () => {
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
+  });
+});
+
+describe("red alerts must be acknowledged", () => {
+  const about = (name: string) => pushes().filter((p) => p.messages[0].text?.includes(name));
+
+  it("sends the alert again until someone taps the button, and records who did", async () => {
+    await store.clearLadder("takahashi");
+    const body = fixture.replace("conv_slip", "conv_ack").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
+    await elevenlabs(signedElevenLabs(body));
+    const first = about("高橋").find((p) => p.to === "U_helper")!;
+    expect(first.messages[1].template.actions[0].data).toBe("ack:conv_ack");
+
+    lineCalls.length = 0;
+    await after(31);
+    expect(about("高橋").map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+    expect(about("高橋")[0].messages[0].text).toContain("再通知1回目");
+    expect((await store.getCall("conv_ack"))!.alert_rounds).toBe(1);
+
+    await tap("ack:conv_ack", "U_stranger");
+    expect((await store.getCall("conv_ack"))!.acknowledged_by).toBeUndefined();
+    await tap("ack:conv_ack", "U_helper");
+    expect((await store.getCall("conv_ack"))!.acknowledged_by).toBe("民生委員 田中");
+
+    lineCalls.length = 0;
+    await after(62);
+    expect(about("高橋")).toEqual([]);
+  });
+
+  it("stops after three re-sends, and stops at once when the call is marked handled", async () => {
+    const body = fixture.replace("conv_slip", "conv_quiet").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
+    await elevenlabs(signedElevenLabs(body));
+    for (const seconds of [31, 62, 93, 124, 155]) await after(seconds);
+    expect((await store.getCall("conv_quiet"))!.alert_rounds).toBe(3);
+
+    const again = fixture.replace("conv_slip", "conv_done").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
+    await elevenlabs(signedElevenLabs(again));
+    await store.saveCall({ ...(await store.getCall("conv_done"))!, handled: true });
+    lineCalls.length = 0;
+    await after(200);
+    expect(about("高橋")).toEqual([]);
+  });
+
+  it("ignores a step left over from an earlier ladder", async () => {
+    await store.saveLadder("takahashi", { stage: "second_contact", at: Date.now() });
+    await store.schedule({ kind: "ladder_confirm", resident_id: "takahashi", ladder_at: 12345, due: Date.now() - 1 });
+    const before = (await store.listCalls("takahashi")).length;
+    await after(0);
+    expect((await store.listCalls("takahashi")).length).toBe(before);
+    expect(await store.getLadder("takahashi")).toMatchObject({ stage: "second_contact" });
+    await store.clearLadder("takahashi");
+  });
+
+  it("does not ask for acknowledgement on a yellow alert", async () => {
+    extract.mockRejectedValueOnce(new Error("model unavailable"));
+    const body = fixture.replace("conv_slip", "conv_yellow").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
+    await elevenlabs(signedElevenLabs(body));
+    expect(about("高橋")[0].messages).toHaveLength(1);
   });
 });
 

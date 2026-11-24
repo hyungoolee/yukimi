@@ -48,6 +48,15 @@ export async function POST(request: Request) {
         if (call && userId && resident?.snow_volunteer.line_id === userId) {
           await saveCall({ ...call, snow_accepted: true });
         }
+      } else if (kind === "ack") {
+        // Someone who was sent the red alert says they've seen it: stop sending it again.
+        const call = await getCall(id);
+        const resident = call && (await getResident(call.resident_id));
+        const who = resident && [resident.helper, resident.second_contact].find((c) => userId && c.line_id === userId);
+        if (call && who && !call.acknowledged_by) {
+          await saveCall({ ...call, acknowledged_by: who.name });
+          await reply(event.replyToken, "確認を記録しました。ありがとうございます。");
+        }
       } else if (kind === "ok" || kind === "ng") {
         await secondContactAnswered(id, kind === "ok", userId);
       }
