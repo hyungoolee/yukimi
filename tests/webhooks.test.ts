@@ -12,13 +12,13 @@ const extraction: Extraction = {
     emergency: false, self_harm: false, fall_recent: true, pain: true, cant_move: false, snowed_in: true,
     heater_problem: false, not_eating: false, confused: false, money_request: false, low_mood: false,
   },
-  new_facts: ["健太の模試はよくできた"],
   english: { summary: "Snowed in; slipped on ice yesterday and her hip hurts.", mood: "Calm", health: "Hip pain", winter: "Door blocked by snow", needs: ["Snow clearing"] },
 };
 const extract = vi.fn(async () => extraction);
 vi.mock("@/lib/extract", () => ({ extract }));
 // The second model call, for memory. By default it proposes nothing.
-const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ resolved: [], new_follow_ups: [] }));
+const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ fact_changes: noFacts, resolved: [], new_follow_ups: [] }));
+const noFacts: import("@/lib/curate").Curation["fact_changes"] = { add: [], update: [], retire: [] };
 vi.mock("@/lib/curate", () => ({ curate }));
 const placeCall = vi.fn(async () => "conv_retry");
 vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall }));
@@ -127,7 +127,7 @@ describe("after a call", () => {
 
     const sato = await store.getResident("sato");
     expect(sato!.recent_calls[0].summary).toBe(extraction.summary);
-    expect(sato!.facts).toContain("健太の模試はよくできた");
+    expect(sato!.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
   });
 
   it("records the volunteer accepting the snow request, and nobody else", async () => {
@@ -480,14 +480,17 @@ describe("demo reset", () => {
     await store.saveResident({ ...(await store.getResident("sato"))!, phone: "+819011112222" });
     await store.saveLadder("sato", { stage: "retry", at: Date.now() });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
-    expect((await store.getResident("sato"))!.facts).toContain("健太の模試はよくできた");
+    await store.updateResident("sato", (r) => ({
+      ...r, care_notes: "夫の話はしない", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
+    }));
 
     await resetDemo();
 
     expect(await store.listCalls()).toEqual([]);
     expect(await store.getLadder("sato")).toBeNull();
     const sato = (await store.getResident("sato"))!;
-    expect(sato.facts).not.toContain("健太の模試はよくできた");
+    expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
+    expect([sato.care_notes, sato.retired_facts, sato.memory_log]).toEqual(["", [], []]);
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
@@ -510,12 +513,12 @@ describe("one writer at a time", () => {
     const before = (await store.getResident("sato"))!;
     await Promise.all([
       store.updateResident("sato", (r) => ({ ...r, phone: "+819011110000" })),
-      store.updateResident("sato", (r) => ({ ...r, facts: [...r.facts, "同時に書かれた事実"] })),
+      store.updateResident("sato", (r) => ({ ...r, care_notes: "同時に書かれた注意" })),
       store.updateResident("sato", (r) => ({ ...r, location: { lat: 43.2, lng: 141.77 } })),
     ]);
     const after = (await store.getResident("sato"))!;
     expect(after.phone).toBe("+819011110000");
-    expect(after.facts).toContain("同時に書かれた事実");
+    expect(after.care_notes).toBe("同時に書かれた注意");
     expect(after.location).toEqual({ lat: 43.2, lng: 141.77 });
     await store.saveResident(before);
   });
@@ -579,7 +582,7 @@ describe("follow-ups after a call", () => {
     elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
 
   it("saves what the model proposes, hands it to the next call, and lets the helper remove it", async () => {
-    curate.mockResolvedValueOnce({ resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
     await call("conv_fu1", "takahashi");
     const saved = (await store.getResident("takahashi"))!.follow_ups!;
     expect(saved.map((f) => f.text)).toEqual(["腰の痛みはその後どうか"]);
@@ -601,7 +604,7 @@ describe("follow-ups after a call", () => {
     await store.updateResident("takahashi", (r) => ({
       ...r, follow_ups: [{ id: "hip", text: "腰の痛みはその後どうか", created: "2026-11-01", expires: "2099-01-01" }],
     }));
-    curate.mockResolvedValueOnce({ resolved: ["hip"], new_follow_ups: [] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: ["hip"], new_follow_ups: [] });
     await call("conv_fu2", "takahashi");
     expect(curate.mock.calls[0][1]).toEqual([expect.objectContaining({ id: "hip" })]);
     expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);

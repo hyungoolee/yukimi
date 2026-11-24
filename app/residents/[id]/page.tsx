@@ -10,6 +10,7 @@ import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { japanTime, RiskBadge } from "../../ui";
 import { LocationPicker } from "./location-picker";
+import { MemoryEditor } from "./memory-editor";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -42,7 +43,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
     <main className="mx-auto w-full max-w-3xl p-6">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">{t.back}</Link>
       <h1 className="mt-2 text-2xl font-semibold">{t.name(resident)}</h1>
-      <p className="mt-1 text-sm text-zinc-600">{resident.facts.join("、")}</p>
+
 
       <form action={savePhone} className="mt-4 flex items-center gap-2 text-sm">
         <input type="hidden" name="resident_id" value={resident.id} />
@@ -84,7 +85,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               </tr>
             </thead>
             <tbody>
-              {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.includes(line.needsFact!))).map(
+              {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.text.includes(line.needsFact!))).map(
                 (line) => (
                   <tr key={line.say} className="border-t border-zinc-200 align-top">
                     <td className="py-2 pr-3 text-zinc-600">{line.when[lang]}</td>
@@ -115,6 +116,8 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           labels={t.picker}
         />
       </details>
+
+      <MemoryEditor resident={resident} t={t} lang={lang} />
 
       {openFollowUps(resident, japanDate()).length > 0 && (
         <>
