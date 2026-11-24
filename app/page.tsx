@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { criticalCount } from "@/lib/coverage";
 import { mapData, rankedRows, snowRequest, type Row } from "@/lib/dashboard";
-import { DEMO_MODE } from "@/lib/env";
+import { DEMO_MODE, LINE_READY } from "@/lib/env";
 import type { Lang, Strings } from "@/lib/i18n";
 import { listCalls, listResidents } from "@/lib/store";
 import type { CallRecord } from "@/lib/types";
@@ -33,6 +34,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     { label: t.badge.yellow, n: open("yellow"), className: "bg-amber-400 text-black" },
     { label: t.badge.none, n: rows.filter((r) => !r.call).length, className: "bg-zinc-200 text-zinc-700" },
   ];
+  const unreached = criticalCount(residents);
   const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
@@ -47,7 +49,14 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </span>
         ))}
       </p>
-      <nav className="mt-4 inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
+      {(!LINE_READY || unreached > 0) && (
+        // An alert that would reach nobody is the failure this product exists to prevent: say so up front.
+        <Link href="/people" className="mt-3 block rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800 hover:bg-red-100">
+          {LINE_READY ? t.coverageBanner(unreached) : t.lineNotReady} →
+        </Link>
+      )}
+      <div className="mt-4 flex items-center gap-4">
+      <nav className="inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
         {(["list", "map"] as const).map((v) => (
           <Link
             key={v}
@@ -59,6 +68,10 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </Link>
         ))}
       </nav>
+        <Link href="/people" className={linkClass}>
+          {t.people}
+        </Link>
+      </div>
 
       {view === "list" ? (
         <ul className="mt-4 divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
