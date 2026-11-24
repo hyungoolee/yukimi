@@ -78,6 +78,12 @@ function variablesOf<V>(started: { variables: V } | { error: string }) {
   if ("error" in started) throw new Error(started.error);
   return started.variables;
 }
+/** Ends every help request a resident has open, so the next call starts afresh. */
+async function closeRequests(residentId: string) {
+  for (const c of await store.listCalls(residentId)) {
+    await store.updateCall(c.id, (call) => ({ actions: call.actions.map((a) => (a.type === "request" ? { ...a, done: true } : a)) }));
+  }
+}
 const pushes = () => lineCalls.filter((c) => c.url.endsWith("/push")).map((c) => c.body);
 
 beforeEach(async () => {
@@ -155,21 +161,28 @@ describe("after a call", () => {
   const lastReply = () => lineCalls.filter((c) => c.url.endsWith("/reply")).at(-1)?.body.messages[0].text;
 
   it("records the volunteer's time slot, from the volunteer and nobody else, and the first answer stands", async () => {
-    await tap("accept:conv_slip:snow:2026-11-26:am", "U_stranger");
-    await tap("accept:conv_slip:supplies:2026-11-26:am", "U_volunteer"); // not theirs to take
+    const { slotChoices } = await import("@/lib/requests");
+    const [first, second] = slotChoices();
+    const button = (kind: string, slot = first) => `accept:conv_slip:${kind}:${slot.date}:${slot.part}`;
+    await tap(button("snow"), "U_stranger");
+    await tap(button("supplies"), "U_volunteer"); // not theirs to take
+    await tap("accept:conv_slip:snow:2020-01-01:am", "U_volunteer"); // a half-day that is over
+    expect(lastReply()).toBe("その時間は過ぎています。ほかの時間を押してください。");
     expect((await snowOf("conv_slip")).accepted_by).toBeUndefined();
 
-    await tap("accept:conv_slip:snow:2026-11-26:am", "U_volunteer");
-    expect(await snowOf("conv_slip")).toMatchObject({ accepted_by: "山本", slot: { date: "2026-11-26", part: "am" } });
+    await tap(button("snow"), "U_volunteer");
+    expect(await snowOf("conv_slip")).toMatchObject({ accepted_by: "山本", slot: first });
     expect(lastReply()).toContain("佐藤さん宅、");
 
-    await tap("accept:conv_slip:snow:2026-11-27:am", "U_volunteer");
-    expect((await snowOf("conv_slip")).slot).toEqual({ date: "2026-11-26", part: "am" });
-    expect(lastReply()).toBe("山本さんが引き受け済みです。");
+    await tap(button("snow", second), "U_volunteer");
+    expect((await snowOf("conv_slip")).slot).toEqual(first);
+    expect(lastReply()).toBe("すでに引き受け済みです。ありがとうございます。");
   });
 
   it("still takes the button from before there were time slots", async () => {
-    await store.updateCall("conv_slip", () => ({ handled: true })); // closed, so the next call asks afresh
+    await closeRequests("sato");
+    await tap("snow_accept:conv_slip", "U_volunteer"); // nothing open any more
+    expect(lastReply()).toBe("この件はもう済んでいます。ありがとうございます。");
     const body = fixture.replace("conv_slip", "conv_old_button");
     await elevenlabs(signedElevenLabs(body));
     await tap("snow_accept:conv_old_button", "U_volunteer");
@@ -1019,7 +1032,7 @@ describe("help requests", () => {
 
   it("asks once, tells the resident who is coming, and closes when she says it is done", async () => {
     const { slotChoices, slotLabel } = await import("@/lib/requests");
-    for (const c of await store.listCalls("suzuki")) await store.updateCall(c.id, () => ({ handled: true }));
+    await closeRequests("suzuki");
     const [first] = slotChoices();
 
     await heard("conv_h1", true, true);
@@ -1053,18 +1066,18 @@ describe("help requests", () => {
   });
 
   it("asks again when nobody took it, and the old message's button answers the new request", async () => {
-    for (const c of await store.listCalls("suzuki")) await store.updateCall(c.id, () => ({ handled: true }));
+    await closeRequests("suzuki");
     await heard("conv_h4", true, false);
     lineCalls.length = 0;
     await heard("conv_h5", true, false);
     expect(pushes().map((p) => p.to)).toEqual(["U_volunteer"]);
-    await tap("accept:conv_h4:snow:2026-11-26:am", "U_volunteer");
+    await tap("snow_accept:conv_h4", "U_volunteer");
     expect((await requestsOf("conv_h5"))[0].accepted_by).toBe("山本");
     expect((await requestsOf("conv_h4"))[0].accepted_by).toBeUndefined();
   });
 
   it("takes the demo button's place for a tap, in demo mode", async () => {
-    for (const c of await store.listCalls("suzuki")) await store.updateCall(c.id, () => ({ handled: true }));
+    await closeRequests("suzuki");
     await heard("conv_h6", true, false);
     const { acceptDemo } = await import("@/app/actions");
     const form = new FormData();

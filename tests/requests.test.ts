@@ -49,6 +49,11 @@ describe("open requests", () => {
     const old = call([request("snow")]);
     expect(openRequests(sato, [call([request("snow", { done: true })]), old])).toEqual([]);
     expect(openRequests(sato, [call([request("snow")], { handled: true }), old])).toEqual([]);
+    // "Handled" clears the alert, not a visit someone has promised.
+    expect(openRequests(sato, [call([request("snow", { accepted_by: "山本" })], { handled: true })])).toHaveLength(1);
+    // Never closed: dropped after three days.
+    const stale = call([request("snow")], { at: "2026-11-20T00:00:00.000Z" });
+    expect(openRequests(sato, [stale], morning)).toEqual([]);
     expect(openRequests(sato, [call([request("snow")], { resident_id: "suzuki" })])).toEqual([]);
   });
 
