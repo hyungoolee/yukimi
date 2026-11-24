@@ -538,7 +538,7 @@ describe("trends across days", () => {
   const callToday = (id: string) =>
     elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', '"resident_id": "suzuki"')));
 
-  it("alerts helper and family on the third day of not eating, and only notes it on the fourth", async () => {
+  it("alerts helper and family on the third day of not eating, once", async () => {
     await earlier("conv_t1", 1);
     extract.mockResolvedValueOnce(notEaten);
     await callToday("conv_t2");
@@ -553,17 +553,17 @@ describe("trends across days", () => {
     });
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
 
+    // A second call the same day: still red, but family is not alerted twice.
     lineCalls.length = 0;
-    await earlier("conv_t00", 3);
     extract.mockResolvedValueOnce(notEaten);
-    await callToday("conv_t4");
-    expect(await store.getCall("conv_t4")).toMatchObject({
-      risk: "yellow", reasons: ["食事をとれていない", "3日続けて食事をとれていない（継続中）"],
+    await callToday("conv_t3b");
+    expect(await store.getCall("conv_t3b")).toMatchObject({
+      risk: "red", reasons: ["食事をとれていない", "3日続けて食事をとれていない（継続中）"],
     });
     expect(pushes()).toEqual([]);
   });
 
-  it("still judges today's call when the earlier records can't be read as observations", async () => {
+  it("ignores an earlier record with an unreadable time", async () => {
     await store.saveCall({
       id: "conv_bad", resident_id: "takahashi", at: "not a date", kind: "call", risk: "green", reasons: [], actions: [],
       extraction: notEaten,
