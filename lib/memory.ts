@@ -215,11 +215,12 @@ export function restoreFact(resident: Resident, id: string): Resident {
 export function deleteFact(resident: Resident, id: string): Resident {
   const fact = (resident.retired_facts ?? []).find((f) => f.id === id);
   if (!fact) return resident;
-  // Every earlier wording of this fact goes too, and any note that the same text was once refused.
+  // Every earlier wording of this fact goes too, wherever the log holds it: under another id
+  // (a copy merged on restore) or as a note that the same text was once refused.
   const log = resident.memory_log ?? [];
   const wordings = new Set([fact.text, ...log.filter((e) => e.fact === id).flatMap((e) => [e.text, e.before])]);
   const scrub = (e: MemoryChange): MemoryChange =>
-    e.fact === id || (e.op === "refuse" && wordings.has(e.text)) ? { at: e.at, by: e.by, op: e.op } : e;
+    e.fact === id || wordings.has(e.text) || wordings.has(e.before) ? { at: e.at, by: e.by, op: e.op } : e;
   // Deleting is the strongest removal, so the block stays (and is added, if the model had retired it).
   return logged(
     block(
