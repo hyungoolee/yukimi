@@ -40,6 +40,8 @@ export type Resident = {
   retired_facts?: RetiredFact[]; // kept, hidden from the agent, restorable
   care_notes?: string; // written by the helper: what to avoid or handle gently
   memory_log?: MemoryChange[]; // newest last
+  /** Hashes of facts the helper retired or deleted. The model can't write these back; the text isn't kept. */
+  blocked_facts?: string[];
   recent_calls: { date: string; summary: string }[];
   /** Absent on files from before follow-ups existed. Read through lib/memory.ts. */
   follow_ups?: FollowUp[];
