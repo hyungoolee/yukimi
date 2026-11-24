@@ -37,7 +37,8 @@ const scenarios: Record<string, Scenario> = {
     expectTool: false,
     expectSay: "腰",
     variables: {
-      recent_calls: "2026-11-25：雪で玄関が開かず、きのう氷ですべって転び腰が痛い。暖房・食料・薬は足りている。",
+      // No mention of the hip here: the agent can only know to ask from the follow-up.
+      recent_calls: "2026-11-25：雪で玄関が開かなかった。暖房・食料・薬は足りている。",
       follow_ups: "・腰の痛みはその後どうか",
     },
     persona: `${base} 状況：元気。玄関の雪はボランティアさんがはいてくれた。腰のことは自分からは言わない。聞かれたら、きのうより楽になったと答える。`,

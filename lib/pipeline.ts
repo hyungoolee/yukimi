@@ -103,6 +103,7 @@ export async function processCall(residentId: string, callId: string, transcript
   }
 
   // Last, and on its own: the call is already judged, alerted and saved. If curation fails,
-  // memory is simply left as it was, and nobody is alerted about it.
-  await curateMemory(residentId, transcript).catch((e) => console.error("Memory curation failed", e));
+  // memory is simply left as it was, and nobody is alerted about it. A call that could not be
+  // judged is left for a person to read, not for memory to learn from.
+  if (extraction) await curateMemory(residentId, transcript).catch((e) => console.error("Memory curation failed", e));
 }

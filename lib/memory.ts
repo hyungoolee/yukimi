@@ -11,6 +11,9 @@ const MAX_OPEN = 5;
 const MAX_NEW_PER_CALL = 3;
 const MAX_DAYS = 14;
 const MAX_LENGTH = 80;
+// A follow-up's text is placed in tomorrow's agent prompt, so it must stay a plain one-line note:
+// nothing that reads as prompt structure, and nothing about money, whoever said it on the call.
+const NOT_A_NOTE = /[#{}<>]|口座|暗証|カード|振込|振り込|送金|お金|現金|ATM|ＡＴＭ/i;
 
 /** Follow-ups still worth asking on `today`. */
 export const openFollowUps = (resident: Resident, today: string): FollowUp[] =>
@@ -32,15 +35,15 @@ export function applyCuration(resident: Resident, proposed: Curation, today: str
   const known = new Set(kept.map((f) => f.text));
   const added: FollowUp[] = [];
   for (const { text, days } of proposed.new_follow_ups) {
-    const clean = text.trim();
-    if (added.length === MAX_NEW_PER_CALL) break;
-    if (!clean || clean.length > MAX_LENGTH || known.has(clean)) continue;
+    const clean = String(text).replace(/\s+/g, " ").trim();
+    // Full is full: a new item never pushes out one that is still open.
+    if (added.length === MAX_NEW_PER_CALL || kept.length + added.length >= MAX_OPEN) break;
+    if (!clean || clean.length > MAX_LENGTH || known.has(clean) || NOT_A_NOTE.test(clean)) continue;
     known.add(clean);
     const lasts = Math.min(MAX_DAYS, Math.max(1, Math.round(Number(days) || 1)));
     added.push({ id: randomUUID().slice(0, 8), text: clean, created: today, expires: daysBefore(today, -lasts) });
   }
-  // Over the cap, the oldest go first.
-  return { ...resident, follow_ups: [...kept, ...added].slice(-MAX_OPEN) };
+  return { ...resident, follow_ups: [...kept, ...added] };
 }
 
 /** After a call has been judged and saved: let the model propose memory changes, then apply them. */
