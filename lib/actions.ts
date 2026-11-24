@@ -1,12 +1,14 @@
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
-import { REQUESTS, slotChoices, slotLabel, type RequestKind } from "./requests";
-import { getCall, getResident, schedule, updateCall, type Task } from "./store";
+import { openRequests, REQUESTS, slotChoices, slotLabel, type RequestKind } from "./requests";
+import { getCall, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
 import type { Action, AlertReasons, Delivery, Resident, Risk, Role, Slot } from "./types";
 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
 const ACK_MS = DEMO_MODE ? 30_000 : 10 * 60_000;
 const MAX_RESENDS = 3;
+// A help request nobody has taken is passed to the coordinators after this long.
+const REQUEST_WAIT_MS = DEMO_MODE ? 30_000 : 2 * 60 * 60_000;
 
 const link = (resident: Resident) =>
   process.env.APP_URL ? `\n${process.env.APP_URL}/residents/${resident.id}` : "";
@@ -103,15 +105,57 @@ export async function acceptRequest(callId: string, kind: RequestKind, name: str
   return { mine: !!saved, request };
 }
 
+const scheduleCheck = (residentId: string, requestId: string, kind: RequestKind, wait: number, round = 1) =>
+  schedule({ kind: "request_check", resident_id: residentId, call_id: requestId, request_kind: kind, round, due: Date.now() + wait });
+
+/**
+ * Has anyone taken the request? If not, the coordinators hear about it, once. Being told is what
+ * stops a second message, so this is safe to run again: after a reminder, a restart, or a retry.
+ */
+export async function checkRequest({ resident_id, call_id: requestId = "", request_kind: kind, round = 1 }: Pick<Task, "resident_id" | "call_id" | "request_kind" | "round">) {
+  const resident = await getResident(resident_id);
+  if (!resident || !kind) return;
+  // Closed, handled or gone stale: no longer open, so nothing to pass on.
+  const open = openRequests(resident, await listCalls(resident_id)).find((r) => r.kind === kind && r.requestId === requestId);
+  if (!open || open.status === "accepted" || open.escalated) return;
+  const label = REQUESTS[kind].label.ja;
+  // No name: the person in that role now may not be the one the request went to.
+  const body =
+    open.status === "not_sent"
+      ? `【依頼先なし】${resident.name}さんの${label}。依頼を届けられる人がいません。`
+      : `【引き受け手なし】${resident.name}さんの${label}。依頼しましたが、引き受ける人がまだ決まっていません。`;
+  const coordinators = (await listPeople()).filter((p) => p.coordinator && p.line_id);
+  const sent = await Promise.all(coordinators.map((p) => push(p.line_id, [text(`${body}${link(resident)}`)])));
+  if (sent.some(Boolean)) {
+    // Noted only when it reached someone: until then the card still shows the request waiting.
+    const escalated_at = new Date().toISOString();
+    await updateCall(open.callId, (call) => ({
+      actions: call.actions.map((a) => (a.type === "request" && a.kind === kind ? { ...a, escalated_at } : a)),
+    }));
+  } else if (coordinators.length && round < MAX_RESENDS) {
+    // LINE took none of them: try again shortly, a few times.
+    await scheduleCheck(resident_id, requestId, kind, ACK_MS, round + 1);
+  }
+}
+
 /** Carries out the rules' actions and reports, per recipient, what was sent and whether it went out. */
 export async function runActions(resident: Resident, callId: string, risk: Risk, reasons: string[], actions: Action[]) {
   const alert = (reasonsByRole: AlertReasons) =>
     risk === "red" ? sendAndScheduleRedAlert(resident, callId, reasonsByRole) : sendAlert(resident, reasonsByRole);
   return Promise.all(
     actions.map(async (a) => {
-      const deliveries =
-        a.type === "alert" ? await alert(a.reasonsByRole ?? sharedReasons(a.to, reasons)) : await sendRequest(resident, callId, a);
-      return { ...a, sent: anySent(deliveries), deliveries };
+      if (a.type === "alert") {
+        const deliveries = await alert(a.reasonsByRole ?? sharedReasons(a.to, reasons));
+        return { ...a, sent: anySent(deliveries), deliveries };
+      }
+      const deliveries = await sendRequest(resident, callId, a);
+      const sent = anySent(deliveries);
+      // Sent: the coordinators hear if nobody takes it in time. Reached nobody: they hear now.
+      // A reminder on a later call does the same; the check says nothing once they have been told.
+      const requestId = a.request_id ?? callId;
+      if (sent) await scheduleCheck(resident.id, requestId, a.kind, REQUEST_WAIT_MS);
+      else await checkRequest({ resident_id: resident.id, call_id: requestId, request_kind: a.kind });
+      return { ...a, sent, deliveries };
     }),
   );
 }

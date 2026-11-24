@@ -34,6 +34,10 @@ export default async function PersonPage({ params }: PageProps<"/people/[id]">) 
           <span className="text-zinc-500">{t.personPhone}</span>
           <input name="phone" maxLength={60} defaultValue={person.phone ?? ""} className={input} />
         </label>
+        <label className="flex items-center gap-1.5 py-1">
+          <input type="checkbox" name="coordinator" defaultChecked={person.coordinator} />
+          {t.coordinator}
+        </label>
         <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
       </form>
 
