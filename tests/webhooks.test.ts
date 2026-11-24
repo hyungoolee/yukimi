@@ -359,6 +359,33 @@ describe("phone number", () => {
   });
 });
 
+describe("locations", () => {
+  const form = (fields: Record<string, string>) => {
+    const data = new FormData();
+    for (const [k, v] of Object.entries(fields)) data.set(k, v);
+    return data;
+  };
+
+  it("places a home pin, and refuses a point outside Japan or an empty form", async () => {
+    vi.doMock("next/cache", () => ({ revalidatePath: () => {} }));
+    const { saveLocation } = await import("@/app/actions");
+    await saveLocation(form({ resident_id: "sato", who: "home", lat: "43.25", lng: "141.8" }));
+    expect((await store.getResident("sato"))!.location).toEqual({ lat: 43.25, lng: 141.8 });
+    await saveLocation(form({ resident_id: "sato", who: "home", lat: "48.85", lng: "2.35" }));
+    await saveLocation(form({ resident_id: "sato", who: "home", lat: "", lng: "" }));
+    expect((await store.getResident("sato"))!.location).toEqual({ lat: 43.25, lng: 141.8 });
+  });
+
+  it("moves a shared volunteer's pin for every resident they serve", async () => {
+    const { saveLocation } = await import("@/app/actions");
+    await saveLocation(form({ resident_id: "sato", who: "snow_volunteer", lat: "43.3", lng: "141.9" }));
+    for (const r of await store.listResidents()) {
+      expect(r.snow_volunteer.location).toEqual({ lat: 43.3, lng: 141.9 });
+      expect(r.snow_volunteer.line_id).toBe("U_volunteer");
+    }
+  });
+});
+
 describe("calls without a phone line", () => {
   it("hands the browser a token and the resident's variables", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
