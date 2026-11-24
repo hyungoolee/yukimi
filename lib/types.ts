@@ -17,6 +17,7 @@ export type MemoryChange = {
   at: string; // ISO time
   by: string; // "helper", or "call:<call id>"
   op: "add" | "update" | "retire" | "restore" | "delete" | "refuse" | "care_notes";
+  fact?: string; // the fact's id, so deleting a fact for good can clear every trace of its text here
   text?: string;
   before?: string;
 };

@@ -104,7 +104,7 @@ describe("facts proposed by the model", () => {
   it("adds a new fact, unlocked, and logs which call it came from", () => {
     const out = propose(withFacts([]), { add: [" 毎週木曜にデイサービスに通う "] });
     expect(out.facts).toEqual([{ id: expect.any(String), text: "毎週木曜にデイサービスに通う", since: TODAY, source: "call" }]);
-    expect(out.memory_log).toEqual([{ at: expect.any(String), by: "call:conv_1", op: "add", text: "毎週木曜にデイサービスに通う" }]);
+    expect(out.memory_log).toEqual([{ at: expect.any(String), by: "call:conv_1", op: "add", fact: out.facts[0].id, text: "毎週木曜にデイサービスに通う" }]);
   });
 
   it("updates and retires unlocked facts, keeping the retired one with its reason", () => {
