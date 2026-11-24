@@ -1,3 +1,4 @@
+import type { Observations } from "./measures";
 // Shared formats from the Build plan. Change only with the whole team.
 
 export type LatLng = { lat: number; lng: number };
@@ -46,17 +47,7 @@ export type Signals = {
   low_mood: boolean;
 };
 
-/** "unknown" means it did not come up. It never counts as "no". */
-export type Tri = "yes" | "no" | "unknown";
-
-/** What the resident said about the time since yesterday's call. Read across days by lib/trends.ts. */
-export type Observations = {
-  ate: Tri; // "no" = skipped meals or says they aren't eating; "not yet this morning" is unknown
-  slept_well: Tri;
-  went_out: Tri;
-  pain_or_injury: Tri;
-  low_mood: Tri;
-};
+export type { Observations, Tri } from "./measures";
 
 export type Extraction = {
   answered_by_person: boolean;
