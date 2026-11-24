@@ -156,6 +156,41 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </div>
           {call.reasons.length > 0 && <p className="mt-2 text-sm font-medium">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>}
           {call.extraction && <Notes notes={notesFor(call.extraction, lang)} t={t} />}
+          {call.actions.length > 0 && (
+            <div className="mt-3 text-sm">
+              <div className="text-zinc-500">{t.messagesSent}</div>
+              <ul className="mt-1 space-y-2">
+                {call.actions.flatMap((a) =>
+                  // Older records kept neither the wording nor each person's result: say so, don't guess.
+                  !a.deliveries
+                    ? [
+                        <li key={a.type} className="rounded border border-zinc-200 p-2 text-zinc-500">
+                          → {a.to.map((role) => resident[role].name).join("、")}
+                          <div>{t.messageNotRecorded}</div>
+                        </li>,
+                      ]
+                    : a.deliveries.map((d) => (
+                        <li key={`${a.type}-${d.role}`} className="rounded border border-zinc-200 p-2">
+                          <div className="text-zinc-500">
+                            → {resident[d.role].name}
+                            <span className={d.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
+                              {d.sent ? t.messageDelivered : d.registered ? t.messageFailed : t.messageUnregistered}
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap break-words">{d.text}</div>
+                          {d.button && <div className="text-zinc-500">{t.messageButton(d.button)}</div>}
+                          {lang === "en" && (
+                            <div className="text-zinc-600">
+                              {d.reasons ? t.alertGloss(d.reasons.map((r) => reasonText(lang, r)).join(t.separator)) : t.snowGloss}
+                            </div>
+                          )}
+                        </li>
+                      )),
+                )}
+              </ul>
+              {call.alert_rounds ? <p className="mt-1 text-zinc-500">{t.messageResent(call.alert_rounds)}</p> : null}
+            </div>
+          )}
           {call.transcript && (
             <details className="mt-3 text-sm">
               <summary className="cursor-pointer text-zinc-500">{t.showTranscript}</summary>
