@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { ROLES } from "./coverage";
 import type { AlertReasons, CallRecord, Contact, Person, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
@@ -24,13 +25,14 @@ async function seed() {
   }
   // A disk from before people had their own files holds names inside each resident. Nobody had
   // registered for real then, so such a resident takes its three people from the seed data.
-  for (const name of existing.filter((n) => n.endsWith(".json"))) {
-    const at = path.join(DATA_DIR, "residents", name);
-    const old = JSON.parse(await readFile(at, "utf8")) as Stored;
-    if (ROLES.every((role) => typeof old[role] === "string")) continue;
+  const json = <T>(at: string) => readFile(at, "utf8").then((raw) => JSON.parse(raw) as T).catch(() => null);
+  for (const name of existing.filter((n) => /^[\w-]+\.json$/.test(n))) {
+    // A file that can't be read is left alone, as before: that resident is missing, the rest still work.
+    const old = await json<Stored>(path.join(DATA_DIR, "residents", name));
+    if (!old || ROLES.every((role) => typeof old[role] === "string")) continue;
     await cp(path.join(SEED_DIR, "people"), path.join(DATA_DIR, "people"), { recursive: true, force: false });
-    const fresh = JSON.parse(await readFile(path.join(SEED_DIR, "residents", name), "utf8").catch(() => "{}")) as Partial<Stored>;
-    const roles = Object.fromEntries(ROLES.map((role) => [role, fresh[role] ?? ""]));
+    const fresh = await json<Stored>(path.join(SEED_DIR, "residents", name));
+    const roles = Object.fromEntries(ROLES.map((role) => [role, typeof old[role] === "string" ? old[role] : (fresh?.[role] ?? "")]));
     await write("residents", name.slice(0, -5), { ...old, ...roles });
   }
 }
@@ -94,7 +96,6 @@ export function updatePerson(id: string, change: (person: Person) => Person | nu
 /** A fresh registration code, replacing any old one. */
 export const renewCode = (id: string) => updatePerson(id, (p) => ({ ...p, code: newCode() }));
 
-const ROLES: Role[] = ["helper", "second_contact", "snow_volunteer"];
 /** A resident as saved: each role holds a person's id, or "" when the post is vacant. */
 type Stored = Omit<Resident, Role> & Record<Role, string>;
 
@@ -102,7 +103,8 @@ type Stored = Omit<Resident, Role> & Record<Role, string>;
 async function withPeople(stored: Stored): Promise<Resident> {
   const contact = async (id: string): Promise<Contact> => {
     const person = id ? await getPerson(id) : null;
-    if (!person) return { name: "" };
+    // A person who can't be read keeps their id, so the next save of this resident doesn't drop them.
+    if (!person) return id ? { id, name: "" } : { name: "" };
     const contact: Person = { ...person };
     delete contact.code; // the registration code stays on the person's own page
     return contact;

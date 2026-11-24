@@ -12,7 +12,7 @@ import { TestMessage } from "../test-message";
 /** One person: their details, their LINE registration, and the residents they serve. */
 export default async function PersonPage({ params }: PageProps<"/people/[id]">) {
   const { id } = await params;
-  const person = await getPerson(id).catch(() => null); // a made-up id in the address is just "not found"
+  const person = await getPerson(id);
   if (!person) notFound();
   const { t } = await getStrings();
   const { roles, residents } = served(person, await listResidents());
