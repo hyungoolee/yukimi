@@ -39,7 +39,13 @@ export async function processCall(
   let judged = false; // true only when the rules ran on a real extraction
   try {
     extraction = await extract(resident, transcript);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), unanswered(extraction.observations ?? {}, winterChecks));
+    // A question an earlier call today already answered is not unanswered: a short second call is fine.
+    const earlier = (await listCalls(residentId).catch(() => [])).filter((c) => c.kind === "call" && c.id !== callId);
+    const [today] = dailyObservations([
+      { at: new Date().toISOString(), observations: extraction.observations },
+      ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
+    ]);
+    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), unanswered(today?.observations ?? {}, winterChecks));
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);

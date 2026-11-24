@@ -691,7 +691,7 @@
     "resident": "sato",
     "expected": "yellow",
     "expected_reasons": [
-      "通話が終わる前に確認できなかった：睡眠、玄関・雪、食料・薬"
+      "通話が終わる前に確認できなかった：睡眠／玄関・雪／食料・薬"
     ],
     "snow_request": false,
     "transcript": [

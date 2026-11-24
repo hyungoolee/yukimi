@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { runActions } from "@/lib/actions";
-import { verifySignature } from "@/lib/elevenlabs";
+import { toldToRunWinterChecks, verifySignature } from "@/lib/elevenlabs";
 import { env } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { needsReview, processCall } from "@/lib/pipeline";
@@ -46,8 +46,8 @@ export async function POST(request: Request) {
         if (!transcript.some((t) => t.role === "user")) {
           if (byPhone) await missed(residentId, attempt);
         } else {
-          // What this call's agent was told (lib/weather.ts describeWeather starts it with 必要 or 不要).
-          const winterChecks = String(variables?.winter_check ?? "").startsWith("必要");
+          // What this call's agent was told: from the call's own variables, else as saved when placing it.
+          const winterChecks = variables ? toldToRunWinterChecks(variables) : !!pending?.winter_checks;
           await processCall(residentId, data.conversation_id, transcript, byPhone ? attempt : null, winterChecks);
         }
       }
