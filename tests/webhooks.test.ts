@@ -72,6 +72,11 @@ const say = (userId: string, text: string) =>
   line(signedLine([{ type: "message", replyToken: "r", source: { userId }, message: { type: "text", text } }]));
 const tap = (data: string, userId = "U_family") =>
   line(signedLine([{ type: "postback", source: { userId }, postback: { data } }]));
+/** A browser call's variables; fails the test with the reason if the call could not start. */
+function variablesOf<V>(started: { variables: V } | { error: string }) {
+  if ("error" in started) throw new Error(started.error);
+  return started.variables;
+}
 const pushes = () => lineCalls.filter((c) => c.url.endsWith("/push")).map((c) => c.body);
 
 beforeEach(async () => {
@@ -892,7 +897,7 @@ describe("the helper's memory edits", () => {
     await actions.saveCareNotes(form({ resident_id: "suzuki", text: "奥さんの話はこちらからしない" }));
     expect((await facts()).care_notes).toBe("奥さんの話はこちらからしない");
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
-    expect((await actions.startBrowserCall("suzuki")).variables).toMatchObject({
+    expect(variablesOf(await actions.startBrowserCall("suzuki"))).toMatchObject({
       care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
       briefing: "なし",
     });
@@ -920,10 +925,10 @@ describe("today's brief on a call", () => {
     }
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     const { startBrowserCall } = await import("@/app/actions");
-    expect((await startBrowserCall("sato")).variables.briefing).toBe("・食事のことを、いつもよりていねいに聞く。");
+    expect(variablesOf(await startBrowserCall("sato")).briefing).toBe("・食事のことを、いつもよりていねいに聞く。");
 
     const broken = vi.spyOn(store, "listCalls").mockRejectedValueOnce(new Error("disk error"));
-    expect((await startBrowserCall("sato")).variables.briefing).toBe("なし");
+    expect(variablesOf(await startBrowserCall("sato")).briefing).toBe("なし");
     broken.mockRestore();
   });
 });
