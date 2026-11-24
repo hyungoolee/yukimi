@@ -843,12 +843,13 @@ describe("follow-ups after a call", () => {
     await post("conv_cut3", "不要。天気の話は軽くふれる程度でよい。");
     expect(await store.getCall("conv_cut3")).toMatchObject({ risk: "green", reasons: [] });
 
-    // The webhook came without the call's variables: what was saved when the call was placed is used.
+    // The webhook's variables don't say: what was saved when the call was placed is used.
     await store.savePending("conv_cut5", { resident_id: "suzuki", attempt: 1, winter_checks: true });
     extract.mockResolvedValueOnce(cutShort);
     await elevenlabs(signedElevenLabs(JSON.stringify({
       type: "post_call_transcription",
-      data: { conversation_id: "conv_cut5", transcript: [{ role: "user", message: "はい。" }] },
+      data: { conversation_id: "conv_cut5", conversation_initiation_client_data: { dynamic_variables: { resident_id: "suzuki" } },
+        transcript: [{ role: "user", message: "はい。" }] },
     })));
     expect(await store.getCall("conv_cut5")).toMatchObject({ reasons: ["通話が終わる前に確認できなかった：玄関・雪／食料・薬"] });
   });

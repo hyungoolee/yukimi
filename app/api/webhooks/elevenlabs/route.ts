@@ -47,7 +47,7 @@ export async function POST(request: Request) {
           if (byPhone) await missed(residentId, attempt);
         } else {
           // What this call's agent was told: from the call's own variables, else as saved when placing it.
-          const winterChecks = variables ? toldToRunWinterChecks(variables) : !!pending?.winter_checks;
+          const winterChecks = variables?.winter_check !== undefined ? toldToRunWinterChecks(variables) : !!pending?.winter_checks;
           await processCall(residentId, data.conversation_id, transcript, byPhone ? attempt : null, winterChecks);
         }
       }
