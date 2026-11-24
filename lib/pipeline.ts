@@ -2,7 +2,7 @@ import { runActions } from "./actions";
 import { extract } from "./extract";
 import { missed } from "./ladder";
 import { applyRules } from "./rules";
-import { clearLadder, getResident, saveCall, saveResident } from "./store";
+import { clearLadder, getResident, saveCall, updateResident } from "./store";
 import type { Extraction, RulesOutput, Turn } from "./types";
 import { getWeather } from "./weather";
 
@@ -50,10 +50,12 @@ export async function processCall(residentId: string, callId: string, transcript
   });
 
   if (extraction) {
-    // Re-read: the profile may have changed while the model was working.
-    const fresh = (await getResident(residentId)) ?? resident;
-    fresh.recent_calls = [{ date: japanDate(), summary: extraction.summary }, ...fresh.recent_calls].slice(0, 7);
-    fresh.facts = [...new Set([...fresh.facts, ...extraction.new_facts])];
-    await saveResident(fresh);
+    const { summary, new_facts } = extraction;
+    // Applied to the freshest copy: the profile may have changed while the model was working.
+    await updateResident(residentId, (fresh) => ({
+      ...fresh,
+      recent_calls: [{ date: japanDate(), summary }, ...fresh.recent_calls].slice(0, 7),
+      facts: [...new Set([...fresh.facts, ...new_facts])],
+    }));
   }
 }
