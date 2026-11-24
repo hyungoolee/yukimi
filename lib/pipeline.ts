@@ -95,12 +95,11 @@ export async function processCall(residentId: string, callId: string, transcript
   });
 
   if (extraction) {
-    const { summary, new_facts } = extraction;
+    const { summary } = extraction;
     // Applied to the freshest copy: the profile may have changed while the model was working.
     await updateResident(residentId, (fresh) => ({
       ...fresh,
       recent_calls: [{ date: today, summary }, ...fresh.recent_calls].slice(0, 7),
-      facts: [...new Set([...fresh.facts, ...new_facts])],
     }));
   }
 

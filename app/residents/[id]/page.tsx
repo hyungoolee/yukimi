@@ -12,6 +12,7 @@ import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-car
 import { SubmitButton } from "../../submit-button";
 import { japanTime, RiskBadge, riskEdge } from "../../ui";
 import { LocationPicker } from "./location-picker";
+import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
 import { WeekGrid } from "./week-grid";
@@ -47,7 +48,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
     <main className="mx-auto w-full max-w-3xl p-6">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">{t.back}</Link>
       <h1 className="mt-2 text-2xl font-semibold">{t.name(resident)}</h1>
-      <p className="mt-1 text-sm text-zinc-600">{resident.facts.join("、")}</p>
+
 
       <section className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(current)}`}>
         <div className="flex items-center gap-3">
@@ -98,7 +99,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                 </tr>
               </thead>
               <tbody>
-                {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.includes(line.needsFact!))).map(
+                {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.text.includes(line.needsFact!))).map(
                   (line) => (
                     <tr key={line.say} className="border-t border-zinc-200 align-top">
                       <td className="py-2 pr-3 text-zinc-600">{line.when[lang]}</td>
@@ -116,6 +117,8 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </details>
         )}
       </section>
+
+      <MemoryEditor resident={resident} t={t} lang={lang} />
 
       {openFollowUps(resident, japanDate()).length > 0 && (
         <>

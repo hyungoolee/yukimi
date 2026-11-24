@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ROLES } from "./coverage";
+import { normalizeResident } from "./resident";
 import type { AlertReasons, CallRecord, Contact, Person, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
@@ -110,7 +111,8 @@ async function withPeople(stored: Stored): Promise<Resident> {
     return contact;
   };
   const [helper, second_contact, snow_volunteer] = await Promise.all(ROLES.map((role) => contact(stored[role])));
-  return { ...stored, helper, second_contact, snow_volunteer };
+  // Facts are brought to today's shape on every read (lib/resident.ts).
+  return normalizeResident({ ...stored, helper, second_contact, snow_volunteer });
 }
 
 export async function getResident(id: string) {
@@ -226,11 +228,16 @@ export async function resetDemoData() {
   for (const current of await readAll<Stored>("residents")) {
     const seed = await seedFile<Stored>("residents", current.id);
     if (!seed) continue;
+    const { facts, recent_calls } = normalizeResident(seed);
     await updateResident(current.id, (r) => ({
       ...r,
-      facts: seed.facts,
-      recent_calls: seed.recent_calls,
+      facts,
+      recent_calls,
       follow_ups: [],
+      retired_facts: [],
+      care_notes: "",
+      memory_log: [],
+      blocked_facts: [],
       location: r.location ?? seed.location,
     }));
   }

@@ -6,7 +6,7 @@ import type { Extraction, Resident, Turn } from "./types";
 
 const tri = z.enum(["yes", "no", "unknown"]);
 
-const ExtractionSchema = z.object({
+export const ExtractionSchema = z.object({
   answered_by_person: z.boolean(),
   summary: z.string(),
   notes: z.object({
@@ -29,7 +29,6 @@ const ExtractionSchema = z.object({
   }),
   // One field per daily measure (lib/measures.ts).
   observations: z.object(Object.fromEntries(MEASURES.map((m) => [m.field, tri]))),
-  new_facts: z.array(z.string()),
   english: z.object({
     summary: z.string(),
     mood: z.string(),
@@ -43,7 +42,7 @@ const SYSTEM = `You read the transcript of a daily check-in phone call between a
 
 Set answered_by_person to false when the "user" side is a voicemail or answering-machine greeting (留守番電話), a recorded announcement, or someone other than the resident who says the resident is not there. Otherwise set it to true.
 
-Write summary, notes and new_facts in Japanese. In english, give a faithful English translation of the summary and of each note, adding nothing. summary is one or two sentences the caller can refer to tomorrow. new_facts are lasting personal details not already in the known facts (family, hobbies, health conditions, routines); leave it empty if there are none.
+Write summary and notes in Japanese. In english, give a faithful English translation of the summary and of each note, adding nothing. summary is one or two sentences the caller can refer to tomorrow.
 
 Set each signal to true only when the resident's own words support it. When the resident corrects or denies something, go with the correction.
 - emergency: describes something needing an ambulance now, such as chest pain, trouble breathing, or signs of a stroke.
@@ -68,7 +67,9 @@ export async function extract(resident: Resident, transcript: Turn[]): Promise<E
     messages: [
       {
         role: "user",
-        content: `Known facts about ${resident.name}さん: ${[`紹介者は${resident.introducer}`, ...resident.facts].join("、")}\n\nTranscript:\n${transcript
+        // The resident's remembered facts are deliberately not given here: memory is curated by a
+        // model, and nothing a model wrote should feed the step that decides alerts.
+        content: `The resident is ${resident.name}さん.\n\nTranscript:\n${transcript
           .map((t) => `${t.role}: ${t.message}`)
           .join("\n")}`,
       },
