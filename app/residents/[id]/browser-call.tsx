@@ -50,7 +50,9 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
       });
       probe.getTracks().forEach((track) => track.stop());
 
-      const { token, variables } = await startBrowserCall(residentId);
+      const started = await startBrowserCall(residentId);
+      if ("error" in started) throw new Error(started.error);
+      const { token, variables } = started;
       call.current = await Conversation.startSession({
         conversationToken: token,
         dynamicVariables: variables,
