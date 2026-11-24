@@ -205,6 +205,7 @@ describe("missed-call ladder", () => {
 
   it("retries, asks the second contact, then alerts when nobody confirms", async () => {
     vi.useFakeTimers();
+    await store.saveResident({ ...(await store.getResident("suzuki"))!, phone: "+819000000001" });
     await store.savePending("conv_a1", { resident_id: "suzuki", attempt: 1 });
     await failure("conv_a1");
     expect(await store.getLadder("suzuki")).toMatchObject({ stage: "retry" });
@@ -224,6 +225,7 @@ describe("missed-call ladder", () => {
       expect((await store.listCalls("suzuki"))[0]).toMatchObject({ kind: "missed", risk: "red" }),
     );
     expect(await store.getLadder("suzuki")).toBeNull();
+    await store.saveResident({ ...(await store.getResident("suzuki"))!, phone: "" });
   });
 
   it("skips the retry when the resident was reached in the meantime", async () => {
@@ -354,9 +356,39 @@ describe("calls without a phone line", () => {
     const { startBrowserCall } = await import("@/app/actions");
     const { token, variables } = await startBrowserCall("sato");
     expect(token).toBe("tok_test");
-    expect(variables).toMatchObject({ resident_id: "sato", attempt: "1", name: "佐藤", introducer: "娘のゆきさん" });
+    expect(variables).toMatchObject({ resident_id: "sato", attempt: "1", name: "佐藤", introducer: "娘のゆきさん", channel: "browser" });
     expect(variables.weather).toContain("-12℃");
     expect(variables.winter_check).toMatch(/^必要/);
+  });
+
+  it("does not start the phone ladder for a silent or voicemail-like browser call", async () => {
+    await store.clearLadder("takahashi");
+    const browser = { dynamic_variables: { resident_id: "takahashi", attempt: "1", channel: "browser" } };
+    await elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "post_call_transcription",
+      data: { conversation_id: "conv_web_silent", conversation_initiation_client_data: browser,
+        transcript: [{ role: "agent", message: "もしもし、高橋さんですか。" }] },
+    })));
+    extract.mockResolvedValueOnce({ ...extraction, answered_by_person: false });
+    await elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "post_call_transcription",
+      data: { conversation_id: "conv_web_other", conversation_initiation_client_data: browser,
+        transcript: [{ role: "agent", message: "もしもし。" }, { role: "user", message: "いま留守です。" }] },
+    })));
+    expect(await store.getLadder("takahashi")).toBeNull();
+    expect(await store.getCall("conv_web_other")).toBeNull();
+  });
+
+  it("skips the retry call and asks the second contact when the resident has no phone number", async () => {
+    vi.useFakeTimers();
+    await store.clearLadder("suzuki");
+    await store.savePending("conv_h1", { resident_id: "suzuki", attempt: 1 });
+    await elevenlabs(signedElevenLabs(JSON.stringify({ type: "call_initiation_failure", data: { conversation_id: "conv_h1" } })));
+    await vi.advanceTimersByTimeAsync(20_000);
+    vi.useRealTimers();
+    await vi.waitFor(async () => expect(await store.getLadder("suzuki")).toMatchObject({ stage: "second_contact" }));
+    expect(placeCall).not.toHaveBeenCalled();
+    await store.clearLadder("suzuki");
   });
 
   it("starts the missed-call ladder from the demo no-answer button", async () => {
@@ -367,5 +399,33 @@ describe("calls without a phone line", () => {
     await simulateNoAnswer(data);
     expect(await store.getLadder("takahashi")).toMatchObject({ stage: "retry" });
     await store.clearLadder("takahashi");
+  });
+});
+
+describe("dashboard language", () => {
+  it("translates the fixed reasons and keeps what the resident said", async () => {
+    const { reasonText, strings } = await import("@/lib/i18n");
+    expect(reasonText("en", "転倒・痛みあり")).toBe("Fell and is in pain");
+    expect(reasonText("en", "緊急の訴え（119番を案内）：胸が苦しい")).toBe("Emergency (told to call 119)：胸が苦しい");
+    expect(reasonText("en", "電話に応答なし。ゆきさんが無事を確認")).toContain("Second contact confirmed");
+    expect(reasonText("ja", "転倒・痛みあり")).toBe("転倒・痛みあり");
+    expect(reasonText("en", "知らない理由")).toBe("知らない理由");
+    const sato = (await store.getResident("sato"))!;
+    expect(strings.en.name(sato)).toBe("Sato-san");
+    expect(strings.ja.name(sato)).toBe("佐藤さん");
+  });
+
+  it("has an English reason for every reason the rules can give", async () => {
+    const { reasonText } = await import("@/lib/i18n");
+    const { applyRules } = await import("@/lib/rules");
+    const all = { emergency: true, self_harm: true, fall_recent: true, pain: true, cant_move: true, snowed_in: true,
+      heater_problem: true, not_eating: true, confused: true, money_request: true, low_mood: true };
+    const weather = { station: "x", date: "2026-11-26", snowfall_24h_cm: 0, snow_depth_cm: 0, low_c: -5 };
+    const reasons = [
+      ...applyRules(all, weather).reasons,
+      ...applyRules({ ...all, pain: false, cant_move: false, emergency: false }, { ...weather, low_c: 3 }).reasons,
+      ...applyRules({ ...all, heater_problem: false }, weather).reasons,
+    ];
+    for (const reason of new Set(reasons)) expect(reasonText("en", reason), reason).not.toBe(reason);
   });
 });

@@ -28,6 +28,8 @@ export async function POST(request: Request) {
   const residentId: string | undefined = variables?.resident_id ?? pending?.resident_id;
   if (!residentId) return new Response("No resident for this conversation", { status: 422 });
   const attempt = Number(variables?.attempt) || pending?.attempt || 1;
+  // A call taken in the browser has no phone to retry: a silent or abandoned one is simply dropped.
+  const byPhone = variables?.channel !== "browser";
 
   // Answer ElevenLabs right away; the model call and LINE messages run after the response.
   after(async () => {
@@ -39,8 +41,11 @@ export async function POST(request: Request) {
           .filter((t: Turn) => t.message)
           .map((t: Turn) => ({ role: t.role, message: t.message }));
         // Nobody spoke: a silent pickup counts as a missed call.
-        if (!transcript.some((t) => t.role === "user")) await missed(residentId, attempt);
-        else await processCall(residentId, data.conversation_id, transcript, attempt);
+        if (!transcript.some((t) => t.role === "user")) {
+          if (byPhone) await missed(residentId, attempt);
+        } else {
+          await processCall(residentId, data.conversation_id, transcript, byPhone ? attempt : null);
+        }
       }
     } catch (e) {
       // Never lose a call: record it for a person to read, beside (not over) anything already saved.

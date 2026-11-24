@@ -54,10 +54,11 @@ const agentConfig = {
       language: "ja",
       first_message: "もしもし、{{name}}さんですか。おはようございます。{{introducer}}からご紹介いただいた、見守り電話です。",
       // Stand-in values for ElevenLabs' own test call, which doesn't go through our app.
-      // A real call always sends its own (lib/elevenlabs.ts).
+      // A real call always sends its own (lib/elevenlabs.ts). The ID matches no resident on purpose,
+      // so a test call can't write to a resident's history, start their ladder, or alert their family.
       dynamic_variables: {
         dynamic_variable_placeholders: {
-          resident_id: "sato",
+          resident_id: "test",
           attempt: "1",
           name: "佐藤",
           introducer: "娘のゆきさん",
@@ -87,6 +88,8 @@ const agentConfig = {
     },
   },
   platform_settings: {
+    // Only our server (with the API key) may start a conversation; knowing the agent ID is not enough.
+    auth: { enable_auth: true },
     workspace_overrides: {
       webhooks: {
         post_call_webhook_id: need("ELEVENLABS_WEBHOOK_ID"),

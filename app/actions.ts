@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
@@ -61,4 +61,11 @@ export async function simulateNoAnswer(formData: FormData) {
   await requireAccess();
   if (DEMO_MODE) await missed(String(formData.get("resident_id")), 1);
   revalidatePath("/");
+}
+
+/** The language toggle: remembers the choice in a cookie for a year. */
+export async function setLanguage(formData: FormData) {
+  const lang = formData.get("lang") === "en" ? "en" : "ja";
+  (await cookies()).set("lang", lang, { maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  revalidatePath("/", "layout");
 }
