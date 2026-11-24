@@ -42,7 +42,10 @@ describe("people in the store", () => {
 
   it("reads a role whose person is gone as a vacant post", async () => {
     await store.assign("suzuki", { snow_volunteer: "p_nobody" });
-    expect((await store.getResident("suzuki"))!.snow_volunteer).toEqual({ name: "" });
+    expect((await store.getResident("suzuki"))!.snow_volunteer).toEqual({ id: "p_nobody", name: "" });
+    // Saving the resident for another reason keeps who was assigned, in case the person's file comes back.
+    await store.updateResident("suzuki", (r) => ({ ...r, phone: r.phone }));
+    expect((await store.getResident("suzuki"))!.snow_volunteer.id).toBe("p_nobody");
     await store.assign("suzuki", { snow_volunteer: "p_yamamoto" });
   });
 
@@ -62,6 +65,7 @@ describe("people in the store", () => {
     const mine = { ...old, id: "mine", helper: { name: "だれか" } }; // not a seed resident
     await writeFile(path.join(dir, "residents", "sato.json"), JSON.stringify(old));
     await writeFile(path.join(dir, "residents", "mine.json"), JSON.stringify(mine));
+    await writeFile(path.join(dir, "residents", "broken.json"), "{bad"); // one unreadable file must not stop the rest
     await cp(path.join(process.cwd(), "data/seed/weather.json"), path.join(dir, "weather.json"));
 
     vi.resetModules();
