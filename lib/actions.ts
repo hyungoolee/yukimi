@@ -1,5 +1,6 @@
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
+import { EMERGENCY } from "./rules";
 import { openRequests, REQUESTS, slotChoices, slotLabel, type RequestKind } from "./requests";
 import { getCall, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
 import type { Action, AlertReasons, Delivery, Resident, Risk, Role, Slot } from "./types";
@@ -14,6 +15,11 @@ const link = (resident: Resident) =>
   process.env.APP_URL ? `\n${process.env.APP_URL}/residents/${resident.id}` : "";
 
 const ACK_BUTTON = "確認しました";
+
+// She was told to phone an ambulance herself, and may not manage it: whoever reads this does it for her.
+// We hold no street address, so they give the one they know.
+const callForThem = (r: Resident) =>
+  `\nいますぐ${r.name}さんに電話してください${r.phone ? `（${r.phone}）` : ""}。出ないときや、ご本人が119番にかけられないときは、代わりに119番に電話して、${r.name}さんの住所を伝えてください。`;
 
 /** Sends one person's message and records exactly what went out and whether LINE took it. */
 async function deliver(resident: Resident, role: Role, sentText: string, messages: object[], extra: Partial<Delivery>): Promise<Delivery> {
@@ -35,7 +41,8 @@ async function sendAlert(
   const label = ack?.resend ? `【再通知${ack.resend}回目・要確認】` : "【要確認】";
   const recipients = Object.entries(reasonsByRole) as [Role, string[]][];
   return Promise.all(recipients.map(([role, reasons]) => {
-    const body = `${label}${resident.name}さん — ${reasons.join("、")}${link(resident)}`;
+    const urgent = reasons.some((r) => r.startsWith(EMERGENCY)) ? callForThem(resident) : "";
+    const body = `${label}${resident.name}さん — ${reasons.join("、")}${urgent}${link(resident)}`;
     const messages: object[] = [text(body)];
     if (ack) {
       messages.push(
