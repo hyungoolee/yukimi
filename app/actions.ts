@@ -9,7 +9,7 @@ import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact,
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
 import { translateToEnglish } from "@/lib/translate";
-import { getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
+import { clearLadder, getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -19,7 +19,7 @@ async function requireAccess() {
 export async function callNow(formData: FormData) {
   await requireAccess();
   const resident = await getResident(String(formData.get("resident_id")));
-  if (resident?.phone) {
+  if (resident?.phone && resident.active !== false) {
     await placeCall(resident).catch((e) => {
       console.error(e);
       return missed(resident.id, 1);
@@ -92,6 +92,17 @@ export async function simulateNoAnswer(formData: FormData) {
 export async function setLanguage(formData: FormData) {
   const lang = formData.get("lang") === "en" ? "en" : "ja";
   (await cookies()).set("lang", lang, { maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  revalidatePath("/", "layout");
+}
+
+/** Stops or resumes the service for a resident. Stopping also ends any missed-call steps under way. */
+export async function setActive(formData: FormData) {
+  await requireAccess();
+  const id = String(formData.get("resident_id"));
+  const active = formData.get("active") === "1";
+  // Resuming starts the schedule afresh, so today is not reported as a call the app failed to place.
+  await updateResident(id, (fresh) => ({ ...fresh, active, scheduled_on: undefined, call_queued: undefined }));
+  if (!active) await clearLadder(id);
   revalidatePath("/", "layout");
 }
 

@@ -19,6 +19,7 @@ export default async function PeoplePage() {
   const critical = criticalCount(residents);
   const rank = { critical: 0, warning: 1, ok: 2 };
   const rows = residents
+    .filter((resident) => resident.active !== false)
     .map((resident) => ({ resident, ...coverage(resident) }))
     .sort((a, b) => rank[a.level] - rank[b.level]);
 
