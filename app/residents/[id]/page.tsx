@@ -120,6 +120,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
       <WeekGrid
         week={lastWeek(dailyObservations(calls.filter((c) => c.kind === "call").map((c) => ({ at: c.at, observations: c.extraction?.observations }))), japanDate())}
         t={t}
+        lang={lang}
       />
 
       <h2 className="mt-8 font-medium">{t.callLog}</h2>

@@ -1,4 +1,5 @@
-import type { AlertReasons, Observations, Risk, Role, RulesOutput, Tri } from "./types";
+import { MEASURES } from "./measures.ts";
+import type { AlertReasons, Observations, Risk, Role, RulesOutput } from "./types";
 
 export const japanDate = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
@@ -11,7 +12,6 @@ export function daysBefore(date: string, n: number) {
 
 export type Day = { date: string; observations: Observations };
 
-const FIELDS = ["ate", "slept_well", "went_out", "pain_or_injury", "low_mood"] as const;
 
 /**
  * One entry per Japan date, newest first, from answered calls (newest first).
@@ -30,17 +30,13 @@ export function dailyObservations(calls: { at: string; observations?: Observatio
       byDate.set(date, { ...call.observations });
       continue;
     }
-    for (const field of FIELDS) if (day[field] === "unknown") day[field] = call.observations[field];
+    for (const { field } of MEASURES) if (day[field] === "unknown") day[field] = call.observations[field];
   }
   return [...byDate].map(([date, observations]) => ({ date, observations })).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-// Starting values, to tune with a 民生委員. Everyone gets the same thresholds: there is no personal baseline yet.
-const RULES: (Omit<Trend, "fires"> & { field: keyof Observations; bad: Tri; days: number; within: number })[] = [
-  { id: "not_eating", field: "ate", bad: "no", days: 3, within: 5, risk: "red", reason: "3日続けて食事をとれていない" },
-  { id: "low_mood", field: "low_mood", bad: "yes", days: 3, within: 5, risk: "yellow", reason: "気分の落ち込みが3日続いている" },
-  { id: "poor_sleep", field: "slept_well", bad: "no", days: 3, within: 5, risk: "yellow", reason: "3日続けて眠れていない" },
-];
+// The measures that have a pattern across days (lib/measures.ts).
+const RULES = MEASURES.flatMap((m) => ("trend" in m ? [{ field: m.field, bad: m.concern, ...m.trend }] : []));
 const RAISE_AGAIN_EVERY = 3;
 
 export type Trend = { id: string; reason: string; risk: Risk; fires: boolean };
@@ -114,7 +110,3 @@ export function lastWeek(days: Day[], today: string) {
     return { date, observations: days.find((d) => d.date === date)?.observations };
   });
 }
-
-/** Whether a value is the worrying one for its field. */
-export const isConcern = (field: keyof Observations, value: Tri) =>
-  value !== "unknown" && value === (field === "pain_or_injury" || field === "low_mood" ? "yes" : "no");
