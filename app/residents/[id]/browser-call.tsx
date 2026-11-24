@@ -4,6 +4,7 @@ import { Conversation } from "@elevenlabs/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { startBrowserCall, translateCaption } from "../../actions";
+import { liveCall } from "../../refresh";
 
 type Labels = { start: string; connecting: string; end: string; micError: string; agent: string; you: string; waiting: string };
 type Caption = { key: string; fromAgent: boolean; text: string; english?: string };
@@ -35,6 +36,7 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
     gone.current = false;
     return () => {
       gone.current = true;
+      liveCall.on = false;
       void call.current?.endSession();
     };
   }, []);
@@ -43,6 +45,7 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
     setError("");
     setCaptions([]);
     setState("connecting");
+    liveCall.on = true; // no page refreshes until the call is over
     try {
       // Ask for the microphone up front for a clear error; the SDK opens its own stream.
       const probe = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
@@ -50,12 +53,15 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
       });
       probe.getTracks().forEach((track) => track.stop());
 
-      const { token, variables } = await startBrowserCall(residentId);
+      const started = await startBrowserCall(residentId);
+      if ("error" in started) throw new Error(started.error);
+      const { token, variables } = started;
       call.current = await Conversation.startSession({
         conversationToken: token,
         dynamicVariables: variables,
         onDisconnect: () => {
           call.current = null;
+          liveCall.on = false;
           setState("idle");
           router.refresh(); // the call's notes arrive a few seconds after it ends
         },
@@ -67,6 +73,7 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
       setState("live"); // only once there is a session the end button can close
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      liveCall.on = false;
       setState("idle");
     }
   }

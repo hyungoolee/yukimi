@@ -5,15 +5,19 @@ import { DEMO_SCRIPT } from "@/lib/demo-script";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { simulateNoAnswer } from "../../actions";
+import { deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-card";
 import { SubmitButton } from "../../submit-button";
 import { japanTime, RiskBadge, riskEdge } from "../../ui";
 import { LocationPicker } from "./location-picker";
+import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
+import { WeekGrid } from "./week-grid";
+import { openFollowUps } from "@/lib/memory";
+import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
 
 // English view: the model's English copy when the record has one (older records don't).
 function notesFor(e: Extraction, lang: Lang) {
@@ -43,8 +47,11 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">{t.back}</Link>
-      <h1 className="mt-2 text-2xl font-semibold">{t.name(resident)}</h1>
-      <p className="mt-1 text-sm text-zinc-600">{resident.facts.join("、")}</p>
+      <h1 className="mt-2 text-2xl font-semibold">
+        {t.name(resident)}
+        {resident.active === false && <span className="ml-3 rounded bg-zinc-200 px-2 py-0.5 align-middle text-sm font-normal">{t.inactive}</span>}
+      </h1>
+
 
       <section className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(current)}`}>
         <div className="flex items-center gap-3">
@@ -95,7 +102,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                 </tr>
               </thead>
               <tbody>
-                {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.includes(line.needsFact!))).map(
+                {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.text.includes(line.needsFact!))).map(
                   (line) => (
                     <tr key={line.say} className="border-t border-zinc-200 align-top">
                       <td className="py-2 pr-3 text-zinc-600">{line.when[lang]}</td>
@@ -114,6 +121,34 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         )}
       </section>
 
+      <MemoryEditor resident={resident} t={t} lang={lang} />
+
+      {openFollowUps(resident, japanDate()).length > 0 && (
+        <>
+          <h2 className="mt-8 font-medium">{t.followUps}</h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {openFollowUps(resident, japanDate()).map((f) => (
+              <li key={f.id} className="flex items-center gap-3">
+                <span>{f.text}</span>
+                <span className="text-zinc-500">{t.followUpUntil(f.expires)}</span>
+                <form action={deleteFollowUp}>
+                  <input type="hidden" name="resident_id" value={resident.id} />
+                  <input type="hidden" name="follow_up_id" value={f.id} />
+                  <button className="text-zinc-500 underline hover:text-zinc-800">{t.remove}</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <h2 className="mt-8 font-medium">{t.week}</h2>
+      <WeekGrid
+        week={lastWeek(dailyObservations(calls.filter((c) => c.kind === "call").map((c) => ({ at: c.at, observations: c.extraction?.observations }))), japanDate())}
+        t={t}
+        lang={lang}
+      />
+
       <h2 className="mt-8 font-medium">{t.callLog}</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">{t.noCalls}</p>}
       {calls.map((call) => (
@@ -124,6 +159,41 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </div>
           {call.reasons.length > 0 && <p className="mt-2 text-sm font-medium">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>}
           {call.extraction && <Notes notes={notesFor(call.extraction, lang)} t={t} />}
+          {call.actions.length > 0 && (
+            <div className="mt-3 text-sm">
+              <div className="text-zinc-500">{t.messagesSent}</div>
+              <ul className="mt-1 space-y-2">
+                {call.actions.flatMap((a) =>
+                  // Older records kept neither the wording nor each person's result: say so, don't guess.
+                  !a.deliveries
+                    ? [
+                        <li key={a.type} className="rounded border border-zinc-200 p-2 text-zinc-500">
+                          → {a.to.map((role) => resident[role].name).join("、")}
+                          <div>{t.messageNotRecorded}</div>
+                        </li>,
+                      ]
+                    : a.deliveries.map((d) => (
+                        <li key={`${a.type}-${d.role}`} className="rounded border border-zinc-200 p-2">
+                          <div className="text-zinc-500">
+                            → {resident[d.role].name}
+                            <span className={d.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
+                              {d.sent ? t.messageDelivered : d.registered ? t.messageFailed : t.messageUnregistered}
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap break-words">{d.text}</div>
+                          {d.button && <div className="text-zinc-500">{t.messageButton(d.button)}</div>}
+                          {lang === "en" && (
+                            <div className="text-zinc-600">
+                              {d.reasons ? t.alertGloss(d.reasons.map((r) => reasonText(lang, r)).join(t.separator)) : t.snowGloss}
+                            </div>
+                          )}
+                        </li>
+                      )),
+                )}
+              </ul>
+              {call.alert_rounds ? <p className="mt-1 text-zinc-500">{t.messageResent(call.alert_rounds)}</p> : null}
+            </div>
+          )}
           {call.transcript && (
             <details className="mt-3 text-sm">
               <summary className="cursor-pointer text-zinc-500">{t.showTranscript}</summary>
@@ -159,6 +229,12 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         initial={resident.snow_volunteer.location}
         labels={t.picker}
       />
+      <form action={setActive} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+        <input type="hidden" name="resident_id" value={resident.id} />
+        <input type="hidden" name="active" value={resident.active === false ? "1" : "0"} />
+        <SubmitButton pending={t.saving}>{resident.active === false ? t.resumeService : t.stopService}</SubmitButton>
+        <span className="text-zinc-500">{resident.active === false ? t.inactiveHelp : t.stopServiceHelp}</span>
+      </form>
     </main>
   );
 }

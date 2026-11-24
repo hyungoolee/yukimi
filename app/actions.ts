@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
+import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
+import { japanDate } from "@/lib/trends";
+import type { Resident } from "@/lib/types";
 import { translateToEnglish } from "@/lib/translate";
-import { getResident, listResidents, resetDemoData, updateCall, updateResident } from "@/lib/store";
+import { clearLadder, getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -17,7 +19,7 @@ async function requireAccess() {
 export async function callNow(formData: FormData) {
   await requireAccess();
   const resident = await getResident(String(formData.get("resident_id")));
-  if (resident?.phone) {
+  if (resident?.phone && resident.active !== false) {
     await placeCall(resident).catch((e) => {
       console.error(e);
       return missed(resident.id, 1);
@@ -63,15 +65,8 @@ export async function saveLocation(formData: FormData) {
   if (!resident || !inJapan) return;
 
   if (formData.get("who") === "snow_volunteer") {
-    // The volunteer sits in each resident's profile, as LINE registration writes them: update every copy.
-    const key = volunteerKey(resident.snow_volunteer);
-    for (const { id } of await listResidents()) {
-      await updateResident(id, (fresh) =>
-        key && volunteerKey(fresh.snow_volunteer) === key
-          ? { ...fresh, snow_volunteer: { ...fresh.snow_volunteer, location } }
-          : fresh,
-      );
-    }
+    // The pin belongs to the person, so it moves for every resident they help.
+    if (resident.snow_volunteer.id) await updatePerson(resident.snow_volunteer.id, (p) => ({ ...p, location }));
   } else {
     await updateResident(resident.id, (fresh) => ({ ...fresh, location }));
   }
@@ -83,7 +78,12 @@ export async function startBrowserCall(residentId: string) {
   await requireAccess();
   const resident = await getResident(residentId);
   if (!resident) throw new Error("Unknown resident");
-  return browserCall(resident);
+  // A thrown error reaches the browser with its message removed in production. The reason is returned
+  // instead, so the page can say what is wrong (a missing key, a refused request).
+  return browserCall(resident).catch((e) => {
+    console.error(e);
+    return { error: e instanceof Error ? e.message : String(e) };
+  });
 }
 
 /** Demo only: act as if today's call rang out, to show the missed-call ladder without a phone. */
@@ -100,11 +100,30 @@ export async function setLanguage(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+/** Stops or resumes the service for a resident. Stopping also ends any missed-call steps under way. */
+export async function setActive(formData: FormData) {
+  await requireAccess();
+  const id = String(formData.get("resident_id"));
+  const active = formData.get("active") === "1";
+  // Resuming starts the schedule afresh, so today is not reported as a call the app failed to place.
+  await updateResident(id, (fresh) => ({ ...fresh, active, scheduled_on: undefined, call_queued: undefined }));
+  if (!active) await clearLadder(id);
+  revalidatePath("/", "layout");
+}
+
 /** Demo only: clear calls and ladders and restore the residents' seeded memory, for a clean rehearsal. */
 export async function resetDemo() {
   await requireAccess();
   if (DEMO_MODE) await resetDemoData();
   revalidatePath("/", "layout");
+}
+
+/** The helper drops a follow-up that no longer needs asking. */
+export async function deleteFollowUp(formData: FormData) {
+  await requireAccess();
+  const residentId = String(formData.get("resident_id"));
+  await updateResident(residentId, (r) => removeFollowUp(r, String(formData.get("follow_up_id"))));
+  revalidatePath(`/residents/${residentId}`);
 }
 
 /** English for one line of a live call, shown as a caption. Empty if the translation fails. */
@@ -115,3 +134,20 @@ export async function translateCaption(text: string) {
     return "";
   });
 }
+
+// The helper's edits to what Yukimi remembers. The rules for each live in lib/memory.ts.
+async function editMemory(formData: FormData, change: (resident: Resident, value: string) => Resident) {
+  await requireAccess();
+  const residentId = String(formData.get("resident_id"));
+  const value = String(formData.get("fact_id") ?? formData.get("text") ?? "");
+  await updateResident(residentId, (r) => change(r, value));
+  revalidatePath(`/residents/${residentId}`);
+}
+
+export const addFactAction = async (formData: FormData) => editMemory(formData, (r, text) => addFact(r, text, japanDate()));
+export const retireFactAction = async (formData: FormData) => editMemory(formData, (r, id) => retireFact(r, id, japanDate()));
+export const restoreFactAction = async (formData: FormData) => editMemory(formData, restoreFact);
+export const deleteFactAction = async (formData: FormData) => editMemory(formData, deleteFact);
+export const saveCareNotes = async (formData: FormData) => editMemory(formData, setCareNotes);
+export const editFactAction = async (formData: FormData) =>
+  editMemory(formData, (r, id) => editFact(r, id, String(formData.get("text") ?? "")));

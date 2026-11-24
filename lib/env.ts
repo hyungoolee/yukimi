@@ -18,3 +18,6 @@ export function dashboardAccess(authorization: string | null): "ok" | "denied" |
 }
 
 export const DEMO_MODE = process.env.DEMO_MODE === "1";
+
+/** Whether the app can send LINE messages at all. Without this, no alert reaches anyone. */
+export const LINE_READY = !!process.env.LINE_CHANNEL_ACCESS_TOKEN;
