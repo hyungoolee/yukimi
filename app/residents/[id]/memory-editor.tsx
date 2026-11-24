@@ -2,9 +2,9 @@ import type { Lang, Strings } from "@/lib/i18n";
 import type { Resident } from "@/lib/types";
 import { addFactAction, deleteFactAction, editFactAction, restoreFactAction, retireFactAction, saveCareNotes } from "../../actions";
 import { japanTime } from "../../ui";
+import { InlineText } from "./inline-text";
 
 const button = "rounded border border-zinc-300 px-2 py-0.5 hover:bg-zinc-50";
-const input = "min-w-0 flex-1 rounded border border-zinc-300 px-2 py-1";
 
 /** What Yukimi remembers about a resident, for the helper to read and correct. */
 export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Strings; lang: Lang }) {
@@ -17,48 +17,54 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
       <h2 className="text-base font-medium">{t.memory}</h2>
       <ul className="mt-2 space-y-1">
         {resident.facts.map((fact) => (
-          <li key={fact.id} className="flex items-center gap-2">
-            <form action={editFactAction} className="flex min-w-0 flex-1 items-center gap-2">
-              {id}
-              <input type="hidden" name="fact_id" value={fact.id} />
-              <input name="text" defaultValue={fact.text} maxLength={80} aria-label={fact.text} className={input} />
-              <button className={button}>{t.save}</button>
-            </form>
-            <form action={retireFactAction}>
-              {id}
-              <input type="hidden" name="fact_id" value={fact.id} />
-              <button className={button}>{t.retire}</button>
-            </form>
-            <span className="w-28 shrink-0 text-xs text-zinc-500">
+          <li key={fact.id} className="group flex items-start gap-2">
+            <InlineText
+              action={editFactAction}
+              fields={{ resident_id: resident.id, fact_id: fact.id }}
+              value={fact.text}
+              empty=""
+              label={t.editFact}
+              maxLength={80}
+            />
+            {/* Facts the model learned on a call are the ones to check, so their label stands out, with the day. */}
+            <span className={`shrink-0 pt-0.5 text-xs ${fact.source === "call" && !fact.locked ? "text-amber-700" : "text-zinc-400"}`}>
               {t.factSource[fact.source]}
+              {fact.source === "call" && ` · ${fact.since.slice(5).replace("-", "/").replace(/^0/, "")}`}
               {fact.locked && fact.source === "call" ? `・${t.locked}` : ""}
             </span>
+            <form action={retireFactAction} className="shrink-0">
+              {id}
+              <input type="hidden" name="fact_id" value={fact.id} />
+              <button className="text-xs text-zinc-500 opacity-0 group-hover:opacity-100 hover:underline focus:opacity-100">
+                {t.retire}
+              </button>
+            </form>
           </li>
         ))}
-      </ul>
-      <form action={addFactAction} className="mt-2 flex items-center gap-2">
-        {id}
-        <input name="text" maxLength={80} placeholder={t.factPlaceholder} aria-label={t.addFact} className={input} />
-        <button className={button}>{t.addFact}</button>
-        <span className="w-28 shrink-0" />
-      </form>
-
-      <form action={saveCareNotes} className="mt-4">
-        {id}
-        <label htmlFor="care_notes" className="text-zinc-500">{t.careNotes}</label>
-        <div className="mt-1 flex items-start gap-2">
-          <textarea
-            id="care_notes"
-            name="text"
-            rows={2}
-            maxLength={300}
-            defaultValue={resident.care_notes ?? ""}
-            placeholder={t.careNotesHint}
-            className={input}
+        <li className="flex">
+          <InlineText
+            action={addFactAction}
+            fields={{ resident_id: resident.id }}
+            value=""
+            empty={<span className="text-zinc-500">+ {t.addFact}</span>}
+            label={t.factPlaceholder}
+            maxLength={80}
           />
-          <button className={button}>{t.save}</button>
-        </div>
-      </form>
+        </li>
+      </ul>
+
+      <p className="mt-4 text-zinc-500">{t.careNotes}</p>
+      <div className="mt-1 flex">
+        <InlineText
+          action={saveCareNotes}
+          fields={{ resident_id: resident.id }}
+          value={resident.care_notes ?? ""}
+          empty={<span className="text-zinc-500">{t.careNotesHint}</span>}
+          label={t.careNotes}
+          maxLength={300}
+          multiline
+        />
+      </div>
 
       {retired.length > 0 && (
         <details className="mt-3">

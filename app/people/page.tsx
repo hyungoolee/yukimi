@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { coverage, criticalCount, reach, ROLES, served, type Reach } from "@/lib/coverage";
 import { LINE_READY } from "@/lib/env";
 import { listPeople, listResidents } from "@/lib/store";
+import type { Person } from "@/lib/types";
 import { getStrings } from "../lang";
 import { SubmitButton } from "../submit-button";
 import { assignRoles, createPerson } from "./actions";
@@ -22,6 +23,29 @@ export default async function PeoplePage() {
     .map((resident) => ({ resident, ...coverage(resident) }))
     .sort((a, b) => rank[a.level] - rank[b.level]);
 
+  const coordinators = everyone.filter((person) => person.coordinator);
+  const personRow = (person: Person) => {
+    const state = reach(person);
+    const { roles, residents: theirs } = served(person, residents);
+    return (
+      <li key={person.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+        <span className={`inline-block size-2 rounded-full ${DOT[state]}`} />
+        <Link href={`/people/${person.id}`} className="font-medium hover:underline">{person.name}</Link>
+        <span className="text-zinc-500">
+          {[...roles.map((role) => t.role[role]), ...(theirs.length || !person.coordinator ? [t.serves(theirs.length)] : []), t.reach[state]].join("・")}
+        </span>
+        {state === "registered" && LINE_READY && (
+          <span className="ml-auto">
+            <TestMessage
+              personId={person.id}
+              labels={{ send: t.testSend, sending: t.testSending, sent: t.testSent, failed: t.testFailed }}
+            />
+          </span>
+        )}
+      </li>
+    );
+  };
+
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <Link href="/" className="text-sm text-zinc-500 hover:underline">{t.back}</Link>
@@ -37,7 +61,18 @@ export default async function PeoplePage() {
         {critical > 0 ? t.coverageBanner(critical) : t.coverageOk}
       </p>
 
-      <ul className="mt-4 space-y-3">
+      {/* Told about the whole town, not about one resident, so they are listed apart from everyone else. */}
+      <h2 className="mt-6 font-medium">{t.coordinatorShort}</h2>
+      <p className="mt-1 text-sm text-zinc-600">{t.coordinatorsIntro}</p>
+      {!coordinators.some((person) => person.line_id) && (
+        <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-800">{t.noCoordinator}</p>
+      )}
+      {coordinators.length > 0 && (
+        <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm">{coordinators.map(personRow)}</ul>
+      )}
+
+      <h2 className="mt-8 font-medium">{t.residentsHeading}</h2>
+      <ul className="mt-2 space-y-3">
         {rows.map(({ resident, redAlertReaches, gaps, level }) => (
           <li
             key={resident.id}
@@ -90,27 +125,7 @@ export default async function PeoplePage() {
 
       <h2 className="mt-8 font-medium">{t.peopleList}</h2>
       <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm">
-        {everyone.map((person) => {
-          const state = reach(person);
-          const { roles, residents: theirs } = served(person, residents);
-          return (
-            <li key={person.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
-              <span className={`inline-block size-2 rounded-full ${DOT[state]}`} />
-              <Link href={`/people/${person.id}`} className="font-medium hover:underline">{person.name}</Link>
-              <span className="text-zinc-500">
-                {[...roles.map((role) => t.role[role]), t.serves(theirs.length), t.reach[state]].join("・")}
-              </span>
-              {state === "registered" && LINE_READY && (
-                <span className="ml-auto">
-                  <TestMessage
-                    personId={person.id}
-                    labels={{ send: t.testSend, sending: t.testSending, sent: t.testSent, failed: t.testFailed }}
-                  />
-                </span>
-              )}
-            </li>
-          );
-        })}
+        {everyone.filter((person) => !person.coordinator).map(personRow)}
       </ul>
 
       <form action={createPerson} className="mt-4 flex flex-wrap items-end gap-3 text-sm">

@@ -5,6 +5,14 @@ import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
 
+/** How long an open request has gone without anyone taking it. */
+function waited(r: OpenRequest, lang: "ja" | "en") {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(r.since).getTime()) / 60_000));
+  const hours = Math.floor(minutes / 60);
+  if (lang === "en") return hours ? `for ${hours} h` : `for ${minutes} min`;
+  return hours ? `${hours}時間前から` : `${minutes}分前から`;
+}
+
 const ja = {
   switchTo: "English",
   title: "見守りリスト",
@@ -17,7 +25,7 @@ const ja = {
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
       r.status === "not_sent" ? "送信できていません" : r.status === "sent" ? "返事待ち" : `${r.who}さんが引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
-    }`,
+    }${r.status === "accepted" ? "" : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
@@ -54,11 +62,6 @@ const ja = {
   captionWaiting: "通話中。ここに会話が表示されます…",
   noAnswerDemo: "電話に出ない（デモ）",
   resetDemo: "デモをリセット",
-  demoScript: "デモの台本（電話で言うこと）",
-  demoScriptIntro: "AIが先に話します。順番は変わることがあるので、聞かれたことに答えてください。",
-  demoScriptWhen: "AIが…",
-  demoScriptSay: "言うこと",
-  demoScriptAvoid: "「立てない」「胸が苦しい」「息が苦しい」と言うと、救急の案内と緊急の通知になります。",
   callLog: "通話の記録",
   noCalls: "まだ通話がありません",
   summary: "まとめ",
@@ -73,6 +76,7 @@ const ja = {
   factSource: { intake: "登録時", call: "通話から", helper: "手入力" },
   locked: "固定",
   addFact: "追加",
+  editFact: "クリックして編集",
   factPlaceholder: "例：毎週木曜にデイサービスに通う",
   retire: "外す",
   restore: "戻す",
@@ -125,6 +129,11 @@ const ja = {
   },
   role: { helper: "民生委員", second_contact: "家族", snow_volunteer: "除雪" },
   reach: { none: "未定", unregistered: "LINE未登録", registered: "LINE登録済み" },
+  coordinator: "コーディネーター（引き受け手のないお願いの連絡先）",
+  coordinatorShort: "コーディネーター",
+  coordinatorsIntro: "町全体の連絡先です。引き受け手のないお願いが届きます。それぞれの人のページで設定します。",
+  residentsHeading: "見守りの対象者",
+  noCoordinator: "LINEに登録済みのコーディネーターがいません。引き受け手のないお願いは、だれにも連絡されません。",
   peopleList: "登録されている人",
   serves: (n: number) => `${n}名を担当`,
   testSend: "テスト送信",
@@ -160,7 +169,7 @@ const en: typeof ja = {
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
       r.status === "not_sent" ? "request could not be sent" : r.status === "sent" ? "asked, waiting for a reply" : `accepted${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
-    }`,
+    }${r.status === "accepted" ? "" : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
@@ -197,11 +206,6 @@ const en: typeof ja = {
   captionWaiting: "Call connected. The conversation will appear here…",
   noAnswerDemo: "No answer (demo)",
   resetDemo: "Reset demo",
-  demoScript: "Demo script (what to say on the call)",
-  demoScriptIntro: "The agent speaks first. It may ask in a different order, so answer the question it asks.",
-  demoScriptWhen: "When the agent…",
-  demoScriptSay: "Say",
-  demoScriptAvoid: "Don't say you can't stand up, or mention your chest or breathing: the agent will tell you to call an ambulance and send an emergency alert.",
   callLog: "Call log",
   noCalls: "No calls yet",
   summary: "Summary",
@@ -216,6 +220,7 @@ const en: typeof ja = {
   factSource: { intake: "from sign-up", call: "from a call", helper: "entered by hand" },
   locked: "locked",
   addFact: "Add",
+  editFact: "Click to edit",
   factPlaceholder: "e.g. goes to day care every Thursday",
   retire: "Retire",
   restore: "Restore",
@@ -268,6 +273,11 @@ const en: typeof ja = {
   },
   role: { helper: "Helper", second_contact: "Family", snow_volunteer: "Snow helper" },
   reach: { none: "Nobody assigned", unregistered: "Not on LINE", registered: "On LINE" },
+  coordinator: "Coordinator (told when a help request has nobody on it)",
+  coordinatorShort: "Coordinators",
+  coordinatorsIntro: "Told about the whole town: any help request nobody takes. Set on each person's page.",
+  residentsHeading: "Residents",
+  noCoordinator: "No coordinator is registered on LINE. A help request nobody takes will be reported to no one.",
   peopleList: "People on file",
   serves: (n) => `serves ${n} resident${n === 1 ? "" : "s"}`,
   testSend: "Send a test message",
