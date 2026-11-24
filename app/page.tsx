@@ -11,7 +11,6 @@ import { resetDemo } from "./actions";
 import { getStrings } from "./lang";
 import { riskEdge } from "./ui";
 import { MapView } from "./map-view";
-import { Refresh } from "./refresh";
 import { ResidentCard } from "./resident-card";
 
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -42,7 +41,6 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <Refresh />
       <h1 className="text-2xl font-semibold">{t.title}</h1>
       {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
       <p className="mt-3 flex flex-wrap gap-2 text-sm">

@@ -4,7 +4,6 @@ import { served } from "@/lib/coverage";
 import { LINE_READY } from "@/lib/env";
 import { getPerson, listResidents } from "@/lib/store";
 import { getStrings } from "../../lang";
-import { Refresh } from "../../refresh";
 import { SubmitButton } from "../../submit-button";
 import { editPerson, newCode, removePerson, unregister } from "../actions";
 import { TestMessage } from "../test-message";
@@ -21,7 +20,6 @@ export default async function PersonPage({ params }: PageProps<"/people/[id]">) 
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6 text-sm">
-      <Refresh />
       <Link href="/people" className="text-zinc-500 hover:underline">{t.backToPeople}</Link>
       <h1 className="mt-2 text-2xl font-semibold">{person.name}</h1>
       <p className="mt-1 text-zinc-600">{roles.map((role) => t.role[role]).join(t.separator)}</p>
