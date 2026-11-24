@@ -4,12 +4,37 @@
   "phone": "",
   "call_time": "09:30",
   "introducer": "社協の木村さん",
-  "second_contact": { "name": "隣の高田さん", "phone": "", "line_id": "" },
-  "helper": { "name": "民生委員 田中", "line_id": "" },
-  "snow_volunteer": { "name": "山本", "line_id": "" },
+  "second_contact": {
+    "name": "隣の高田さん",
+    "phone": "",
+    "line_id": ""
+  },
+  "helper": {
+    "name": "民生委員 田中",
+    "line_id": ""
+  },
+  "snow_volunteer": {
+    "name": "山本",
+    "line_id": "",
+    "location": {
+      "lat": 43.1975,
+      "lng": 141.779
+    }
+  },
   "amedas_station": "15356",
-  "facts": ["元漁師", "猫のタマと暮らしている", "週に一度デイサービスに通う"],
+  "facts": [
+    "元漁師",
+    "猫のタマと暮らしている",
+    "週に一度デイサービスに通う"
+  ],
   "recent_calls": [
-    { "date": "2026-11-25", "summary": "元気。タマが寒がって布団に入ってくると笑っていた。" }
-  ]
+    {
+      "date": "2026-11-25",
+      "summary": "元気。タマが寒がって布団に入ってくると笑っていた。"
+    }
+  ],
+  "location": {
+    "lat": 43.189,
+    "lng": 141.792
+  }
 }

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
 import { savePhone } from "../../actions";
 import { japanTime, RiskBadge } from "../../ui";
+import { LocationPicker } from "./location-picker";
 
 export default async function ResidentPage({ params }: PageProps<"/residents/[id]">) {
   const { id } = await params;
@@ -30,6 +31,20 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">保存</button>
         <span className="text-zinc-500">090… または +81…（海外の番号は + から）</span>
       </form>
+
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm text-zinc-500">
+          地図上の位置（自宅：{resident.location ? "登録済み" : "未登録"}、除雪ボランティア：
+          {resident.snow_volunteer.location ? "登録済み" : "未登録"}）
+        </summary>
+        <LocationPicker residentId={resident.id} who="home" label="自宅" initial={resident.location} />
+        <LocationPicker
+          residentId={resident.id}
+          who="snow_volunteer"
+          label={`除雪ボランティア ${resident.snow_volunteer.name}さん`}
+          initial={resident.snow_volunteer.location}
+        />
+      </details>
 
       <h2 className="mt-8 font-medium">通話の記録</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">まだ通話がありません</p>}

@@ -4,13 +4,41 @@
   "phone": "",
   "call_time": "09:00",
   "introducer": "娘のゆきさん",
-  "second_contact": { "name": "ゆき", "phone": "", "line_id": "" },
-  "helper": { "name": "民生委員 田中", "line_id": "" },
-  "snow_volunteer": { "name": "山本", "line_id": "" },
+  "second_contact": {
+    "name": "ゆき",
+    "phone": "",
+    "line_id": ""
+  },
+  "helper": {
+    "name": "民生委員 田中",
+    "line_id": ""
+  },
+  "snow_volunteer": {
+    "name": "山本",
+    "line_id": "",
+    "location": {
+      "lat": 43.1975,
+      "lng": 141.779
+    }
+  },
   "amedas_station": "15356",
-  "facts": ["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"],
+  "facts": [
+    "孫の健太が大学受験中",
+    "庭でバラを育てている",
+    "ひざが少し悪い"
+  ],
   "recent_calls": [
-    { "date": "2026-11-25", "summary": "元気。孫の健太の模試の結果を気にしていた。庭のバラの雪囲いを済ませた。" },
-    { "date": "2026-11-24", "summary": "よく眠れた。昼は煮物を作った。" }
-  ]
+    {
+      "date": "2026-11-25",
+      "summary": "元気。孫の健太の模試の結果を気にしていた。庭のバラの雪囲いを済ませた。"
+    },
+    {
+      "date": "2026-11-24",
+      "summary": "よく眠れた。昼は煮物を作った。"
+    }
+  ],
+  "location": {
+    "lat": 43.201,
+    "lng": 141.7705
+  }
 }
