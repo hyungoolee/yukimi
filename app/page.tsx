@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { mapData, rankedRows, snowRequest } from "@/lib/dashboard";
+import { mapData, rankedRows, snowRequest, type Row } from "@/lib/dashboard";
+import type { Lang, Strings } from "@/lib/i18n";
 import { listCalls, listResidents } from "@/lib/store";
-import { describeWeather, getWeather } from "@/lib/weather";
+import type { CallRecord } from "@/lib/types";
+import { getWeather } from "@/lib/weather";
+import { getStrings } from "./lang";
 import { MapView } from "./map-view";
 import { Refresh } from "./refresh";
 import { ResidentCard } from "./resident-card";
@@ -12,6 +15,7 @@ const linkClass = "self-center text-sm text-zinc-500 hover:underline";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await connection(); // read the files on every request
+  const { lang, t } = await getStrings();
   // The view and the selected resident live in the address, so switching views keeps the selection.
   const params = await searchParams;
   const view = one(params.view) === "map" ? "map" : "list";
@@ -19,43 +23,41 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   const [residents, calls] = await Promise.all([listResidents(), listCalls()]);
   const rows = rankedRows(residents, calls);
-  const weather = residents[0] && describeWeather(await getWeather(residents[0].amedas_station));
-  const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${id}` : ""}`;
+  const weather = residents[0] && (await getWeather(residents[0].amedas_station));
+  const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <Refresh />
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">見守りリスト</h1>
-        <nav className="flex overflow-hidden rounded border border-zinc-300 text-sm">
-          {(["list", "map"] as const).map((v) => (
-            <Link
-              key={v}
-              href={href(v)}
-              aria-current={view === v ? "page" : undefined}
-              className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
-            >
-              {v === "list" ? "リスト" : "地図"}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      {weather && <p className="mt-1 text-sm text-zinc-600">{weather.weather}</p>}
+      <h1 className="text-2xl font-semibold">{t.title}</h1>
+      {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
+      <nav className="mt-4 inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
+        {(["list", "map"] as const).map((v) => (
+          <Link
+            key={v}
+            href={href(v)}
+            aria-current={view === v ? "page" : undefined}
+            className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
+          >
+            {t[v]}
+          </Link>
+        ))}
+      </nav>
 
       {view === "list" ? (
-        <ul className="mt-6 divide-y divide-zinc-200 rounded-lg border border-zinc-200">
+        <ul className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200">
           {rows.map((row) => (
             <li key={row.resident.id} className={`p-4 ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
-              <ResidentCard {...row}>
+              <ResidentCard {...row} lang={lang} t={t}>
                 <Link href={href("map", row.resident.id)} className={linkClass}>
-                  地図で見る
+                  {t.viewOnMap}
                 </Link>
               </ResidentCard>
             </li>
           ))}
         </ul>
       ) : (
-        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} />
+        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} />
       )}
     </main>
   );
@@ -66,11 +68,15 @@ function MapPanel({
   calls,
   selected,
   listHref,
+  lang,
+  t,
 }: {
-  rows: ReturnType<typeof rankedRows>;
-  calls: Awaited<ReturnType<typeof listCalls>>;
+  rows: Row[];
+  calls: CallRecord[];
   selected?: string;
   listHref: string;
+  lang: Lang;
+  t: Strings;
 }) {
   const data = mapData(rows, calls);
   const row = rows.find((r) => r.resident.id === selected);
@@ -78,17 +84,15 @@ function MapPanel({
   const home = row?.resident.location;
 
   return (
-    <div className="mt-6">
-      <MapView data={data} selected={selected} />
-      {data.unplaced > 0 && (
-        <p className="mt-2 text-sm text-zinc-500">位置未登録：{data.unplaced}名（利用者のページで登録できます）</p>
-      )}
+    <div className="mt-4">
+      <MapView data={data} selected={selected} volunteerLabel={t.volunteer("")} />
+      {data.unplaced > 0 && <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>}
       <div className="mt-4 rounded-lg border border-zinc-200 p-4">
         {row ? (
           <>
-            <ResidentCard {...row}>
+            <ResidentCard {...row} lang={lang} t={t}>
               <Link href={listHref} className={linkClass}>
-                リストで見る
+                {t.viewInList}
               </Link>
               {home && (
                 <a
@@ -97,21 +101,20 @@ function MapPanel({
                   rel="noreferrer"
                   className={linkClass}
                 >
-                  地図アプリで開く
+                  {t.openInMaps}
                 </a>
               )}
             </ResidentCard>
             {request && (
               <p className="mt-2 text-sm text-zinc-600">
-                {request.volunteer}さんへ：
-                {{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[request.status]}
-                {request.km !== undefined && `（直線で約${request.km.toFixed(1)} km）`}
+                {t.requestStatus(request.volunteer, request.status)}
+                {request.km !== undefined && t.straightLine(request.km)}
               </p>
             )}
-            {!home && <p className="mt-2 text-sm text-zinc-500">この方の位置はまだ登録されていません。</p>}
+            {!home && <p className="mt-2 text-sm text-zinc-500">{t.noLocation}</p>}
           </>
         ) : (
-          <p className="text-sm text-zinc-500">ピンを選ぶと、その方の状況が表示されます。</p>
+          <p className="text-sm text-zinc-500">{t.pickPin}</p>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import type { CallRecord, LatLng, Resident, Risk } from "./types";
+import type { CallRecord, Contact, LatLng, Resident, Risk } from "./types";
 
 // What the helper list and the coordinator's map both show. One rule, so they can't disagree.
 
@@ -55,6 +55,9 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   };
 }
 
+/** Tells volunteers apart: by LINE ID once registered, by name until then. Used for pins and for saving. */
+export const volunteerKey = (v: Contact) => v.line_id || v.name;
+
 export type MapData = {
   /** No names here: a pin shows a colour, and the name appears only when it is opened. */
   pins: { id: string; risk: Risk | null; handled: boolean; location: LatLng }[];
@@ -69,7 +72,7 @@ export function mapData(rows: Row[], calls: CallRecord[]): MapData {
   for (const { resident } of rows) {
     const v = resident.snow_volunteer;
     // The same volunteer sits in several residents' profiles: one pin each.
-    if (v.location) volunteers.set(v.line_id || v.name, { name: v.name, location: v.location });
+    if (v.location) volunteers.set(volunteerKey(v), { name: v.name, location: v.location });
   }
   return {
     pins: rows.flatMap(({ resident, call }) =>

@@ -53,20 +53,43 @@ const agentConfig = {
     agent: {
       language: "ja",
       first_message: "もしもし、{{name}}さんですか。おはようございます。{{introducer}}からご紹介いただいた、見守り電話です。",
+      // Stand-in values for ElevenLabs' own test call, which doesn't go through our app.
+      // A real call always sends its own (lib/elevenlabs.ts). The ID matches no resident on purpose,
+      // so a test call can't write to a resident's history, start their ladder, or alert their family.
+      dynamic_variables: {
+        dynamic_variable_placeholders: {
+          resident_id: "test",
+          attempt: "1",
+          name: "佐藤",
+          introducer: "娘のゆきさん",
+          facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
+          recent_calls: "2026-11-25：元気。孫の健太の模試の結果を気にしていた。",
+          weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
+          winter_check: "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。",
+        },
+      },
       prompt: {
         prompt: readFileSync(new URL("./prompt.md", import.meta.url), "utf8"),
         // The fastest model that handles Japanese well; judge it on the M1 test call.
         llm: process.env.ELEVENLABS_LLM ?? "claude-haiku-5-5",
+        // No thinking step: on the first test call it added 2–5 s before every reply.
+        reasoning_effort: "none",
         tool_ids: [tool.id],
         timezone: "Asia/Tokyo",
       },
     },
     // Japanese needs one of the multilingual voice models.
     tts: { voice_id: need("ELEVENLABS_VOICE_ID"), model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5" },
-    // Older callers pause; wait longer before deciding they have finished.
-    turn: { turn_timeout: 10 },
+    // Seconds of silence before the agent prompts the resident again.
+    turn: {
+      turn_timeout: 10,
+      // If a reply takes longer than this, say a short filler first, as a person would.
+      soft_timeout_config: { timeout_seconds: 1.5, message: "はい…" },
+    },
   },
   platform_settings: {
+    // Only our server (with the API key) may start a conversation; knowing the agent ID is not enough.
+    auth: { enable_auth: true },
     workspace_overrides: {
       webhooks: {
         post_call_webhook_id: need("ELEVENLABS_WEBHOOK_ID"),

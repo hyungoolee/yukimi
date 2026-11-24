@@ -15,8 +15,11 @@ export const needsReview = (reason: string): RulesOutput => ({
   actions: [{ type: "alert", to: ["helper"] }],
 });
 
-/** After a finished call: extract, apply the rules, send alerts and requests, update memory. */
-export async function processCall(residentId: string, callId: string, transcript: Turn[], attempt = 1) {
+/**
+ * After a finished call: extract, apply the rules, send alerts and requests, update memory.
+ * `attempt` is which phone attempt this was, or null for a browser call (which has no ladder).
+ */
+export async function processCall(residentId: string, callId: string, transcript: Turn[], attempt: number | null = 1) {
   const resident = await getResident(residentId);
   if (!resident) throw new Error(`Unknown resident ${residentId}`);
 
@@ -31,7 +34,7 @@ export async function processCall(residentId: string, callId: string, transcript
   }
 
   // Voicemail or someone else picked up: the resident has not been reached.
-  if (extraction && !extraction.answered_by_person) return missed(residentId, attempt);
+  if (extraction && !extraction.answered_by_person) return attempt === null ? undefined : missed(residentId, attempt);
   await clearLadder(residentId);
 
   await saveCall({

@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
-import { placeCall } from "@/lib/elevenlabs";
-import { dashboardAccess } from "@/lib/env";
+import { cookies, headers } from "next/headers";
+import { volunteerKey } from "@/lib/dashboard";
+import { browserCall, placeCall } from "@/lib/elevenlabs";
+import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { getCall, getResident, listResidents, saveCall, saveResident } from "@/lib/store";
 
@@ -59,10 +60,38 @@ export async function saveLocation(formData: FormData) {
 
   if (formData.get("who") === "snow_volunteer") {
     // The volunteer sits in each resident's profile, as LINE registration writes them: update every copy.
-    const sameVolunteer = (await listResidents()).filter((r) => r.snow_volunteer.name === resident.snow_volunteer.name);
-    for (const r of sameVolunteer) await saveResident({ ...r, snow_volunteer: { ...r.snow_volunteer, location } });
+    const key = volunteerKey(resident.snow_volunteer);
+    for (const { id } of await listResidents()) {
+      // Re-read just before saving, so a call or a LINE registration finishing meanwhile isn't overwritten.
+      const fresh = await getResident(id);
+      if (fresh && key && volunteerKey(fresh.snow_volunteer) === key) {
+        await saveResident({ ...fresh, snow_volunteer: { ...fresh.snow_volunteer, location } });
+      }
+    }
   } else {
     await saveResident({ ...resident, location });
   }
   revalidatePath(`/residents/${resident.id}`);
+}
+
+/** Starts a check-in call in this browser tab, for when there is no phone line. */
+export async function startBrowserCall(residentId: string) {
+  await requireAccess();
+  const resident = await getResident(residentId);
+  if (!resident) throw new Error("Unknown resident");
+  return browserCall(resident);
+}
+
+/** Demo only: act as if today's call rang out, to show the missed-call ladder without a phone. */
+export async function simulateNoAnswer(formData: FormData) {
+  await requireAccess();
+  if (DEMO_MODE) await missed(String(formData.get("resident_id")), 1);
+  revalidatePath("/");
+}
+
+/** The language toggle: remembers the choice in a cookie for a year. */
+export async function setLanguage(formData: FormData) {
+  const lang = formData.get("lang") === "en" ? "en" : "ja";
+  (await cookies()).set("lang", lang, { maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  revalidatePath("/", "layout");
 }
