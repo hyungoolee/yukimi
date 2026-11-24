@@ -2,6 +2,7 @@
 // Uses the saved demo weather (-12°C), so the heater rule's mild-day branch is not exercised.
 // Costs one model call per persona. Run: pnpm eval
 import { readFileSync } from "node:fs";
+import { curate } from "../lib/curate.ts";
 import { extract } from "../lib/extract.ts";
 import { applyRules } from "../lib/rules.ts";
 import { dailyObservations, daysBefore, findTrends, japanDate, withTrends } from "../lib/trends.ts";
@@ -74,3 +75,20 @@ for (const [i, transcript] of sequence.days.entries()) {
 }
 const fired = last.risk === "red" && last.reasons.includes("3日続けて食事をとれていない");
 console.log(`three-day trend fires:         ${fired ? "1/1" : "0/1"}`);
+
+// Follow-ups: the memory model call, on the demo call and on a next-day call that settles one.
+const sato: Resident = json("../data/seed/residents/sato.json");
+const slip = personas.find((p) => p.id === "slip-on-ice")!.transcript.map(([role, message]) => ({ role, message }));
+const first = await curate(sato, [], slip, today);
+console.log(`\nfollow-ups after the slip-on-ice call: ${first.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
+const open = [{ id: "hip", text: "腰の痛みはその後どうか", created: today, expires: today }];
+const nextDay = [
+  ["agent", "もしもし、佐藤さんですか。見守り電話です。きのうは腰が痛いとのことでしたが、その後いかがですか？"],
+  ["user", "おかげさまで、もうすっかり痛くないよ。ふつうに歩けるし。"],
+  ["agent", "それはよかったです。食事はとれていますか？"],
+  ["user", "うん、朝もしっかり食べたよ。"],
+].map(([role, message]) => ({ role, message }));
+const second = await curate(sato, open, nextDay, today);
+console.log(`follow-up about the hip or the fall:  ${first.new_follow_ups.some((f) => /腰|転/.test(f.text)) ? "1/1" : "0/1"}`);
+console.log(`routine questions left out:           ${first.new_follow_ups.some((f) => /食事|睡眠|暖房|ストーブ/.test(f.text)) ? "0/1" : "1/1"}`);
+console.log(`settled follow-up closed:             ${second.resolved.includes("hip") ? "1/1" : "0/1"}  (new: ${second.new_follow_ups.map((f) => f.text).join(" / ") || "none"})`);

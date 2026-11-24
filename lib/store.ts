@@ -151,6 +151,7 @@ export async function resetDemoData() {
       ...r,
       facts: seed.facts,
       recent_calls: seed.recent_calls,
+      follow_ups: [],
       location: r.location ?? seed.location,
       snow_volunteer: { ...r.snow_volunteer, location: r.snow_volunteer.location ?? seed.snow_volunteer.location },
     }));
