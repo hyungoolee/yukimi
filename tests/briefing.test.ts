@@ -20,13 +20,13 @@ describe("today's brief", () => {
 
   it("tells the agent about a pattern that was running as of yesterday, before today's call", () => {
     const line = briefingLine([call(1, { ate: "no" }), call(2, { ate: "no" }), call(3, { ate: "no" })], TODAY);
-    expect(line).toBe("・ここ数日、食事がとれていないと話している。食事のことをやさしく、くわしく聞く。");
+    expect(line).toBe("・食事のことを、いつもよりていねいに聞く。");
   });
 
   it("lists each running pattern once, in the order of the measures table", () => {
     const bad = { ate: "no", slept_well: "no", low_mood: "yes" } as const;
     const line = briefingLine([call(1, bad), call(2, bad), call(3, bad)], TODAY);
-    expect(line.split(" ").map((l) => l.slice(0, 12))).toEqual(["・ここ数日、食事がとれて", "・ここ数日、よく眠れてい", "・ここ数日、気分が落ち込"]);
+    expect(line.split(" ").map((l) => l.slice(0, 4))).toEqual(["・食事の", "・睡眠の", "・気持ち"]);
   });
 
   it("drops a pattern once they say they ate, or once it is too old to count", () => {
@@ -40,7 +40,11 @@ describe("today's brief", () => {
     expect(briefingLine([missed, empty, call(3, { ate: "no" }), call(4, { ate: "no" })], TODAY)).toBe("なし");
   });
 
-  it("has fixed wording for every trend, with nothing that could read as prompt structure", () => {
-    for (const m of MEASURES) if ("trend" in m) expect(m.trend.brief).toMatch(/^[^#{}<>\n]+。$/);
+  it("has fixed wording for every trend: a topic to take care over, never what the resident said", () => {
+    for (const m of MEASURES) {
+      if (!("trend" in m)) continue;
+      expect(m.trend.brief).toMatch(/^[^#{}<>\n]+。$/);
+      expect(m.trend.brief).not.toMatch(/話している|とれていない|眠れていない|落ち込/);
+    }
   });
 });
