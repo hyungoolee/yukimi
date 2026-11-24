@@ -78,7 +78,12 @@ export async function startBrowserCall(residentId: string) {
   await requireAccess();
   const resident = await getResident(residentId);
   if (!resident) throw new Error("Unknown resident");
-  return browserCall(resident);
+  // A thrown error reaches the browser with its message removed in production. The reason is returned
+  // instead, so the page can say what is wrong (a missing key, a refused request).
+  return browserCall(resident).catch((e) => {
+    console.error(e);
+    return { error: e instanceof Error ? e.message : String(e) };
+  });
 }
 
 /** Demo only: act as if today's call rang out, to show the missed-call ladder without a phone. */

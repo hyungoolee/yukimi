@@ -404,11 +404,20 @@ describe("calls without a phone line", () => {
     process.env.ELEVENLABS_AGENT_ID = "agent_test";
     process.env.ELEVENLABS_API_KEY = "key_test";
     const { startBrowserCall } = await import("@/app/actions");
-    const { token, variables } = await startBrowserCall("sato");
+    const started = await startBrowserCall("sato");
+    if ("error" in started) throw new Error(started.error);
+    const { token, variables } = started;
     expect(token).toBe("tok_test");
     expect(variables).toMatchObject({ resident_id: "sato", attempt: "1", name: "佐藤", introducer: "娘のゆきさん", channel: "browser" });
     expect(variables.weather).toContain("-12℃");
     expect(variables.winter_check).toMatch(/^必要/);
+  });
+
+  it("tells the page why a browser call could not start, since a thrown error loses its message in production", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    const { startBrowserCall } = await import("@/app/actions");
+    expect(await startBrowserCall("sato")).toEqual({ error: "ElevenLabs token request failed (401)" });
   });
 
   it("does not start the phone ladder for a silent or voicemail-like browser call", async () => {
@@ -748,8 +757,12 @@ describe("follow-ups after a call", () => {
 
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     const { startBrowserCall, deleteFollowUp } = await import("@/app/actions");
-    expect((await startBrowserCall("takahashi")).variables.follow_ups).toBe("・腰の痛みはその後どうか");
-    expect((await startBrowserCall("suzuki")).variables.follow_ups).toBe("なし");
+    const followUps = async (id: string) => {
+      const started = await startBrowserCall(id);
+      return "error" in started ? started.error : started.variables.follow_ups;
+    };
+    expect(await followUps("takahashi")).toBe("・腰の痛みはその後どうか");
+    expect(await followUps("suzuki")).toBe("なし");
 
     const data = new FormData();
     data.set("resident_id", "takahashi");
