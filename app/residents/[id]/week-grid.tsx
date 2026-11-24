@@ -1,11 +1,9 @@
-import type { Strings } from "@/lib/i18n";
-import { isConcern, type lastWeek } from "@/lib/trends";
-import type { Observations } from "@/lib/types";
-
-const FIELDS: (keyof Observations)[] = ["ate", "slept_well", "went_out", "pain_or_injury", "low_mood"];
+import type { Lang, Strings } from "@/lib/i18n";
+import { isConcern, MEASURES } from "@/lib/measures";
+import type { lastWeek } from "@/lib/trends";
 
 /** Seven days of what the resident reported, one row per measure. */
-export function WeekGrid({ week, t }: { week: ReturnType<typeof lastWeek>; t: Strings }) {
+export function WeekGrid({ week, t, lang }: { week: ReturnType<typeof lastWeek>; t: Strings; lang: Lang }) {
   return (
     <>
       <table className="mt-2 text-sm">
@@ -20,9 +18,9 @@ export function WeekGrid({ week, t }: { week: ReturnType<typeof lastWeek>; t: St
           </tr>
         </thead>
         <tbody>
-          {FIELDS.map((field) => (
+          {MEASURES.map(({ field, label }) => (
             <tr key={field} className="border-t border-zinc-200">
-              <th className="py-1 pr-3 text-left font-normal text-zinc-500">{t.weekRows[field]}</th>
+              <th className="py-1 pr-3 text-left font-normal text-zinc-500">{label[lang]}</th>
               {week.map((day) => {
                 const value = day.observations?.[field] ?? "unknown";
                 const concern = isConcern(field, value);

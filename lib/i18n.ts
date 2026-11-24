@@ -1,3 +1,4 @@
+import { MEASURES } from "./measures";
 import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
@@ -50,7 +51,6 @@ const ja = {
   showTranscript: "会話を見る",
   history: "これまでのまとめ",
   week: "この7日間",
-  weekRows: { ate: "食事", slept_well: "睡眠", went_out: "外出", pain_or_injury: "痛み・けが", low_mood: "気分" },
   weekKey: "○ 問題なし　! 気になる　– 話題なし",
   separator: "、",
   alertSeen: (name: string) => `通知を確認：${name}`,
@@ -122,7 +122,6 @@ const en: typeof ja = {
   showTranscript: "Show conversation",
   history: "Earlier summaries",
   week: "Last 7 days",
-  weekRows: { ate: "Meals", slept_well: "Sleep", went_out: "Went out", pain_or_injury: "Pain or injury", low_mood: "Mood" },
   weekKey: "○ fine   ! a concern   – not discussed",
   separator: "; ",
   alertSeen: (name) => `Alert acknowledged by ${name}`,
@@ -151,6 +150,8 @@ export type Strings = typeof ja;
 // The fixed reasons written by the rules, the ladder and the emergency tool. Anything after the
 // matched text (such as what the resident said) is kept as written.
 const REASONS_EN: [string, string][] = [
+  // Trend reasons come with their measures, and go first: one of them starts like a single-call reason.
+  ...MEASURES.flatMap((m): [string, string][] => ("trend" in m ? [[m.trend.reason, m.trend.reasonEn]] : [])),
   ["緊急の訴え（119番を案内）", "Emergency (told to call 119)"],
   ["死にたい気持ちの訴え", "Talked about wanting to die"],
   ["転倒・痛みあり", "Fell and is in pain"],
@@ -162,9 +163,6 @@ const REASONS_EN: [string, string][] = [
   ["雪で玄関から出られない", "Snowed in"],
   ["食事をとれていない", "Not eating"],
   ["混乱した様子", "Seems confused"],
-  ["3日続けて食事をとれていない", "Not eating for 3 days running"],
-  ["気分の落ち込みが3日続いている", "Low mood for 3 days running"],
-  ["3日続けて眠れていない", "Sleeping badly for 3 nights running"],
   ["気分の落ち込み", "Low mood"],
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],
   ["電話に2回応答なし。第二連絡先も確認できず", "No answer twice; the second contact can't confirm"],

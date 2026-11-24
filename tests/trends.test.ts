@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dailyObservations, daysBefore, findTrends, isConcern, lastWeek, withTrends } from "@/lib/trends";
+import { isConcern, MEASURES } from "@/lib/measures";
+import { dailyObservations, daysBefore, findTrends, lastWeek, withTrends } from "@/lib/trends";
 import type { Observations, RulesOutput } from "@/lib/types";
 
 const TODAY = "2026-11-26";
@@ -93,9 +94,9 @@ describe("trend rules", () => {
   it("flags three days of low mood or bad sleep as yellow", () => {
     const low = days({ 0: { low_mood: "yes", slept_well: "no" }, 1: { low_mood: "yes", slept_well: "no" }, 2: { low_mood: "yes", slept_well: "no" } });
     expect(findTrends(low, TODAY)).toEqual([
-      { id: "low_mood", reason: "気分の落ち込みが3日続いている", risk: "yellow", fires: true },
       { id: "poor_sleep", reason: "3日続けて眠れていない", risk: "yellow", fires: true },
-    ]);
+      { id: "low_mood", reason: "気分の落ち込みが3日続いている", risk: "yellow", fires: true },
+    ]); // in the order of the measures table
   });
 
   it("has no rule for pain or staying in, however long", () => {
@@ -156,5 +157,24 @@ describe("the 7-day grid", () => {
   it("knows which answer is the worrying one", () => {
     expect([isConcern("ate", "no"), isConcern("ate", "yes"), isConcern("ate", "unknown")]).toEqual([true, false, false]);
     expect([isConcern("pain_or_injury", "yes"), isConcern("low_mood", "yes"), isConcern("went_out", "no")]).toEqual([true, true, true]);
+  });
+});
+
+describe("the measures table", () => {
+  it("drives the extraction: one schema field and one prompt line per measure", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("lib/extract.ts", "utf8");
+    expect(source).toContain("MEASURES.map((m) => [m.field, tri])");
+    expect(source).toContain("MEASURES.map((m) => `- ${m.ask}`)");
+    for (const m of MEASURES) expect(m.ask.startsWith(m.field)).toBe(true);
+  });
+
+  it("gives every trend an English reason, and every measure both labels", async () => {
+    const { reasonText } = await import("@/lib/i18n");
+    for (const m of MEASURES) {
+      expect(m.label.ja && m.label.en).toBeTruthy();
+      if ("trend" in m) expect(reasonText("en", `${m.trend.reason}（継続中）`)).toBe(`${m.trend.reasonEn} (ongoing)`);
+    }
+    expect(reasonText("en", "気分の落ち込み")).toBe("Low mood");
   });
 });
