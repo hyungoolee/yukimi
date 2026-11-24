@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-/** Re-reads the page's data every few seconds so new calls appear without a reload. */
+/** In the root layout: re-reads every page's data every few seconds, so new calls and memory appear without a reload. */
 export function Refresh() {
   const router = useRouter();
   useEffect(() => {
