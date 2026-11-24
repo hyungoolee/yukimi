@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { distanceKm, mapData, rankedRows, snowRequest } from "@/lib/dashboard";
 import type { CallRecord, Resident } from "@/lib/types";
 
-const volunteer = { name: "山本", line_id: "U_v", location: { lat: 43.1975, lng: 141.779 } };
+const volunteer = { id: "p_v", name: "山本", line_id: "U_v", location: { lat: 43.1975, lng: 141.779 } };
 const resident = (id: string, extra: Partial<Resident> = {}): Resident => ({
   id, name: id, phone: "", call_time: "09:00", introducer: "", amedas_station: "15356", facts: [], recent_calls: [],
   second_contact: { name: "family" }, helper: { name: "helper" }, snow_volunteer: volunteer,
@@ -68,7 +68,7 @@ describe("mapData", () => {
   });
 
   it("draws a volunteer shared by several residents once", () => {
-    expect(mapData(rankedRows(people, []), []).volunteers).toEqual([{ name: "山本", location: volunteer.location }]);
+    expect(mapData(rankedRows(people, []), []).volunteers).toEqual([{ id: volunteer.id, name: "山本", location: volunteer.location }]);
   });
 });
 
