@@ -16,8 +16,8 @@ describe("a call that ends before a required question", () => {
 
   it("is yellow and tells the helper which questions went unanswered, in table order", () => {
     expect(applyRules(none, cold, ["has_supplies", "slept_well"])).toEqual({
-      risk: "yellow", reasons: [reason("睡眠、食料・薬")],
-      actions: [{ type: "alert", to: ["helper"], reasonsByRole: { helper: [reason("睡眠、食料・薬")] } }],
+      risk: "yellow", reasons: [reason("睡眠／食料・薬")],
+      actions: [{ type: "alert", to: ["helper"], reasonsByRole: { helper: [reason("睡眠／食料・薬")] } }],
     });
   });
 
@@ -54,7 +54,7 @@ describe("which questions are required", () => {
 
   it("has an English form naming the questions", async () => {
     const { reasonText } = await import("@/lib/i18n");
-    expect(reasonText("en", "通話が終わる前に確認できなかった：睡眠、食料・薬")).toBe("Not confirmed before the call ended: Sleep, Food and medicine");
+    expect(reasonText("en", "通話が終わる前に確認できなかった：睡眠／食料・薬")).toBe("Not confirmed before the call ended: Sleep, Food and medicine");
   });
 });
 

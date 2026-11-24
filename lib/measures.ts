@@ -78,7 +78,7 @@ export const MEASURES = [
     field: "heating_ok",
     concern: "no",
     label: { ja: "暖房", en: "Heating" },
-    ask: `heating_ok (now): "yes" when they say their heating is on or working; "no" when it is broken, off, or they are out of fuel.`,
+    ask: `heating_ok (now): "yes" when they say their heating is on or working; "no" when it is broken or they are out of fuel.`,
     required: "winter",
   },
   {

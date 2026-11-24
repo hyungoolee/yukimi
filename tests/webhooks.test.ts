@@ -835,13 +835,22 @@ describe("follow-ups after a call", () => {
 
     extract.mockResolvedValueOnce(cutShort);
     await post("conv_cut2", "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。");
-    expect(await store.getCall("conv_cut2")).toMatchObject({ risk: "yellow", reasons: ["通話が終わる前に確認できなかった：玄関・雪、食料・薬"] });
+    expect(await store.getCall("conv_cut2")).toMatchObject({ risk: "yellow", reasons: ["通話が終わる前に確認できなかった：玄関・雪／食料・薬"] });
     expect(pushes().map((p) => p.to)).toEqual(["U_helper"]);
 
-    // Hello, then gone: even on a mild morning the one everyday question went unanswered.
+    // Later the same day, hello and gone: sleep was already answered this morning, so nothing is missing.
     extract.mockResolvedValueOnce({ ...cutShort, observations: unknown });
     await post("conv_cut3", "不要。天気の話は軽くふれる程度でよい。");
-    expect(await store.getCall("conv_cut3")).toMatchObject({ risk: "yellow", reasons: ["通話が終わる前に確認できなかった：睡眠"] });
+    expect(await store.getCall("conv_cut3")).toMatchObject({ risk: "green", reasons: [] });
+
+    // The webhook came without the call's variables: what was saved when the call was placed is used.
+    await store.savePending("conv_cut5", { resident_id: "suzuki", attempt: 1, winter_checks: true });
+    extract.mockResolvedValueOnce(cutShort);
+    await elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "post_call_transcription",
+      data: { conversation_id: "conv_cut5", transcript: [{ role: "user", message: "はい。" }] },
+    })));
+    expect(await store.getCall("conv_cut5")).toMatchObject({ reasons: ["通話が終わる前に確認できなかった：玄関・雪／食料・薬"] });
   });
 
   it("does not curate a call whose extraction worked but whose rules could not run", async () => {

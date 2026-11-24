@@ -23,8 +23,12 @@ async function callVariables(resident: Resident, attempt: number) {
   };
 }
 
+/** Whether a call's variables told its agent to run the winter checks (lib/weather.ts describeWeather). */
+export const toldToRunWinterChecks = (variables: { winter_check?: unknown }) => String(variables.winter_check ?? "").startsWith("必要");
+
 /** Ask ElevenLabs to phone the resident. attempt 2 is the missed-call retry. */
 export async function placeCall(resident: Resident, attempt = 1) {
+  const variables = await callVariables(resident, attempt);
   const res = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
     signal: AbortSignal.timeout(15_000),
     method: "POST",
@@ -33,14 +37,14 @@ export async function placeCall(resident: Resident, attempt = 1) {
       agent_id: env("ELEVENLABS_AGENT_ID"),
       agent_phone_number_id: env("ELEVENLABS_PHONE_NUMBER_ID"),
       to_number: resident.phone,
-      conversation_initiation_client_data: { dynamic_variables: await callVariables(resident, attempt) },
+      conversation_initiation_client_data: { dynamic_variables: variables },
     }),
   });
   const body = await res.json();
   if (!res.ok || !body.conversation_id) {
     throw new Error(`ElevenLabs outbound call failed (${res.status}): ${JSON.stringify(body)}`);
   }
-  await savePending(body.conversation_id, { resident_id: resident.id, attempt });
+  await savePending(body.conversation_id, { resident_id: resident.id, attempt, winter_checks: toldToRunWinterChecks(variables) });
   return body.conversation_id as string;
 }
 

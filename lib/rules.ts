@@ -41,7 +41,7 @@ export function applyRules(s: Signals, weather: Weather, unanswered: MeasureFiel
   // The helper is told which. Left out when something red already has people on their way.
   if (!red.length && unanswered.length) {
     const labels = MEASURES.filter((m) => unanswered.includes(m.field)).map((m) => m.label.ja);
-    yellow.push(UNCONFIRMED + labels.join("、"));
+    yellow.push(UNCONFIRMED + labels.join("／")); // not 、, which separates reasons in the alert
     alerts.set("helper", []);
   }
 
