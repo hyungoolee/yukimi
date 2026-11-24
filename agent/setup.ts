@@ -71,14 +71,20 @@ const agentConfig = {
         prompt: readFileSync(new URL("./prompt.md", import.meta.url), "utf8"),
         // The fastest model that handles Japanese well; judge it on the M1 test call.
         llm: process.env.ELEVENLABS_LLM ?? "claude-haiku-5-5",
+        // No thinking step: on the first test call it added 2–5 s before every reply.
+        reasoning_effort: "none",
         tool_ids: [tool.id],
         timezone: "Asia/Tokyo",
       },
     },
     // Japanese needs one of the multilingual voice models.
     tts: { voice_id: need("ELEVENLABS_VOICE_ID"), model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5" },
-    // Older callers pause; wait longer before deciding they have finished.
-    turn: { turn_timeout: 10 },
+    // Seconds of silence before the agent prompts the resident again.
+    turn: {
+      turn_timeout: 10,
+      // If a reply takes longer than this, say a short filler first, as a person would.
+      soft_timeout_config: { timeout_seconds: 1.5, message: "はい…" },
+    },
   },
   platform_settings: {
     workspace_overrides: {
