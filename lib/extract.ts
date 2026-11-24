@@ -29,7 +29,6 @@ export const ExtractionSchema = z.object({
   }),
   // One field per daily measure (lib/measures.ts).
   observations: z.object(Object.fromEntries(MEASURES.map((m) => [m.field, tri]))),
-  winter_covered: z.object({ heating: z.boolean(), exit: z.boolean(), supplies: z.boolean() }),
   english: z.object({
     summary: z.string(),
     mood: z.string(),
@@ -56,12 +55,7 @@ Set each signal to true only when the resident's own words support it. When the 
 - money_request: someone else (a caller, visitor or message) asked them for money, a transfer, or bank or card details.
 
 Each observation is "yes", "no" or "unknown", taken only from the resident's own words. Use "unknown" when the subject did not come up. When what they said points to the worrying answer, give that answer: do not soften it to "unknown". As with the signals, when the resident corrects or denies something, go with the correction.
-${MEASURES.map((m) => `- ${m.ask}`).join("\n")}
-
-winter_covered records which of the caller's winter checks the resident actually answered, whatever the answer was. Set each to true only when the resident's own words settle it; false when it was never asked, or was asked and the call ended (or moved on) without an answer.
-- heating: whether their heating is working.
-- exit: whether they can get out of the front door, or snow is blocking it.
-- supplies: whether they have enough food and medicine.`;
+${MEASURES.map((m) => `- ${m.ask}`).join("\n")}`;
 
 /** Turns a call transcript into notes and yes/no signals. Throws if the model returns nothing usable. */
 export async function extract(resident: Resident, transcript: Turn[]): Promise<Extraction> {

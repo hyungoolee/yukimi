@@ -1,4 +1,5 @@
 import { MEASURES } from "./measures";
+import { UNCONFIRMED } from "./rules";
 import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
@@ -308,7 +309,6 @@ const REASONS_EN: [string, string][] = [
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],
   ["電話に2回応答なし。第二連絡先も確認できず", "No answer twice; the second contact can't confirm"],
   ["自動判定に失敗。通話メモを確認してください", "Automatic check failed; please read the call notes"],
-  ["冬の確認が終わる前に通話が終了", "Call ended before the winter checks were finished"],
   ["通話の処理に失敗。確認してください", "Processing the call failed; please check"],
 ];
 
@@ -316,6 +316,10 @@ export function reasonText(lang: Lang, reason: string) {
   if (lang === "ja") return reason;
   // "電話に応答なし。<name>さんが無事を確認": the name is the second contact's, in Japanese.
   if (reason.startsWith("電話に応答なし。")) return "No answer; the second contact confirmed they are fine";
+  if (reason.startsWith(UNCONFIRMED)) {
+    const labels = reason.slice(UNCONFIRMED.length).split("、");
+    return `Not confirmed before the call ended: ${labels.map((l) => MEASURES.find((m) => m.label.ja === l)?.label.en ?? l).join(", ")}`;
+  }
   const match = REASONS_EN.find(([japanese]) => reason.startsWith(japanese));
   return match ? match[1] + reason.slice(match[0].length).replace("（継続中）", " (ongoing)") : reason;
 }

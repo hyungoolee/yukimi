@@ -89,7 +89,10 @@
         "user",
         "助かるわ。ありがとうね。"
       ]
-    ]
+    ],
+    "observations": {
+      "can_get_out": "no"
+    }
   },
   {
     "id": "healthy-chatty",
@@ -269,7 +272,10 @@
         "user",
         "お願いね。"
       ]
-    ]
+    ],
+    "observations": {
+      "heating_ok": "no"
+    }
   },
   {
     "id": "not-eating-low-mood",
@@ -685,14 +691,9 @@
     "resident": "sato",
     "expected": "yellow",
     "expected_reasons": [
-      "冬の確認が終わる前に通話が終了"
+      "通話が終わる前に確認できなかった：睡眠、玄関・雪、食料・薬"
     ],
     "snow_request": false,
-    "winter_covered": {
-      "heating": true,
-      "exit": false,
-      "supplies": false
-    },
     "transcript": [
       [
         "agent",
@@ -714,7 +715,14 @@
         "agent",
         "わかりました。玄関の雪はいかがですか。"
       ]
-    ]
+    ],
+    "whole_call": true,
+    "observations": {
+      "heating_ok": "yes",
+      "can_get_out": "unknown",
+      "has_supplies": "unknown",
+      "slept_well": "unknown"
+    }
   },
   {
     "id": "all-checks-done",
@@ -723,11 +731,6 @@
     "expected": "green",
     "expected_reasons": [],
     "snow_request": false,
-    "winter_covered": {
-      "heating": true,
-      "exit": true,
-      "supplies": true
-    },
     "transcript": [
       [
         "agent",
@@ -763,12 +766,19 @@
       ],
       [
         "agent",
-        "体調はいかがですか。"
+        "体調はいかがですか。ゆうべはよく眠れましたか。"
       ],
       [
         "user",
-        "元気ですよ。じゃあ、これで。"
+        "元気ですよ。よく眠れました。じゃあ、これで。"
       ]
-    ]
+    ],
+    "whole_call": true,
+    "observations": {
+      "heating_ok": "yes",
+      "can_get_out": "yes",
+      "has_supplies": "yes",
+      "slept_well": "yes"
+    }
   }
 ]

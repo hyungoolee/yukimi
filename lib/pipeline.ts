@@ -2,6 +2,7 @@ import { runActions } from "./actions";
 import { extract } from "./extract";
 import { missed } from "./ladder";
 import { curateMemory } from "./memory";
+import { unanswered } from "./measures";
 import { applyRules } from "./rules";
 import { claimTrendFiring, clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
 import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
@@ -38,7 +39,7 @@ export async function processCall(
   let judged = false; // true only when the rules ran on a real extraction
   try {
     extraction = await extract(resident, transcript);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), winterChecks ? extraction.winter_covered : undefined);
+    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), unanswered(extraction.observations ?? {}, winterChecks));
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);

@@ -1,7 +1,8 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Extraction } from "@/lib/types";
+import { MEASURES } from "@/lib/measures";
+import type { Extraction, Observations } from "@/lib/types";
 
 // The model call is replaced; everything else (routes, rules, store, LINE requests) is real.
 const extraction: Extraction = {
@@ -670,7 +671,8 @@ describe("one writer at a time", () => {
 });
 
 describe("trends across days", () => {
-  const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
+  // Nothing came up except sleep, the one question every call must get an answer to.
+  const blank: Observations = { ...(Object.fromEntries(MEASURES.map((m) => [m.field, "unknown"])) as Observations), slept_well: "yes" };
   const notEaten = { ...extraction, observations: { ...blank, ate: "no" as const }, signals: { ...extraction.signals, fall_recent: false, pain: false, snowed_in: false, not_eating: true } };
   const earlier = (id: string, daysAgo: number, residentId = "suzuki") =>
     store.saveCall({
@@ -814,9 +816,11 @@ describe("follow-ups after a call", () => {
     expect(curate).not.toHaveBeenCalled();
   });
 
-  it("flags a call that ended before the winter checks only when this call's agent was told to run them", async () => {
+  it("flags a call that ended before a required question, counting the winter ones only when this call's agent was told to ask", async () => {
     const quiet = Object.fromEntries(Object.keys(extraction.signals).map((k) => [k, false])) as Extraction["signals"];
-    const cutShort = { ...extraction, signals: quiet, winter_covered: { heating: true, exit: false, supplies: false } };
+    const unknown = Object.fromEntries(MEASURES.map((m) => [m.field, "unknown"])) as Observations;
+    // Answered about sleep and the heating, then hung up. (They also ate: this resident has days of not eating from the tests above.)
+    const cutShort = { ...extraction, signals: quiet, observations: { ...unknown, ate: "yes" as const, slept_well: "yes" as const, heating_ok: "yes" as const } };
     const post = (id: string, winter_check: string) =>
       elevenlabs(signedElevenLabs(JSON.stringify({
         type: "post_call_transcription",
@@ -831,8 +835,13 @@ describe("follow-ups after a call", () => {
 
     extract.mockResolvedValueOnce(cutShort);
     await post("conv_cut2", "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。");
-    expect(await store.getCall("conv_cut2")).toMatchObject({ risk: "yellow", reasons: ["冬の確認が終わる前に通話が終了"] });
+    expect(await store.getCall("conv_cut2")).toMatchObject({ risk: "yellow", reasons: ["通話が終わる前に確認できなかった：玄関・雪、食料・薬"] });
     expect(pushes().map((p) => p.to)).toEqual(["U_helper"]);
+
+    // Hello, then gone: even on a mild morning the one everyday question went unanswered.
+    extract.mockResolvedValueOnce({ ...cutShort, observations: unknown });
+    await post("conv_cut3", "不要。天気の話は軽くふれる程度でよい。");
+    expect(await store.getCall("conv_cut3")).toMatchObject({ risk: "yellow", reasons: ["通話が終わる前に確認できなかった：睡眠"] });
   });
 
   it("does not curate a call whose extraction worked but whose rules could not run", async () => {
@@ -932,7 +941,8 @@ describe("the helper's memory edits", () => {
 });
 
 describe("today's brief on a call", () => {
-  const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
+  // Nothing came up except sleep, the one question every call must get an answer to.
+  const blank: Observations = { ...(Object.fromEntries(MEASURES.map((m) => [m.field, "unknown"])) as Observations), slept_well: "yes" };
 
   it("reaches the agent when a pattern is running, and never stops a call from being placed", async () => {
     for (const daysAgo of [1, 2, 3]) {
