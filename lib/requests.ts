@@ -33,7 +33,7 @@ export const REQUESTS = {
     role: "second_contact",
     doneField: "has_supplies",
     label: { ja: "お届けのお願い", en: "Supplies" },
-    message: (name) => `【お届けのお願い】${name}さんが、食料・薬・灯油のどれかが足りないと話しています。届けられる時間を押してください。`,
+    message: (name) => `【お届けのお願い】${name}さんが、食料・薬・灯油のどれかが足りないと話しています。何が必要かをご本人に確かめて、届けられる時間を押してください。`,
     visit: "足りないものを届けに来る予定",
     check: "届いて、食料・薬・灯油が足りているかを聞く。",
   },
@@ -72,6 +72,9 @@ export function slotLabel(slot: Slot, now = new Date(), lang: "ja" | "en" = "ja"
 
 export type OpenRequest = {
   kind: RequestKind;
+  /** The call that first asked: what the buttons carry. */
+  requestId: string;
+  /** The call whose record holds the request now (the newest reminder). */
   callId: string;
   status: "not_sent" | "sent" | "accepted";
   /** Who took it, or else who was asked. */
@@ -98,6 +101,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       if (now.getTime() - new Date(call.at).getTime() > STALE_MS) return [];
       return [{
         kind,
+        requestId: (action.type === "request" && action.request_id) || call.id,
         callId: call.id,
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
         who: action.accepted_by || resident[REQUESTS[kind].role].name,

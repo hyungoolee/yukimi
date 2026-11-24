@@ -1071,9 +1071,56 @@ describe("help requests", () => {
     lineCalls.length = 0;
     await heard("conv_h5", true, false);
     expect(pushes().map((p) => p.to)).toEqual(["U_volunteer"]);
+    expect((await requestsOf("conv_h5"))[0].request_id).toBe("conv_h4"); // a reminder of the same request
     await tap("snow_accept:conv_h4", "U_volunteer");
     expect((await requestsOf("conv_h5"))[0].accepted_by).toBe("山本");
     expect((await requestsOf("conv_h4"))[0].accepted_by).toBeUndefined();
+  });
+
+  it("keeps an accepted visit, and sends nothing again, when the same call is reported twice", async () => {
+    await closeRequests("suzuki");
+    const { slotChoices } = await import("@/lib/requests");
+    const [first] = slotChoices();
+    await heard("conv_h7", false, true);
+    await tap(`accept:conv_h7:supplies:${first.date}:${first.part}`, "U_family");
+    lineCalls.length = 0;
+    await heard("conv_h7", false, true);
+    expect(pushes()).toEqual([]);
+    expect((await requestsOf("conv_h7"))[0]).toMatchObject({ accepted_by: "隣の高田さん", slot: first, sent: true });
+    extract.mockReset().mockImplementation(async () => extraction); // the repeat never reached the model
+  });
+
+  it("has the request on record before its buttons can be tapped", async () => {
+    await closeRequests("suzuki");
+    let onRecord: boolean | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (String(url).endsWith("/push")) onRecord = !!(await store.getCall("conv_h8"));
+      return new Response("{}");
+    }));
+    await heard("conv_h8", true, false);
+    expect(onRecord).toBe(true);
+    expect((await requestsOf("conv_h8"))[0]).toMatchObject({ sent: true, request_id: "conv_h8" });
+  });
+
+  it("does not let a button from a settled request take a new one", async () => {
+    await closeRequests("suzuki");
+    const { slotChoices } = await import("@/lib/requests");
+    const [first] = slotChoices();
+    await heard("conv_h9", false, true);
+    await heard("conv_h10", false, false); // she has enough again: settled
+    await heard("conv_h11", false, true); // a new shortage, a new request
+    await tap(`accept:conv_h9:supplies:${first.date}:${first.part}`, "U_family");
+    expect((await requestsOf("conv_h11"))[0].accepted_by).toBeUndefined();
+    await tap(`accept:conv_h11:supplies:${first.date}:${first.part}`, "U_family");
+    expect((await requestsOf("conv_h11"))[0].accepted_by).toBe("隣の高田さん");
+  });
+
+  it("tells the family what she said she needs", async () => {
+    await closeRequests("suzuki");
+    lineCalls.length = 0;
+    await heard("conv_h12", false, true);
+    expect(pushes()[0].messages[0].text).toBe("通話メモより：除雪");
+    expect((await requestsOf("conv_h12"))[0].deliveries![0].text).toContain("何が必要かをご本人に確かめて");
   });
 
   it("takes the demo button's place for a tap, in demo mode", async () => {

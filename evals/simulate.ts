@@ -62,7 +62,7 @@ const scenarios: Record<string, Scenario> = {
   },
   demo: {
     expectTool: false,
-    persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物と薬はある。孫の健太は模試がよくできた。`,
+    persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物も薬も灯油もある。孫の健太は模試がよくできた。`,
   },
   "chest-pain": {
     expectTool: "emergency",
