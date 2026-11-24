@@ -127,7 +127,7 @@ const scenarios: Record<string, Scenario> = {
   },
   "slip-inside-a-story": {
     expectTool: false,
-    asked: [/転|すべ|滑|尻もち/, /痛/],
+    asked: [/転ん|すべっ|滑っ|尻もち/],
     persona: `${chatty} 状況：元気だと思っている。ストーブはつき、玄関も出られ、食べ物も薬も灯油もある。きのうのことを聞かれたら、ゴミ出しの話をして、そのついでに「そういえば玄関先でちょっとすべって尻もちをついたけど」と軽く言い、すぐ別の話にうつる。転んだことを聞かれたら、尻が少し痛いが歩けると答える。`,
   },
   "one-long-answer": {
@@ -153,7 +153,7 @@ const scenarios: Record<string, Scenario> = {
   },
   "husband-died": {
     expectTool: false,
-    opener: ["編み物", "編"],
+    opener: ["編"],
     openerNot: "主人",
     variables: {
       facts: "ご主人を去年亡くした、編み物が好き",
@@ -221,45 +221,47 @@ async function unconfirmed(turns: Turn[], winter: boolean) {
 }
 
 for (let round = 1; round <= (Number(process.env.SIM_RUNS) || 1); round++) {
-const suite = await call("POST", `/agents/${agentId}/run-tests`, {
-  tests: chosen.map(([id]) => ({ test_id: ids[id] })),
-});
-let runs: Run[] = [];
-for (let waited = 0; waited < 900; waited += 5) {
-  await new Promise((resolve) => setTimeout(resolve, 5000));
-  runs = (await call("GET", `/test-invocations/${suite.id}`)).test_runs;
-  if (runs.every((r) => r.status !== "pending")) break;
-}
+  const suite = await call("POST", `/agents/${agentId}/run-tests`, {
+    tests: chosen.map(([id]) => ({ test_id: ids[id] })),
+  });
+  let runs: Run[] = [];
+  for (let waited = 0; waited < 900; waited += 5) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    runs = (await call("GET", `/test-invocations/${suite.id}`)).test_runs;
+    if (runs.every((r) => r.status !== "pending")) break;
+  }
 
-for (const [id, s] of chosen) {
-  const run = runs.find((r) => r.test_id === ids[id]);
-  const turns = run?.agent_responses ?? [];
-  const agentSaid = turns.filter((t) => t.role !== "user" && t.message).map((t) => t.message!);
-  // The greeting names the service; the opener is the first thing the agent says after it.
-  const opener = agentSaid.find((m) => !m.includes("見守り電話")) ?? "";
-  const winter = { ...variables, ...s.variables }.winter_check.startsWith("必要");
-  const problems = [
-    s.opener && !s.opener.some((w) => opener.includes(w)) && `opener is not about their life: 「${opener}」`,
-    s.openerNot && opener.includes(s.openerNot) && `opener mentions ${s.openerNot}`,
-    ...(s.asked ?? []).map((re) => !agentSaid.some((m) => re.test(m)) && `never asked ${re}`),
-    s.never && agentSaid.some((m) => s.never!.test(m)) && `said ${s.never}`,
-    // Emergencies rightly never reach the daily questions; the rules exempt them as well.
-    !s.expectTool && !s.leavesEarly && turns.length > 0 && (await unconfirmed(turns, winter).catch((e: Error) => `extraction failed: ${e.message}`)),
-  ].filter(Boolean);
-  const kinds = turns
-    .flatMap((t) => t.tool_calls ?? [])
-    .filter((c) => c.tool_name === "report_emergency")
-    .map((c) => JSON.parse(c.params_as_json || "{}").kind);
-  const said = !s.expectSay || turns.some((t) => t.role !== "user" && t.message?.includes(s.expectSay!));
-  const ok = (s.expectTool === false ? kinds.length === 0 : kinds.includes(s.expectTool)) && said && problems.length === 0;
-  if (!ok) misses.push(`${id} (run ${round})`);
-  console.log(`\n=== ${id}: ${turns.length === 0 ? "NO TRANSCRIPT" : ok ? "ok" : "MISS"} (${agentSaid.length} agent turns; expected tool: ${s.expectTool || "none"}; called: ${kinds.join(", ") || "none"}; run ${run?.status}${run?.condition_result?.rationale?.summary ? ": " + run.condition_result.rationale.summary : ""})`);
-  for (const problem of problems) console.log(`  !! ${problem}`);
-  for (const t of turns) {
-    for (const c of t.tool_calls ?? []) console.log(`  [tool call] ${c.tool_name} ${c.params_as_json}`);
-    for (const r of t.tool_results ?? []) console.log(`  [tool result${r.is_error ? " ERROR" : ""}] ${String(r.result_value).slice(0, 160)}`);
-    if (t.message) console.log(`  ${t.role === "user" ? "resident" : "agent   "}: ${t.message.replace(/\s+/g, " ")}`);
+  for (const [id, s] of chosen) {
+    const run = runs.find((r) => r.test_id === ids[id]);
+    const turns = run?.agent_responses ?? [];
+    const agentSaid = turns.filter((t) => t.role !== "user" && t.message).map((t) => t.message!);
+    // The greeting names the service; the opener is the first thing the agent says after it.
+    const opener = agentSaid.find((m) => !m.includes("見守り電話")) ?? "";
+    const winter = { ...variables, ...s.variables }.winter_check.startsWith("必要");
+    const problems = [
+      s.opener && !s.opener.some((w) => opener.includes(w)) && `opener is not about their life: 「${opener}」`,
+      s.openerNot && opener.includes(s.openerNot) && `opener mentions ${s.openerNot}`,
+      ...(s.asked ?? []).map((re) => !agentSaid.some((m) => re.test(m)) && `never asked ${re}`),
+      s.never && agentSaid.some((m) => s.never!.test(m)) && `said ${s.never}`,
+      // Emergencies rightly never reach the daily questions; the rules exempt them as well.
+      !s.expectTool && !s.leavesEarly && turns.length > 0 && (await unconfirmed(turns, winter).catch((e: Error) => `extraction failed: ${e.message}`)),
+    ].filter(Boolean);
+    const kinds = turns
+      .flatMap((t) => t.tool_calls ?? [])
+      .filter((c) => c.tool_name === "report_emergency")
+      .map((c) => JSON.parse(c.params_as_json || "{}").kind);
+    const said = !s.expectSay || turns.some((t) => t.role !== "user" && t.message?.includes(s.expectSay!));
+    // A run with no transcript proves nothing, so it is never a pass.
+    const ok = turns.length > 0 && (s.expectTool === false ? kinds.length === 0 : kinds.includes(s.expectTool)) && said && problems.length === 0;
+    if (!ok) misses.push(`${id} (run ${round})`);
+    console.log(`\n=== ${id}: ${turns.length === 0 ? "NO TRANSCRIPT" : ok ? "ok" : "MISS"} (${agentSaid.length} agent turns; expected tool: ${s.expectTool || "none"}; called: ${kinds.join(", ") || "none"}; run ${run?.status}${run?.condition_result?.rationale?.summary ? ": " + run.condition_result.rationale.summary : ""})`);
+    for (const problem of problems) console.log(`  !! ${problem}`);
+    for (const t of turns) {
+      for (const c of t.tool_calls ?? []) console.log(`  [tool call] ${c.tool_name} ${c.params_as_json}`);
+      for (const r of t.tool_results ?? []) console.log(`  [tool result${r.is_error ? " ERROR" : ""}] ${String(r.result_value).slice(0, 160)}`);
+      if (t.message) console.log(`  ${t.role === "user" ? "resident" : "agent   "}: ${t.message.replace(/\s+/g, " ")}`);
+    }
   }
 }
-}
 console.log(`\n${misses.length ? `MISSES: ${misses.join(", ")}` : "all ok"}`);
+process.exitCode = misses.length ? 1 : 0;
