@@ -77,11 +77,15 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
 }
 
 /** Asks the person for this kind of help, with a button for each half-day they could come. */
-async function sendRequest(resident: Resident, callId: string, kind: RequestKind): Promise<Delivery[]> {
+async function sendRequest(resident: Resident, callId: string, request: Extract<Action, { type: "request" }>): Promise<Delivery[]> {
+  const { kind, request_id: id = callId } = request;
   const body = REQUESTS[kind].message(resident.name);
-  const choices = slotChoices().map((slot) => ({ label: slotLabel(slot), data: `accept:${callId}:${kind}:${slot.date}:${slot.part}` }));
+  const choices = slotChoices().map((slot) => ({ label: slotLabel(slot), data: `accept:${id}:${kind}:${slot.date}:${slot.part}` }));
   const button = choices.map((c) => c.label).join(" / ");
-  return [await deliver(resident, REQUESTS[kind].role, body, [buttons(body, choices)], { button })];
+  // What she said she needs, so the person knows what to bring. Call notes, not fixed wording: marked as such.
+  const needs = request.needs?.length ? `通話メモより：${request.needs.join("、").slice(0, 300)}` : "";
+  const messages = [...(needs ? [text(needs)] : []), buttons(body, choices)];
+  return [await deliver(resident, REQUESTS[kind].role, [needs, body].filter(Boolean).join("\n"), messages, { button })];
 }
 
 /**
@@ -106,7 +110,7 @@ export async function runActions(resident: Resident, callId: string, risk: Risk,
   return Promise.all(
     actions.map(async (a) => {
       const deliveries =
-        a.type === "alert" ? await alert(a.reasonsByRole ?? sharedReasons(a.to, reasons)) : await sendRequest(resident, callId, a.kind);
+        a.type === "alert" ? await alert(a.reasonsByRole ?? sharedReasons(a.to, reasons)) : await sendRequest(resident, callId, a);
       return { ...a, sent: anySent(deliveries), deliveries };
     }),
   );

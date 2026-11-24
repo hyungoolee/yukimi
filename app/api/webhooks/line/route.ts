@@ -25,7 +25,8 @@ export async function POST(request: Request) {
 
     if (event.type === "postback") {
       const [kind, id, ...rest] = String(event.postback.data).split(":");
-      // "accept:<call>:<kind>:<date>:<am|pm>". "snow_accept:<call>" is the button from before there were time slots.
+      // "accept:<request>:<kind>:<date>:<am|pm>", where <request> is the call that first asked.
+      // "snow_accept:<call>" is the button from before there were time slots.
       const [requestKind, date, part] = kind === "snow_accept" ? ["snow"] : rest;
       if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
         const call = await getCall(id);
@@ -33,8 +34,8 @@ export async function POST(request: Request) {
         const person = resident?.[REQUESTS[requestKind].role];
         if (resident && userId && person?.line_id === userId) {
           const slot = /^\d{4}-\d\d-\d\d$/.test(date ?? "") && (part === "am" || part === "pm") ? { date, part } as const : undefined;
-          // A later call may have asked again: the answer goes on the request that is open now.
-          const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind);
+          // A later call may have sent a reminder: the answer goes on the newest record of this same request.
+          const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind && r.requestId === id);
           if (!open) {
             await reply(event.replyToken, "この件はもう済んでいます。ありがとうございます。");
           } else if (slot && passed(slot, new Date())) {

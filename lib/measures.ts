@@ -92,7 +92,7 @@ export const MEASURES = [
     field: "has_supplies",
     concern: "no",
     label: { ja: "食料・薬", en: "Food and medicine" },
-    ask: `has_supplies (now): "yes" when they say they have enough food and medicine; "no" when they are short of food, medicine or heating fuel (kerosene, 灯油), or about to run out. "unknown" when only one of them came up and it was fine.`,
+    ask: `has_supplies (now): "yes" only when they say they have enough of all three: food, medicine and heating fuel (kerosene, 灯油). "no" when they are short of any of the three, or about to run out. "unknown" when only one or two of them came up and those were fine.`,
     required: "winter",
   },
 ] as const satisfies readonly Measure[];

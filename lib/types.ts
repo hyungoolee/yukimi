@@ -107,7 +107,15 @@ export type Risk = "green" | "yellow" | "red";
 export type AlertReasons = Partial<Record<Role, string[]>>;
 export type Action =
   | { type: "alert"; to: Role[]; reasonsByRole?: AlertReasons }
-  | { type: "request"; kind: RequestKind; to: Role[] };
+  | {
+      type: "request";
+      kind: RequestKind;
+      to: Role[];
+      /** The call that first asked. A reminder on a later call keeps it, so every message's buttons answer the same request. */
+      request_id?: string;
+      /** What the resident said they need, from the call notes: shown to the person asked. */
+      needs?: string[];
+    };
 /** Half a day someone has said they will come. `date` is a Japan date. */
 export type Slot = { date: string; part: "am" | "pm" };
 /** How a help request stands. Kept on the action it was raised by (lib/requests.ts). */
