@@ -5,6 +5,7 @@ import type { Marker } from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import type { LatLng } from "@/lib/types";
 import { saveLocation } from "../../actions";
+import { SubmitButton } from "../../submit-button";
 import { DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, VOLUNTEER_COLOR } from "../../map-style";
 
 /** A small map: click to place the pin, then save. */
@@ -19,7 +20,7 @@ export function LocationPicker({
   who: "home" | "snow_volunteer";
   label: string;
   initial?: LatLng;
-  labels: { save: string; placed: string; unplaced: string };
+  labels: { save: string; saving: string; placed: string; unplaced: string };
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState<LatLng | undefined>();
@@ -66,9 +67,9 @@ export function LocationPicker({
       <input type="hidden" name="lng" value={picked?.lng ?? ""} />
       <div className="flex items-center gap-2">
         <span className="text-zinc-500">{label}</span>
-        <button disabled={!picked} className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50 disabled:opacity-40">
+        <SubmitButton disabled={!picked} pending={labels.saving}>
           {labels.save}
-        </button>
+        </SubmitButton>
         <span className="text-zinc-500">{initial ? labels.placed : labels.unplaced}</span>
       </div>
       <div ref={container} className="z-0 mt-2 h-56 w-full rounded-lg border border-zinc-200" />

@@ -8,6 +8,7 @@ import type { CallRecord } from "@/lib/types";
 import { getWeather } from "@/lib/weather";
 import { resetDemo } from "./actions";
 import { getStrings } from "./lang";
+import { riskEdge } from "./ui";
 import { MapView } from "./map-view";
 import { Refresh } from "./refresh";
 import { ResidentCard } from "./resident-card";
@@ -26,6 +27,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const [residents, calls] = await Promise.all([listResidents(), listCalls()]);
   const rows = rankedRows(residents, calls);
   const weather = residents[0] && (await getWeather(residents[0].amedas_station));
+  const open = (risk: "red" | "yellow") => rows.filter((r) => r.call?.risk === risk && !r.call.handled).length;
+  const counts = [
+    { label: t.badge.red, n: open("red"), className: "bg-red-600 text-white" },
+    { label: t.badge.yellow, n: open("yellow"), className: "bg-amber-400 text-black" },
+    { label: t.badge.none, n: rows.filter((r) => !r.call).length, className: "bg-zinc-200 text-zinc-700" },
+  ];
   const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
@@ -33,6 +40,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <Refresh />
       <h1 className="text-2xl font-semibold">{t.title}</h1>
       {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
+      <p className="mt-3 flex flex-wrap gap-2 text-sm">
+        {counts.map(({ label, n, className }) => (
+          <span key={label} className={`rounded px-2 py-0.5 ${n > 0 ? `font-medium ${className}` : "bg-zinc-100 text-zinc-400"}`}>
+            {label} {n}
+          </span>
+        ))}
+      </p>
       <nav className="mt-4 inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
         {(["list", "map"] as const).map((v) => (
           <Link
@@ -47,9 +61,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       </nav>
 
       {view === "list" ? (
-        <ul className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200">
+        <ul className="mt-4 divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
           {rows.map((row) => (
-            <li key={row.resident.id} className={`p-4 ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
+            <li key={row.resident.id} className={`p-4 ${riskEdge(row.call) || "border-l-4 border-l-transparent"} ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
               <ResidentCard {...row} lang={lang} t={t}>
                 <Link href={href("map", row.resident.id)} className={linkClass}>
                   {t.viewOnMap}
@@ -96,7 +110,7 @@ function MapPanel({
     <div className="mt-4">
       <MapView data={data} selected={selected} volunteerLabel={t.volunteer("")} />
       {data.unplaced > 0 && <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>}
-      <div className="mt-4 rounded-lg border border-zinc-200 p-4">
+      <div className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(row?.call)}`}>
         {row ? (
           <>
             <ResidentCard {...row} lang={lang} t={t}>
