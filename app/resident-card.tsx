@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { Row } from "@/lib/dashboard";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
+import type { CallRecord, Resident } from "@/lib/types";
 import { callNow, markHandled } from "./actions";
+import { SubmitButton } from "./submit-button";
 import { japanTime, RiskBadge } from "./ui";
 
 /** One resident's status and buttons. The list rows and the map's panel both use it. */
@@ -23,38 +25,62 @@ export function ResidentCard({
           {call ? t.last(japanTime(call.at, lang)) : t.daily(resident.call_time)}
         </span>
       </div>
-      {call && call.reasons.length > 0 && (
+      <CallStatus resident={resident} call={call} lang={lang} t={t} />
+      <div className="mt-3 flex flex-wrap gap-2">
+        <CallNowButton resident={resident} t={t} />
+        {!resident.phone && (
+          <Link href={`/residents/${resident.id}#settings`} className="self-center text-sm text-zinc-500 hover:underline">
+            {t.addPhone}
+          </Link>
+        )}
+        <MarkHandledButton call={call} t={t} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Why the call was flagged, whether the alert was seen, and the snow request. */
+export function CallStatus({ resident, call, lang, t }: Row & { lang: Lang; t: Strings }) {
+  if (!call) return null;
+  return (
+    <>
+      {call.reasons.length > 0 && (
         <p className="mt-2 text-sm">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>
       )}
-      {call?.actions.some((a) => a.type === "snow_request") && (
+      {call.risk === "red" && !call.handled && call.actions.some((a) => a.type === "alert") && (
+        <p className={`mt-1 text-sm ${call.acknowledged_by ? "text-zinc-600" : "font-medium text-red-700"}`}>
+          {call.acknowledged_by ? t.alertSeen(call.acknowledged_by) : t.alertUnseen(call.alert_rounds ?? 0)}
+        </p>
+      )}
+      {call.actions.some((a) => a.type === "snow_request") && (
         <p className="mt-1 text-sm text-zinc-600">
           {t.snowRequest}
           {call.snow_accepted ? t.snowAccepted(resident) : t.snowWaiting}
         </p>
       )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <form action={callNow}>
-          <input type="hidden" name="resident_id" value={resident.id} />
-          <button
-            disabled={!resident.phone}
-            className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50 disabled:opacity-40"
-          >
-            {t.callNow}
-          </button>
-        </form>
-        {!resident.phone && (
-          <Link href={`/residents/${resident.id}`} className="self-center text-sm text-zinc-500 hover:underline">
-            {t.addPhone}
-          </Link>
-        )}
-        {call && call.risk !== "green" && !call.handled && (
-          <form action={markHandled}>
-            <input type="hidden" name="call_id" value={call.id} />
-            <button className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50">{t.markHandled}</button>
-          </form>
-        )}
-        {children}
-      </div>
-    </div>
+    </>
+  );
+}
+
+export function CallNowButton({ resident, t }: { resident: Resident; t: Strings }) {
+  return (
+    <form action={callNow}>
+      <input type="hidden" name="resident_id" value={resident.id} />
+      <SubmitButton disabled={!resident.phone} pending={t.calling}>
+        {t.callNow}
+      </SubmitButton>
+    </form>
+  );
+}
+
+/** Shown only for an alert nobody has handled yet. */
+export function MarkHandledButton({ call, t }: { call?: CallRecord; t: Strings }) {
+  if (!call || call.risk === "green" || call.handled) return null;
+  return (
+    <form action={markHandled}>
+      <input type="hidden" name="call_id" value={call.id} />
+      <SubmitButton pending={t.saving}>{t.markHandled}</SubmitButton>
+    </form>
   );
 }

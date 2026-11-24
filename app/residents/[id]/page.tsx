@@ -5,11 +5,15 @@ import { DEMO_SCRIPT } from "@/lib/demo-script";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { deleteFollowUp, savePhone, simulateNoAnswer } from "../../actions";
+import { deleteFollowUp, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
-import { japanTime, RiskBadge } from "../../ui";
+import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-card";
+import { SubmitButton } from "../../submit-button";
+import { japanTime, RiskBadge, riskEdge } from "../../ui";
 import { LocationPicker } from "./location-picker";
+import { PhoneForm } from "./phone-form";
+import { rankedRows } from "@/lib/dashboard";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -37,6 +41,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   if (!resident) notFound();
   const calls = await listCalls(id);
   const { lang, t } = await getStrings();
+  const current = rankedRows([resident], calls)[0].call; // the same call the list shows
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
@@ -44,77 +49,73 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
       <h1 className="mt-2 text-2xl font-semibold">{t.name(resident)}</h1>
       <p className="mt-1 text-sm text-zinc-600">{resident.facts.join("、")}</p>
 
-      <form action={savePhone} className="mt-4 flex items-center gap-2 text-sm">
-        <input type="hidden" name="resident_id" value={resident.id} />
-        <label htmlFor="phone" className="text-zinc-500">{t.phone}</label>
-        <input
-          id="phone"
-          name="phone"
-          type="tel"
-          defaultValue={resident.phone}
-          placeholder="+819012345678"
-          className="w-48 rounded border border-zinc-300 px-2 py-1"
-        />
-        <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">{t.save}</button>
-        <span className="text-zinc-500">{t.phoneHint}</span>
-      </form>
+      <section className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(current)}`}>
+        <div className="flex items-center gap-3">
+          <RiskBadge call={current} t={t} />
+          <span className="text-sm text-zinc-500">
+            {current ? t.last(japanTime(current.at, lang)) : t.daily(resident.call_time)}
+          </span>
+        </div>
+        <CallStatus resident={resident} call={current} lang={lang} t={t} />
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <CallNowButton resident={resident} t={t} />
+          {!resident.phone && (
+            <a href="#settings" className="text-zinc-500 hover:underline">
+              {t.addPhone}
+            </a>
+          )}
+          <BrowserCall
+            residentId={resident.id}
+            translate={lang === "en"}
+            labels={{
+              start: t.browserCall,
+              connecting: t.connecting,
+              end: t.endCall,
+              micError: t.micError,
+              agent: t.captionAgent,
+              you: t.captionYou,
+              waiting: t.captionWaiting,
+            }}
+          />
+          {DEMO_MODE && (
+            <form action={simulateNoAnswer}>
+              <input type="hidden" name="resident_id" value={resident.id} />
+              <SubmitButton pending={t.calling}>{t.noAnswerDemo}</SubmitButton>
+            </form>
+          )}
+          <MarkHandledButton call={current} t={t} />
+        </div>
 
-      <div className="mt-4 flex items-center gap-2 text-sm">
-        <BrowserCall
-          residentId={resident.id}
-          labels={{ start: t.browserCall, connecting: t.connecting, end: t.endCall, micError: t.micError }}
-        />
         {DEMO_MODE && (
-          <form action={simulateNoAnswer}>
-            <input type="hidden" name="resident_id" value={resident.id} />
-            <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">{t.noAnswerDemo}</button>
-          </form>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-zinc-500">{t.demoScript}</summary>
+            <p className="mt-2 text-sm text-zinc-600">{t.demoScriptIntro}</p>
+            <table className="mt-2 w-full text-left text-sm">
+              <thead>
+                <tr className="text-zinc-500">
+                  <th className="py-1 pr-3 font-normal">{t.demoScriptWhen}</th>
+                  <th className="py-1 font-normal">{t.demoScriptSay}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.includes(line.needsFact!))).map(
+                  (line) => (
+                    <tr key={line.say} className="border-t border-zinc-200 align-top">
+                      <td className="py-2 pr-3 text-zinc-600">{line.when[lang]}</td>
+                      <td className="py-2">
+                        <div className="text-base">{line.say}</div>
+                        <div className="text-zinc-600">{line.romaji}</div>
+                        <div className="text-zinc-500">{line.meaning}</div>
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+            <p className="mt-2 text-sm text-amber-700">{t.demoScriptAvoid}</p>
+          </details>
         )}
-      </div>
-
-      {DEMO_MODE && (
-        <details className="mt-4">
-          <summary className="cursor-pointer text-sm text-zinc-500">{t.demoScript}</summary>
-          <p className="mt-2 text-sm text-zinc-600">{t.demoScriptIntro}</p>
-          <table className="mt-2 w-full text-left text-sm">
-            <thead>
-              <tr className="text-zinc-500">
-                <th className="py-1 pr-3 font-normal">{t.demoScriptWhen}</th>
-                <th className="py-1 font-normal">{t.demoScriptSay}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DEMO_SCRIPT.filter((line) => !line.needsFact || resident.facts.some((f) => f.includes(line.needsFact!))).map(
-                (line) => (
-                  <tr key={line.say} className="border-t border-zinc-200 align-top">
-                    <td className="py-2 pr-3 text-zinc-600">{line.when[lang]}</td>
-                    <td className="py-2">
-                      <div className="text-base">{line.say}</div>
-                      <div className="text-zinc-600">{line.romaji}</div>
-                      <div className="text-zinc-500">{line.meaning}</div>
-                    </td>
-                  </tr>
-                ),
-              )}
-            </tbody>
-          </table>
-          <p className="mt-2 text-sm text-amber-700">{t.demoScriptAvoid}</p>
-        </details>
-      )}
-
-      <details className="mt-4">
-        <summary className="cursor-pointer text-sm text-zinc-500">
-          {t.mapLocations(!!resident.location, !!resident.snow_volunteer.location)}
-        </summary>
-        <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
-        <LocationPicker
-          residentId={resident.id}
-          who="snow_volunteer"
-          label={t.volunteer(resident.snow_volunteer.name)}
-          initial={resident.snow_volunteer.location}
-          labels={t.picker}
-        />
-      </details>
+      </section>
 
       {openFollowUps(resident, japanDate()).length > 0 && (
         <>
@@ -171,6 +172,26 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           <li key={c.date + c.summary}>{c.date}：{c.summary}</li>
         ))}
       </ul>
+
+      <h2 id="settings" className="mt-8 scroll-mt-6 font-medium">{t.settings}</h2>
+      <PhoneForm
+        residentId={resident.id}
+        phone={resident.phone}
+        labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint }}
+      />
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm text-zinc-500">
+          {t.mapLocations(!!resident.location, !!resident.snow_volunteer.location)}
+        </summary>
+        <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
+        <LocationPicker
+          residentId={resident.id}
+          who="snow_volunteer"
+          label={t.volunteer(resident.snow_volunteer.name)}
+          initial={resident.snow_volunteer.location}
+          labels={t.picker}
+        />
+      </details>
     </main>
   );
 }

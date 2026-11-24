@@ -13,6 +13,7 @@ async function send(path: string, body: object): Promise<boolean> {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000), // a stalled LINE must not hold up other residents' alerts
     });
     if (!res.ok) console.error(`LINE ${path} failed (${res.status})`, await res.text());
     return res.ok;
