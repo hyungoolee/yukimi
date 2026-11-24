@@ -1,6 +1,7 @@
 // Shared formats from the Build plan. Change only with the whole team.
 
-export type Contact = { name: string; phone?: string; line_id?: string };
+export type LatLng = { lat: number; lng: number };
+export type Contact = { name: string; phone?: string; line_id?: string; location?: LatLng };
 export type Role = "helper" | "second_contact" | "snow_volunteer";
 
 export type Resident = {
@@ -13,6 +14,7 @@ export type Resident = {
   helper: Contact;
   snow_volunteer: Contact;
   amedas_station: string; // JMA station code
+  location?: LatLng; // home, shown on the coordinator's map
   facts: string[];
   recent_calls: { date: string; summary: string }[];
 };
