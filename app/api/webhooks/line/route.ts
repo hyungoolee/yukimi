@@ -1,19 +1,7 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { getCall, getResident, listResidents, updateCall, updateResident } from "@/lib/store";
-import type { Role } from "@/lib/types";
-
-// A teammate adds the bot and sends "<role word> <REGISTER_CODE>" to take a role for every demo resident.
-// The code stops a stranger who finds the bot from taking over a role.
-const ROLE_WORDS: Record<string, Role> = {
-  helper: "helper",
-  民生委員: "helper",
-  family: "second_contact",
-  家族: "second_contact",
-  volunteer: "snow_volunteer",
-  除雪: "snow_volunteer",
-};
+import { getCall, getResident, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
   const raw = await request.text();
@@ -25,18 +13,12 @@ export async function POST(request: Request) {
     const userId: string | undefined = event.source?.userId;
 
     if (event.type === "message" && event.message?.type === "text" && userId) {
-      // Japanese keyboards often type full-width digits and spaces.
-      const fold = (s: string) => s.normalize("NFKC").trim().toLowerCase();
-      const [word, code] = fold(event.message.text).split(/\s+/);
-      const role = ROLE_WORDS[word];
-      if (!role || code !== fold(env("REGISTER_CODE"))) {
-        await reply(event.replyToken, "役割と登録コードを送ってください（例：家族 1234）");
-        continue;
-      }
-      for (const { id } of await listResidents()) {
-        await updateResident(id, (fresh) => ({ ...fresh, [role]: { ...fresh[role], line_id: userId } }));
-      }
-      await reply(event.replyToken, `登録しました（${word}）`);
+      // Each person has their own code, shown on their page. Japanese keyboards often type full-width digits.
+      const code = event.message.text.normalize("NFKC").trim();
+      const match = /^\d{8}$/.test(code) && (await listPeople()).find((p) => p.code === code);
+      // Checked again inside the update, so a code can't register two people who send it at once.
+      const person = match && (await updatePerson(match.id, (p) => (p.code === code ? { ...p, line_id: userId, code: undefined } : null)));
+      await reply(event.replyToken, person ? `登録しました（${person.name}さん）` : "登録コード（8けたの数字）を送ってください");
     }
 
     if (event.type === "postback") {

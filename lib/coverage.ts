@@ -1,5 +1,4 @@
-import { volunteerKey } from "./dashboard";
-import type { Contact, Resident, Role } from "./types";
+import type { Contact, Person, Resident, Role } from "./types";
 
 // Who would be told if something went wrong with a resident, and whether each of them can be reached.
 // Read-only: this describes what the alert code would do today; it sends nothing.
@@ -42,31 +41,8 @@ export function coverage(resident: Resident) {
 export const criticalCount = (residents: Resident[]) =>
   residents.filter((r) => coverage(r).level === "critical").length;
 
-export type Person = {
-  key: string;
-  name: string;
-  reach: Reach;
-  roles: Role[];
-  residents: Resident[];
-  /** One place this person is on file, so a test message can find them without their LINE ID leaving the server. */
-  at: { residentId: string; role: Role };
-};
-
-/** Each person once, with everyone they serve. The same person is copied into several residents' files. */
-export function people(residents: Resident[]): Person[] {
-  const found = new Map<string, Person>();
-  for (const resident of residents) {
-    for (const role of ROLES) {
-      const contact = resident[role];
-      if (reach(contact) === "none") continue;
-      const key = volunteerKey(contact);
-      const person = found.get(key) ?? {
-        key, name: contact.name, reach: reach(contact), roles: [], residents: [], at: { residentId: resident.id, role },
-      };
-      if (!person.roles.includes(role)) person.roles.push(role);
-      if (!person.residents.includes(resident)) person.residents.push(resident);
-      found.set(key, person);
-    }
-  }
-  return [...found.values()];
+/** Each person with the roles they hold and everyone they serve. */
+export function served(person: Person, residents: Resident[]) {
+  const roles = ROLES.filter((role) => residents.some((r) => r[role].id === person.id));
+  return { roles, residents: residents.filter((r) => ROLES.some((role) => r[role].id === person.id)) };
 }

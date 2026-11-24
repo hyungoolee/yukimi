@@ -15,13 +15,9 @@ beforeEach(async () => {
     pushed.push({ to: body.to, text: body.messages[0].text ?? body.messages[0].template.text });
     return new Response("{}", { status: lineOk ? 200 : 500 });
   }));
-  const sato = (await store.getResident("sato"))!;
-  await store.saveResident({
-    ...sato,
-    helper: { ...sato.helper, line_id: "U_helper" },
-    second_contact: { ...sato.second_contact, line_id: "" }, // the family has not registered on LINE
-    snow_volunteer: { ...sato.snow_volunteer, line_id: "U_volunteer" },
-  });
+  // The family (p_yuki) has not registered on LINE.
+  await store.updatePerson("p_tanaka", (p) => ({ ...p, line_id: "U_helper" }));
+  await store.updatePerson("p_yamamoto", (p) => ({ ...p, line_id: "U_volunteer" }));
 });
 
 describe("what was sent, per recipient", () => {

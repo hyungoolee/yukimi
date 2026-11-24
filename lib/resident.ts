@@ -5,7 +5,7 @@ import type { Fact, Resident } from "./types";
  * Brings a resident file of any age to today's shape. Facts used to be plain strings: those become
  * locked intake facts, with an ID derived from the text so it is the same on every read until saved.
  */
-export function normalizeResident(raw: Resident): Resident {
+export function normalizeResident<T extends Pick<Resident, "facts">>(raw: T): T {
   // The position is part of the hash, so two facts with the same text still get different IDs.
   const facts = (raw.facts as (Fact | string)[]).map((f, i): Fact =>
     typeof f === "string"

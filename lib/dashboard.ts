@@ -56,8 +56,8 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   };
 }
 
-/** Tells volunteers apart: by LINE ID once registered, by name until then. Used for pins and for saving. */
-export const volunteerKey = (v: Contact) => v.line_id || v.name;
+/** Tells volunteers apart, for one pin each. */
+export const volunteerKey = (v: Contact) => v.id || v.line_id || v.name;
 
 export type MapData = {
   /** No names here: a pin shows a colour, and the name appears only when it is opened. */
