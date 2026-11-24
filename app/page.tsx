@@ -35,7 +35,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     { label: t.badge.none, n: rows.filter((r) => !r.call).length, className: "bg-zinc-200 text-zinc-700" },
   ];
   const unreached = criticalCount(residents);
-  // The line on a card singles a resident out. When the banner already covers everyone, it is only noise.
+  // The card line singles a resident out. Skip it when the banner already says the same of everyone:
+  // all are critical, or LINE isn't set up.
   const flagGaps = LINE_READY && unreached < residents.length;
   const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
