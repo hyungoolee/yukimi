@@ -1,10 +1,10 @@
 import type { Lang, Strings } from "@/lib/i18n";
 import type { Resident } from "@/lib/types";
-import { addFactAction, deleteFactAction, editFactAction, restoreFactAction, retireFactAction, saveCareNotes } from "../../actions";
+import { deleteFactAction, restoreFactAction } from "../../actions";
 import { japanTime } from "../../ui";
+import { MemoryText } from "./memory-text";
 
 const button = "rounded border border-zinc-300 px-2 py-0.5 hover:bg-zinc-50";
-const input = "min-w-0 flex-1 rounded border border-zinc-300 px-2 py-1";
 
 /** What Yukimi remembers about a resident, for the helper to read and correct. */
 export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Strings; lang: Lang }) {
@@ -15,50 +15,27 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
   return (
     <section className="mt-6 text-sm">
       <h2 className="text-base font-medium">{t.memory}</h2>
-      <ul className="mt-2 space-y-1">
-        {resident.facts.map((fact) => (
-          <li key={fact.id} className="flex items-center gap-2">
-            <form action={editFactAction} className="flex min-w-0 flex-1 items-center gap-2">
-              {id}
-              <input type="hidden" name="fact_id" value={fact.id} />
-              <input name="text" defaultValue={fact.text} maxLength={80} aria-label={fact.text} className={input} />
-              <button className={button}>{t.save}</button>
-            </form>
-            <form action={retireFactAction}>
-              {id}
-              <input type="hidden" name="fact_id" value={fact.id} />
-              <button className={button}>{t.retire}</button>
-            </form>
-            <span className="w-28 shrink-0 text-xs text-zinc-500">
-              {t.factSource[fact.source]}
-              {fact.locked && fact.source === "call" ? `・${t.locked}` : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <form action={addFactAction} className="mt-2 flex items-center gap-2">
-        {id}
-        <input name="text" maxLength={80} placeholder={t.factPlaceholder} aria-label={t.addFact} className={input} />
-        <button className={button}>{t.addFact}</button>
-        <span className="w-28 shrink-0" />
-      </form>
-
-      <form action={saveCareNotes} className="mt-4">
-        {id}
-        <label htmlFor="care_notes" className="text-zinc-500">{t.careNotes}</label>
-        <div className="mt-1 flex items-start gap-2">
-          <textarea
-            id="care_notes"
-            name="text"
-            rows={2}
-            maxLength={300}
-            defaultValue={resident.care_notes ?? ""}
-            placeholder={t.careNotesHint}
-            className={input}
-          />
-          <button className={button}>{t.save}</button>
-        </div>
-      </form>
+      <MemoryText
+        residentId={resident.id}
+        facts={resident.facts.map((fact) => ({
+          id: fact.id,
+          text: fact.text,
+          source: t.factSource[fact.source] + (fact.locked && fact.source === "call" ? `・${t.locked}` : ""),
+        }))}
+        careNotes={resident.care_notes ?? ""}
+        labels={{
+          careNotes: t.careNotes,
+          none: t.none,
+          edit: t.edit,
+          save: t.save,
+          saving: t.saving,
+          cancel: t.cancel,
+          factsHint: t.factsHint,
+          careNotesHint: t.careNotesHint,
+          tooLong: t.factsTooLong,
+          tooMany: t.factsTooMany,
+        }}
+      />
 
       {retired.length > 0 && (
         <details className="mt-3">

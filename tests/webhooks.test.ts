@@ -934,26 +934,35 @@ describe("the helper's memory edits", () => {
     return data;
   };
 
-  it("adds, edits, retires, restores and deletes a fact, and saves care notes", async () => {
+  it("adds, rewords, retires, restores and deletes a fact, and saves care notes", async () => {
     const actions = await import("@/app/actions");
     const facts = async () => (await store.getResident("suzuki"))!;
-    await actions.addFactAction(form({ resident_id: "suzuki", text: "毎週木曜に書道教室に通う" }));
+    const lines = (await facts()).facts.map((f) => f.text);
+    const save = (extra: string[], care_notes = "") =>
+      actions.saveMemory(undefined, form({ resident_id: "suzuki", facts: [...lines, ...extra].join("\n"), care_notes }));
+
+    expect((await save(["毎週木曜に書道教室に通う"])).error).toBeUndefined();
     const added = (await facts()).facts.at(-1)!;
     expect(added).toMatchObject({ text: "毎週木曜に書道教室に通う", source: "helper", locked: true });
 
-    await actions.editFactAction(form({ resident_id: "suzuki", fact_id: added.id, text: "毎週金曜に書道教室に通う" }));
-    expect((await facts()).facts.at(-1)!.text).toBe("毎週金曜に書道教室に通う");
+    await save(["毎週金曜に書道教室に通う"]); // a reworded line: the old one retired, the new one added
+    const reworded = (await facts()).facts.at(-1)!;
+    expect(reworded.text).toBe("毎週金曜に書道教室に通う");
+    expect((await facts()).retired_facts!.map((f) => f.id)).toContain(added.id);
 
-    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
-    expect((await facts()).facts.map((f) => f.id)).not.toContain(added.id);
-    await actions.restoreFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
-    expect((await facts()).facts.map((f) => f.id)).toContain(added.id);
+    await save([], "奥さんの話はこちらからしない");
+    expect((await facts()).facts.map((f) => f.id)).not.toContain(reworded.id);
+    await actions.restoreFactAction(form({ resident_id: "suzuki", fact_id: reworded.id }));
+    expect((await facts()).facts.map((f) => f.id)).toContain(reworded.id);
 
-    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    await save([], "奥さんの話はこちらからしない");
     await actions.deleteFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    await actions.deleteFactAction(form({ resident_id: "suzuki", fact_id: reworded.id }));
     expect(JSON.stringify(await facts())).not.toContain("書道教室"); // neither wording survives, in the log either
 
-    await actions.saveCareNotes(form({ resident_id: "suzuki", text: "奥さんの話はこちらからしない" }));
+    // A refused list saves nothing, and hands back what was typed.
+    const tooLong = "あ".repeat(81);
+    expect(await save([tooLong], "別の注意")).toEqual({ error: "too_long", facts: [...lines, tooLong].join("\n"), notes: "別の注意" });
     expect((await facts()).care_notes).toBe("奥さんの話はこちらからしない");
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     expect(variablesOf(await actions.startBrowserCall("suzuki"))).toMatchObject({
@@ -964,9 +973,9 @@ describe("the helper's memory edits", () => {
 
   it("does nothing for a resident that doesn't exist or a path-style id", async () => {
     const actions = await import("@/app/actions");
-    await actions.addFactAction(form({ resident_id: "nobody", text: "x" }));
+    await actions.saveMemory(undefined, form({ resident_id: "nobody", facts: "x", care_notes: "" }));
     const call = JSON.stringify(await store.getCall("conv_slip"));
-    await actions.addFactAction(form({ resident_id: "../calls/conv_slip", text: "x" }));
+    await actions.saveMemory(undefined, form({ resident_id: "../calls/conv_slip", facts: "x", care_notes: "" }));
     expect(JSON.stringify(await store.getCall("conv_slip"))).toBe(call); // the call record was not rewritten as a resident
     expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
   });
