@@ -108,8 +108,28 @@ function MapPanel({
 
   return (
     <div className="mt-4">
+      {data.pins.length === 0 && rows.length > 0 && (
+        // An empty map with no explanation looks broken: say why, and where to fix it.
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm">
+          <p className="font-medium">{t.mapEmpty}</p>
+          <p className="mt-1">
+            {t.mapEmptyHelp}{" "}
+            {rows.map(({ resident }, i) => (
+              <span key={resident.id}>
+                {i > 0 && t.separator}
+                <Link href={`/residents/${resident.id}`} className="underline">
+                  {t.name(resident)}
+                </Link>
+              </span>
+            ))}
+          </p>
+          {DEMO_MODE && <p className="mt-1 text-zinc-600">{t.mapEmptyDemo}</p>}
+        </div>
+      )}
       <MapView data={data} selected={selected} volunteerLabel={t.volunteer("")} />
-      {data.unplaced > 0 && <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>}
+      {data.unplaced > 0 && data.pins.length > 0 && (
+        <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>
+      )}
       <div className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(row?.call)}`}>
         {row ? (
           <>
