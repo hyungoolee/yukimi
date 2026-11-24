@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { placeCall } from "@/lib/elevenlabs";
-import { dashboardAccess } from "@/lib/env";
+import { browserCall, placeCall } from "@/lib/elevenlabs";
+import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { getCall, getResident, saveCall, saveResident } from "@/lib/store";
 
@@ -46,4 +46,19 @@ export async function savePhone(formData: FormData) {
     await saveResident({ ...resident, phone });
   }
   revalidatePath(`/residents/${resident?.id}`);
+}
+
+/** Starts a check-in call in this browser tab, for when there is no phone line. */
+export async function startBrowserCall(residentId: string) {
+  await requireAccess();
+  const resident = await getResident(residentId);
+  if (!resident) throw new Error("Unknown resident");
+  return browserCall(resident);
+}
+
+/** Demo only: act as if today's call rang out, to show the missed-call ladder without a phone. */
+export async function simulateNoAnswer(formData: FormData) {
+  await requireAccess();
+  if (DEMO_MODE) await missed(String(formData.get("resident_id")), 1);
+  revalidatePath("/");
 }

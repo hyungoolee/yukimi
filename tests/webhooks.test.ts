@@ -345,3 +345,27 @@ describe("phone number", () => {
     expect(placeCall).not.toHaveBeenCalled();
   });
 });
+
+describe("calls without a phone line", () => {
+  it("hands the browser a token and the resident's variables", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    process.env.ELEVENLABS_AGENT_ID = "agent_test";
+    process.env.ELEVENLABS_API_KEY = "key_test";
+    const { startBrowserCall } = await import("@/app/actions");
+    const { token, variables } = await startBrowserCall("sato");
+    expect(token).toBe("tok_test");
+    expect(variables).toMatchObject({ resident_id: "sato", attempt: "1", name: "佐藤", introducer: "娘のゆきさん" });
+    expect(variables.weather).toContain("-12℃");
+    expect(variables.winter_check).toMatch(/^必要/);
+  });
+
+  it("starts the missed-call ladder from the demo no-answer button", async () => {
+    const { simulateNoAnswer } = await import("@/app/actions");
+    const data = new FormData();
+    data.set("resident_id", "takahashi");
+    await store.clearLadder("takahashi");
+    await simulateNoAnswer(data);
+    expect(await store.getLadder("takahashi")).toMatchObject({ stage: "retry" });
+    await store.clearLadder("takahashi");
+  });
+});

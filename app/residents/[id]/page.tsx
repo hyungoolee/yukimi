@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
-import { savePhone } from "../../actions";
+import { DEMO_MODE } from "@/lib/env";
+import { savePhone, simulateNoAnswer } from "../../actions";
+import { BrowserCall } from "./browser-call";
 import { japanTime, RiskBadge } from "../../ui";
 
 export default async function ResidentPage({ params }: PageProps<"/residents/[id]">) {
@@ -30,6 +32,16 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">保存</button>
         <span className="text-zinc-500">090… または +81…（海外の番号は + から）</span>
       </form>
+
+      <div className="mt-4 flex items-center gap-2 text-sm">
+        <BrowserCall residentId={resident.id} />
+        {DEMO_MODE && (
+          <form action={simulateNoAnswer}>
+            <input type="hidden" name="resident_id" value={resident.id} />
+            <button className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">電話に出ない（デモ）</button>
+          </form>
+        )}
+      </div>
 
       <h2 className="mt-8 font-medium">通話の記録</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">まだ通話がありません</p>}

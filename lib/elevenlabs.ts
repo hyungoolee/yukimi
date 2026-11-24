@@ -4,9 +4,21 @@ import { savePending } from "./store";
 import type { Resident } from "./types";
 import { describeWeather, getWeather } from "./weather";
 
+/** What the agent is told about this call: who it is, what we remember, and this morning's weather. */
+async function callVariables(resident: Resident, attempt: number) {
+  return {
+    resident_id: resident.id,
+    attempt: String(attempt),
+    name: resident.name,
+    introducer: resident.introducer,
+    facts: resident.facts.join("、"),
+    recent_calls: resident.recent_calls.map((c) => `${c.date}：${c.summary}`).join(" / ") || "なし",
+    ...describeWeather(await getWeather(resident.amedas_station)),
+  };
+}
+
 /** Ask ElevenLabs to phone the resident. attempt 2 is the missed-call retry. */
 export async function placeCall(resident: Resident, attempt = 1) {
-  const weather = describeWeather(await getWeather(resident.amedas_station));
   const res = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
     method: "POST",
     headers: { "xi-api-key": env("ELEVENLABS_API_KEY"), "content-type": "application/json" },
@@ -14,17 +26,7 @@ export async function placeCall(resident: Resident, attempt = 1) {
       agent_id: env("ELEVENLABS_AGENT_ID"),
       agent_phone_number_id: env("ELEVENLABS_PHONE_NUMBER_ID"),
       to_number: resident.phone,
-      conversation_initiation_client_data: {
-        dynamic_variables: {
-          resident_id: resident.id,
-          attempt: String(attempt),
-          name: resident.name,
-          introducer: resident.introducer,
-          facts: resident.facts.join("、"),
-          recent_calls: resident.recent_calls.map((c) => `${c.date}：${c.summary}`).join(" / ") || "なし",
-          ...weather,
-        },
-      },
+      conversation_initiation_client_data: { dynamic_variables: await callVariables(resident, attempt) },
     }),
   });
   const body = await res.json();
@@ -33,6 +35,17 @@ export async function placeCall(resident: Resident, attempt = 1) {
   }
   await savePending(body.conversation_id, { resident_id: resident.id, attempt });
   return body.conversation_id as string;
+}
+
+/** A one-time token and the call's variables, for a call taken in the browser instead of on a phone. */
+export async function browserCall(resident: Resident) {
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${env("ELEVENLABS_AGENT_ID")}`,
+    { headers: { "xi-api-key": env("ELEVENLABS_API_KEY") } },
+  );
+  const body = await res.json();
+  if (!res.ok || !body.token) throw new Error(`ElevenLabs token request failed (${res.status})`);
+  return { token: body.token as string, variables: await callVariables(resident, 1) };
 }
 
 /** Checks the ElevenLabs-Signature header ("t=<unix>,v0=<hex hmac>"). Throws if invalid. */
