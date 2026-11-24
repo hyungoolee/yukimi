@@ -28,7 +28,7 @@ export function WeekGrid({ week, t }: { week: ReturnType<typeof lastWeek>; t: St
                 const concern = isConcern(field, value);
                 return (
                   <td key={day.date} className={`text-center ${concern ? "font-semibold text-red-600" : "text-zinc-400"}`}>
-                    {value === "unknown" ? "–" : concern ? "×" : "○"}
+                    {value === "unknown" ? "–" : concern ? "!" : "○"}
                   </td>
                 );
               })}

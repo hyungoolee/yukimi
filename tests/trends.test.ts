@@ -29,6 +29,11 @@ describe("a day's observations", () => {
     expect(merged).toEqual([{ date: TODAY, observations: { ...blank, ate: "no", slept_well: "yes" } }]);
   });
 
+  it("skips a record whose time can't be read", () => {
+    const merged = dailyObservations([{ at: "not a date", observations: { ...blank, ate: "no" } }, { at: at(9), observations: { ...blank, ate: "yes" } }]);
+    expect(merged).toEqual([{ date: TODAY, observations: { ...blank, ate: "yes" } }]);
+  });
+
   it("uses the Japan date, and skips records without observations", () => {
     const merged = dailyObservations([
       { at: "2026-11-25T16:30:00Z", observations: { ...blank, ate: "yes" } }, // 01:30 on the 26th in Japan
@@ -68,6 +73,12 @@ describe("trend rules", () => {
     expect(findTrends(notEating(0, 1, 5), TODAY)).toEqual([]);
   });
 
+  it("is not thrown off by one bad day long ago", () => {
+    expect(findTrends(notEating(0, 1, 2, 20), TODAY)).toEqual([{ reason: "3日続けて食事をとれていない", risk: "red", fires: true }]);
+    expect(findTrends(notEating(0, 1, 2, 6), TODAY)[0].fires).toBe(true); // a 4-day gap ends the run
+    expect(findTrends(notEating(0, 1, 2, 5), TODAY)[0].fires).toBe(false); // a 3-day gap doesn't: this is day four
+  });
+
   it("stays ongoing without firing when today's call did not cover meals", () => {
     const todayUnknown = days({ 0: { slept_well: "yes" }, 1: { ate: "no" }, 2: { ate: "no" }, 3: { ate: "no" } });
     expect(findTrends(todayUnknown, TODAY)).toEqual([{ reason: "3日続けて食事をとれていない", risk: "red", fires: false }]);
@@ -98,9 +109,9 @@ describe("adding trends to today's result", () => {
     });
   });
 
-  it("notes an ongoing trend without raising the risk or alerting", () => {
+  it("keeps an ongoing trend at its risk level, without alerting again", () => {
     expect(withTrends(yellow, [{ reason: "3日続けて食事をとれていない", risk: "red", fires: false }])).toEqual({
-      risk: "yellow",
+      risk: "red",
       reasons: ["食事をとれていない", "3日続けて食事をとれていない（継続中）"],
       actions: [],
     });
