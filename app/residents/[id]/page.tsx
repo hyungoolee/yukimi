@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
 import { DEMO_SCRIPT } from "@/lib/demo-script";
+import { alertText, snowRequestText } from "@/lib/actions";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
@@ -124,6 +125,31 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </div>
           {call.reasons.length > 0 && <p className="mt-2 text-sm font-medium">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>}
           {call.extraction && <Notes notes={notesFor(call.extraction, lang)} t={t} />}
+          {call.actions.length > 0 && (
+            <div className="mt-3 text-sm">
+              <div className="text-zinc-500">{t.messagesSent}</div>
+              <ul className="mt-1 space-y-2">
+                {call.actions.map((a) => (
+                  <li key={a.type} className="rounded border border-zinc-200 p-2">
+                    <div className="text-zinc-500">
+                      → {a.to.map((role) => resident[role].name).join("、")}
+                      <span className={a.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
+                        {a.sent ? t.messageDelivered : t.messageNotDelivered}
+                      </span>
+                    </div>
+                    <div>{a.type === "alert" ? `【要確認】${alertText(resident, call.reasons)}` : snowRequestText(resident)}</div>
+                    {lang === "en" && (
+                      <div className="text-zinc-600">
+                        {a.type === "alert"
+                          ? t.alertGloss(call.reasons.map((r) => reasonText(lang, r)).join(t.separator))
+                          : t.snowGloss}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {call.transcript && (
             <details className="mt-3 text-sm">
               <summary className="cursor-pointer text-zinc-500">{t.showTranscript}</summary>

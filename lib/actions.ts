@@ -10,6 +10,11 @@ const MAX_RESENDS = 3;
 const link = (resident: Resident) =>
   process.env.APP_URL ? `\n${process.env.APP_URL}/residents/${resident.id}` : "";
 
+// The wording of each message, shared with the dashboard so it shows exactly what was sent.
+export const alertText = (resident: Resident, reasons: string[]) => `${resident.name}さん — ${reasons.join("、")}`;
+export const snowRequestText = (resident: Resident) =>
+  `【除雪のお願い】${resident.name}さん宅の玄関前。雪で外に出られません。`;
+
 /** Sends an alert. With `ackCallId`, it carries a "確認しました" button that records who saw it. */
 export async function sendAlert(
   resident: Resident,
@@ -18,7 +23,7 @@ export async function sendAlert(
   ack?: { callId: string; resend?: number },
 ) {
   const label = ack?.resend ? `【再通知${ack.resend}回目・要確認】` : "【要確認】";
-  const messages: object[] = [text(`${label}${resident.name}さん — ${reasons.join("、")}${link(resident)}`)];
+  const messages: object[] = [text(`${label}${alertText(resident, reasons)}${link(resident)}`)];
   if (ack) {
     messages.push(
       buttons(`${resident.name}さんの件を確認したら押してください。`, [{ label: "確認しました", data: `ack:${ack.callId}` }]),
@@ -54,7 +59,7 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
 }
 
 async function sendSnowRequest(resident: Resident, callId: string) {
-  const message = buttons(`【除雪のお願い】${resident.name}さん宅の玄関前。雪で外に出られません。`, [
+  const message = buttons(snowRequestText(resident), [
     { label: "引き受けます", data: `snow_accept:${callId}` },
   ]);
   return push(resident.snow_volunteer.line_id, [message]);
