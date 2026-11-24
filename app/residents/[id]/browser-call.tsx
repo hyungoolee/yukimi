@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { startBrowserCall, translateCaption } from "../../actions";
 
-type Labels = { start: string; connecting: string; end: string; micError: string; agent: string; you: string };
+type Labels = { start: string; connecting: string; end: string; micError: string; agent: string; you: string; waiting: string };
 type Caption = { key: string; fromAgent: boolean; text: string; english?: string };
 
 /**
@@ -87,8 +87,15 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
         </button>
       )}
       {error && <span className="text-red-600">{error}</span>}
-      {captions.length > 0 && (
-        <ol className="order-last w-full space-y-2 rounded-lg border border-zinc-200 p-3" aria-live="polite">
+      {(state === "live" || captions.length > 0) && (
+        // translate="no": a browser's page translation rewrites text as it changes, which can stop
+        // live lines from showing. The captions carry their own English.
+        <ol
+          translate="no"
+          className="notranslate order-last w-full space-y-2 rounded-lg border border-zinc-200 p-3"
+          aria-live="polite"
+        >
+          {captions.length === 0 && <li className="text-zinc-500">{labels.waiting}</li>}
           {captions.slice(-6).map((c) => (
             <li key={c.key}>
               <span className="text-zinc-500">{c.fromAgent ? labels.agent : labels.you}：</span>
