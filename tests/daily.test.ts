@@ -5,7 +5,7 @@ vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof imp
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const { placeDailyCalls } = await import("@/lib/daily");
+const { placeDailyCalls, UNPLACED } = await import("@/lib/daily");
 const { missed } = await import("@/lib/ladder");
 const store = await import("@/lib/store");
 
@@ -28,7 +28,7 @@ beforeEach(async () => {
     await store.clearLadder(id);
   }
   for (const task of await store.listTasks()) await store.deleteTask(task.id);
-  for (const call of await store.listCalls()) await store.saveCall({ ...call, at: "2026-11-01T00:00:00Z" });
+  for (const call of await store.listCalls()) await store.saveCall({ ...call, at: "2026-11-01T00:00:00Z", reasons: [] });
   await store.clearPending("conv_busy");
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -75,28 +75,58 @@ describe("daily calls", () => {
     expect(called()).toEqual([]);
   });
 
-  it("does not phone late: a resident it was calling yesterday is a missed check-in, and the family is asked", async () => {
+  it("still calls someone who waited more than two hours for a free line", async () => {
+    vi.stubEnv("MAX_CONCURRENT_CALLS", "1");
+    vi.useFakeTimers({ now: at("11:25") });
+    await store.savePending("conv_busy", { resident_id: "takahashi", attempt: 1 });
+    await placeDailyCalls(at("09:00")); // Sato joins the queue on time, but the line is taken
+    await placeDailyCalls(at("11:30"));
+    expect(called()).toEqual([]);
+    await store.clearPending("conv_busy");
+    await placeDailyCalls(at("11:30"));
+    expect(called()).toEqual(["sato"]);
+    expect(await store.listCalls("sato")).not.toContainEqual(expect.objectContaining({ reasons: [UNPLACED] }));
+    vi.useRealTimers();
+  });
+
+  it("leaves alone someone already on the phone or in the missed-call steps", async () => {
+    await missed("sato", 1); // a call by hand rang out earlier: the retry is already booked
+    await store.savePending("conv_busy", { resident_id: "suzuki", attempt: 1 }); // on the phone right now
+    for (let i = 0; i < 3; i++) await placeDailyCalls(new Date());
+    expect(called().filter((id) => id !== "takahashi")).toEqual([]);
+    await store.clearPending("conv_busy");
+  });
+
+  it("does not phone late or tell the family: a call the app was down for is noted for the coordinator", async () => {
     await store.updateResident("sato", (r) => ({ ...r, scheduled_on: "2026-11-25" }));
     await placeDailyCalls(at("11:01")); // Sato's 09:00 call is more than two hours late
-    expect(called()).toEqual(["suzuki"]); // Sato is not phoned; the run moves on to Suzuki, still within two hours
-    expect(await store.getLadder("sato")).toMatchObject({ stage: "second_contact" });
-    expect((await store.getResident("sato"))!.scheduled_on).toBe("2026-11-26");
+    expect(called()).toEqual(["suzuki"]); // Sato is not phoned; Suzuki's 09:30 is still within two hours
+    expect(await store.getLadder("sato")).toBeNull();
+    expect((await store.listCalls("sato"))[0]).toMatchObject({ kind: "missed", risk: "yellow", reasons: [UNPLACED] });
   });
 
   it("stays quiet on the day daily calls are first switched on after someone's time", async () => {
     await placeDailyCalls(at("11:01")); // Sato was never scheduled before
-    expect(called()).toEqual(["suzuki"]); // Suzuki's 09:30 is still within two hours
-    expect(await store.getLadder("sato")).toBeNull();
+    expect((await store.listCalls("sato")).filter((c) => c.reasons.includes(UNPLACED))).toEqual([]);
     expect((await store.getResident("sato"))!.scheduled_on).toBe("2026-11-26");
   });
 
-  it("treats a call the phone service refuses as a missed check-in", async () => {
+  it("notes a call the phone service refuses, without telling the family nobody answered", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     placeCall.mockRejectedValueOnce(new Error("no lines"));
     await placeDailyCalls(at("09:00"));
-    expect(await store.getLadder("sato")).toMatchObject({ stage: "retry" });
+    expect(await store.getLadder("sato")).toBeNull();
+    expect((await store.listCalls("sato"))[0]).toMatchObject({ risk: "yellow", reasons: [UNPLACED] });
     await placeDailyCalls(at("09:01"));
-    expect(called()).toEqual(["sato"]); // not dialled again by the scheduler; the retry step takes over
+    expect(called()).toEqual(["sato"]); // not dialled again today
+  });
+
+  it("never rings someone whose call time can't be read", async () => {
+    await store.updateResident("sato", (r) => ({ ...r, call_time: "9:" }));
+    await placeDailyCalls(at("00:05"));
+    await placeDailyCalls(at("12:00"));
+    expect(called()).not.toContain("sato");
+    await store.updateResident("sato", (r) => ({ ...r, call_time: "09:00" }));
   });
 });
 
@@ -117,5 +147,17 @@ describe("a stopped resident", () => {
     await setActive(form({ resident_id: "sato", active: "1" }));
     await callNow(form({ resident_id: "sato" }));
     expect(called()).toEqual(["sato"]);
+  });
+
+  it("is picked up the next day when resumed, with today not reported as a failed call", async () => {
+    const { setActive } = await import("@/app/actions");
+    await store.updateResident("sato", (r) => ({ ...r, scheduled_on: "2026-11-25", active: false }));
+    await setActive(form({ resident_id: "sato", active: "1" }));
+    placeCall.mockClear();
+    await placeDailyCalls(at("15:00"));
+    expect(called()).not.toContain("sato");
+    expect((await store.listCalls("sato")).filter((c) => c.reasons.includes(UNPLACED))).toEqual([]);
+    await placeDailyCalls(at("09:00", "2026-11-27"));
+    expect(called()).toContain("sato");
   });
 });

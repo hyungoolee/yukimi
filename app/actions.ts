@@ -100,7 +100,8 @@ export async function setActive(formData: FormData) {
   await requireAccess();
   const id = String(formData.get("resident_id"));
   const active = formData.get("active") === "1";
-  await updateResident(id, (fresh) => ({ ...fresh, active }));
+  // Resuming starts the schedule afresh, so today is not reported as a call the app failed to place.
+  await updateResident(id, (fresh) => ({ ...fresh, active, scheduled_on: undefined, call_queued: undefined }));
   if (!active) await clearLadder(id);
   revalidatePath("/", "layout");
 }
