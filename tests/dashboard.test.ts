@@ -42,13 +42,13 @@ describe("rankedRows", () => {
 });
 
 describe("snowRequest", () => {
-  const snow = (sent: boolean) => [{ type: "snow_request" as const, to: ["snow_volunteer" as const], sent }];
+  const snow = (sent: boolean) => [{ type: "request" as const, kind: "snow" as const, to: ["snow_volunteer" as const], sent }];
 
   it("reports not sent, sent and accepted, with the straight-line distance", () => {
     const a = resident("a");
     expect(snowRequest(a, [call("a", "yellow", { actions: snow(false) })])?.status).toBe("not_sent");
     expect(snowRequest(a, [call("a", "yellow", { actions: snow(true) })])?.status).toBe("sent");
-    const accepted = snowRequest(a, [call("a", "yellow", { actions: snow(true), snow_accepted: true })]);
+    const accepted = snowRequest(a, [call("a", "yellow", { actions: [{ ...snow(true)[0], accepted_by: "山本", slot: { date: "2026-11-26", part: "am" } }] })]);
     expect(accepted).toMatchObject({ status: "accepted", volunteer: "山本" });
     expect(accepted!.km).toBeCloseTo(distanceKm(a.location!, volunteer.location), 6);
   });

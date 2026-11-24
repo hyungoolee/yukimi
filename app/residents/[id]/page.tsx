@@ -5,7 +5,7 @@ import { DEMO_SCRIPT } from "@/lib/demo-script";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
+import { acceptDemo, deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-card";
@@ -15,6 +15,7 @@ import { LocationPicker } from "./location-picker";
 import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
+import { slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -42,7 +43,8 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   if (!resident) notFound();
   const calls = await listCalls(id);
   const { lang, t } = await getStrings();
-  const current = rankedRows([resident], calls)[0].call; // the same call the list shows
+  const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
+  const [nextSlot] = slotChoices();
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
@@ -60,7 +62,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             {current ? t.last(japanTime(current.at, lang)) : t.daily(resident.call_time)}
           </span>
         </div>
-        <CallStatus resident={resident} call={current} lang={lang} t={t} />
+        <CallStatus resident={resident} call={current} requests={requests} lang={lang} t={t} />
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <CallNowButton resident={resident} t={t} />
           {!resident.phone && (
@@ -87,6 +89,16 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               <SubmitButton pending={t.calling}>{t.noAnswerDemo}</SubmitButton>
             </form>
           )}
+          {DEMO_MODE &&
+            requests
+              .filter((r) => r.status !== "accepted")
+              .map((r) => (
+                <form key={r.kind} action={acceptDemo}>
+                  <input type="hidden" name="call_id" value={r.callId} />
+                  <input type="hidden" name="kind" value={r.kind} />
+                  <SubmitButton pending={t.saving}>{t.acceptDemo(r, slotLabel(nextSlot, new Date(), lang))}</SubmitButton>
+                </form>
+              ))}
           <MarkHandledButton call={current} t={t} />
         </div>
 
@@ -184,7 +196,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                           {d.button && <div className="text-zinc-500">{t.messageButton(d.button)}</div>}
                           {lang === "en" && (
                             <div className="text-zinc-600">
-                              {d.reasons ? t.alertGloss(d.reasons.map((r) => reasonText(lang, r)).join(t.separator)) : t.snowGloss}
+                              {d.reasons ? t.alertGloss(d.reasons.map((r) => reasonText(lang, r)).join(t.separator)) : a.type === "request" ? t.requestGloss[a.kind] : ""}
                             </div>
                           )}
                         </li>

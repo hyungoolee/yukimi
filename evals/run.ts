@@ -16,6 +16,7 @@ type Persona = {
   expected: "green" | "yellow" | "red" | "missed";
   expected_reasons: string[];
   snow_request: boolean;
+  supplies_request?: boolean; // absent: not checked
   observations?: Partial<Observations>; // the ones this script must get right
   holdout?: boolean;
   // Only on scripts written as whole calls: the older scripts are abbreviated and skip some required
@@ -31,16 +32,17 @@ const weather: Weather = json("../data/seed/weather.json");
 async function run(p: Persona) {
   const resident: Resident = json(`../data/seed/residents/${p.resident}.json`);
   const extraction = await extract(resident, p.transcript.map(([role, message]) => ({ role, message })));
-  const rules = applyRules(extraction.signals, weather, p.whole_call ? unanswered(extraction.observations ?? {}, true) : []);
+  const rules = applyRules(extraction.signals, weather, p.whole_call ? unanswered(extraction.observations ?? {}, true) : [], extraction.observations?.has_supplies === "no");
   const answered = extraction.answered_by_person;
   const got = answered ? rules.risk : "missed";
-  const snow = answered && rules.actions.some((a) => a.type === "snow_request");
+  const snow = answered && rules.actions.some((a) => a.type === "request" && a.kind === "snow");
+  const supplies = answered && rules.actions.some((a) => a.type === "request" && a.kind === "supplies");
   // Right level for the right reasons: every expected reason must be among the rules' reasons.
   const wrong = Object.entries(p.observations ?? {})
     .filter(([field, want]) => extraction.observations?.[field as keyof Observations] !== want)
     .map(([field, want]) => `${field} should be ${want}, got ${extraction.observations?.[field as keyof Observations]}`);
   const ok =
-    got === p.expected && snow === p.snow_request && p.expected_reasons.every((r) => rules.reasons.includes(r)) && wrong.length === 0;
+    got === p.expected && snow === p.snow_request && (p.supplies_request === undefined || supplies === p.supplies_request) && p.expected_reasons.every((r) => rules.reasons.includes(r)) && wrong.length === 0;
   return { got, snow, ok, reasons: answered ? [...rules.reasons, ...wrong] : [] };
 }
 

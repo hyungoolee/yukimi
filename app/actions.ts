@@ -2,14 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
+import { acceptRequest } from "@/lib/actions";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
+import { isRequestKind, REQUESTS, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
 import { translateToEnglish } from "@/lib/translate";
-import { clearLadder, getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
+import { clearLadder, getCall, getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -91,6 +93,19 @@ export async function simulateNoAnswer(formData: FormData) {
   await requireAccess();
   if (DEMO_MODE) await missed(String(formData.get("resident_id")), 1);
   revalidatePath("/");
+}
+
+/** Demo only: act as if the person asked had tapped the first time slot, to show the rest without a phone in hand. */
+export async function acceptDemo(formData: FormData) {
+  await requireAccess();
+  const callId = String(formData.get("call_id"));
+  const kind = String(formData.get("kind"));
+  const call = await getCall(callId);
+  const resident = call && (await getResident(call.resident_id));
+  if (DEMO_MODE && resident && isRequestKind(kind)) {
+    await acceptRequest(callId, kind, resident[REQUESTS[kind].role].name, slotChoices()[0]);
+  }
+  revalidatePath("/", "layout");
 }
 
 /** The language toggle: remembers the choice in a cookie for a year. */

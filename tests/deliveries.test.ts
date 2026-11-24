@@ -54,8 +54,10 @@ describe("what was sent, per recipient", () => {
   it("tells a LINE failure apart from a person who is not registered", async () => {
     lineOk = false;
     const sato = (await store.getResident("sato"))!;
-    const [snow] = await runActions(sato, "call_4", "yellow", ["雪で玄関から出られない"], [{ type: "snow_request", to: ["snow_volunteer"] }]);
+    const [snow] = await runActions(sato, "call_4", "yellow", ["雪で玄関から出られない"], [{ type: "request", kind: "snow", to: ["snow_volunteer"] }]);
     expect(snow.sent).toBe(false);
-    expect(snow.deliveries).toMatchObject([{ role: "snow_volunteer", sent: false, registered: true, button: "引き受けます" }]);
+    expect(snow.deliveries).toMatchObject([{ role: "snow_volunteer", sent: false, registered: true }]);
+    expect(snow.deliveries[0].button!.split(" / ")).toHaveLength(3);
+    expect(snow).toMatchObject({ type: "request", kind: "snow" });
   });
 });

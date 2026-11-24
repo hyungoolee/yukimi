@@ -758,11 +758,11 @@
       ],
       [
         "agent",
-        "食べ物やお薬は足りていますか。"
+        "食べ物やお薬、灯油は足りていますか。"
       ],
       [
         "user",
-        "どっちも足りてます。"
+        "どれも足りてます。灯油もまだたくさんあります。"
       ],
       [
         "agent",
@@ -779,6 +779,64 @@
       "can_get_out": "yes",
       "has_supplies": "yes",
       "slept_well": "yes"
+    }
+  },
+  {
+    "id": "low-on-kerosene",
+    "about": "Heater works, but the kerosene will run out in a day or two and she can't go to buy it",
+    "resident": "suzuki",
+    "expected": "yellow",
+    "expected_reasons": [
+      "食料・薬・灯油が足りない"
+    ],
+    "snow_request": false,
+    "supplies_request": true,
+    "transcript": [
+      [
+        "agent",
+        "もしもし、鈴木さんですか。おはようございます。見守り電話です。今朝はマイナス12度まで冷えましたね。暖房はついていますか？"
+      ],
+      [
+        "user",
+        "はい、ストーブはついていますよ。あたたかいです。"
+      ],
+      [
+        "agent",
+        "よかったです。玄関からは出られますか？"
+      ],
+      [
+        "user",
+        "ええ、けさ自分で少しはいたから、出られます。"
+      ],
+      [
+        "agent",
+        "食べるものやお薬、灯油は足りていますか？"
+      ],
+      [
+        "user",
+        "ごはんと薬はあるんだけどね、灯油がもうあと少しなの。あしたかあさってには切れそうで。重くて自分では買いに行けないのよ。"
+      ],
+      [
+        "agent",
+        "灯油があと少しで、ご自分では買いに行けない、ということですね。ご家族にお伝えしておきますね。"
+      ],
+      [
+        "user",
+        "助かります。"
+      ],
+      [
+        "agent",
+        "ゆうべはよく眠れましたか？"
+      ],
+      [
+        "user",
+        "はい、よく眠れました。朝ごはんも食べましたよ。"
+      ]
+    ],
+    "observations": {
+      "has_supplies": "no",
+      "heating_ok": "yes",
+      "can_get_out": "yes"
     }
   }
 ]
