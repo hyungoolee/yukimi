@@ -1,10 +1,12 @@
-import type { CallRecord, Contact, LatLng, Resident, Risk } from "./types";
+import { openRequests, type OpenRequest } from "./requests";
+import type { CallRecord, Contact, LatLng, Resident, Risk, Slot } from "./types";
 
 // What the helper list and the coordinator's map both show. One rule, so they can't disagree.
 
 const RANK = { red: 0, yellow: 1, green: 2 };
 
-export type Row = { resident: Resident; call?: CallRecord };
+/** `requests`: the resident's open help requests, whichever call raised them. */
+export type Row = { resident: Resident; call?: CallRecord; requests?: OpenRequest[] };
 
 /** One row per resident, most urgent first. `calls` must be newest first. */
 export function rankedRows(residents: Resident[], calls: CallRecord[]): Row[] {
@@ -15,7 +17,7 @@ export function rankedRows(residents: Resident[], calls: CallRecord[]): Row[] {
     .map((resident) => {
       const own = calls.filter((c) => c.resident_id === resident.id);
       // A later green call must not hide an alert nobody has handled yet.
-      return { resident, call: own.find((c) => c.risk !== "green" && !c.handled) ?? own[0] };
+      return { resident, call: own.find((c) => c.risk !== "green" && !c.handled) ?? own[0], requests: openRequests(resident, own) };
     })
     .sort((a, b) => order(a) - order(b));
 }
@@ -33,24 +35,23 @@ export type SnowRequest = {
   residentId: string;
   status: "not_sent" | "sent" | "accepted";
   volunteer: string;
+  slot?: Slot;
   from?: LatLng;
   to?: LatLng;
   km?: number;
 };
 
-/** The resident's open snow-clearing request, if any: the newest one nobody has marked handled. */
+/** The resident's open snow-clearing request, if any, with where the volunteer comes from: what the map draws. */
 export function snowRequest(resident: Resident, calls: CallRecord[]): SnowRequest | undefined {
-  const call = calls.find(
-    (c) => c.resident_id === resident.id && !c.handled && c.actions.some((a) => a.type === "snow_request"),
-  );
-  if (!call) return undefined;
-  const sent = call.actions.some((a) => a.type === "snow_request" && a.sent);
+  const request = openRequests(resident, calls).find((r) => r.kind === "snow");
+  if (!request) return undefined;
   const from = resident.location;
   const to = resident.snow_volunteer.location;
   return {
     residentId: resident.id,
-    status: call.snow_accepted ? "accepted" : sent ? "sent" : "not_sent",
+    status: request.status,
     volunteer: resident.snow_volunteer.name,
+    slot: request.slot,
     from,
     to,
     km: from && to ? distanceKm(from, to) : undefined,

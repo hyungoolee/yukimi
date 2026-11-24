@@ -1,7 +1,9 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
+import { acceptRequest } from "@/lib/actions";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { getCall, getResident, listPeople, updateCall, updatePerson } from "@/lib/store";
+import { isRequestKind, openRequests, REQUESTS, slotLabel } from "@/lib/requests";
+import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
   const raw = await request.text();
@@ -22,12 +24,23 @@ export async function POST(request: Request) {
     }
 
     if (event.type === "postback") {
-      const [kind, id] = String(event.postback.data).split(":");
-      if (kind === "snow_accept") {
+      const [kind, id, ...rest] = String(event.postback.data).split(":");
+      // "accept:<call>:<kind>:<date>:<am|pm>". "snow_accept:<call>" is the button from before there were time slots.
+      const [requestKind, date, part] = kind === "snow_accept" ? ["snow"] : rest;
+      if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
-        if (call && userId && resident?.snow_volunteer.line_id === userId) {
-          await updateCall(id, () => ({ snow_accepted: true }));
+        const person = resident?.[REQUESTS[requestKind].role];
+        if (resident && userId && person?.line_id === userId) {
+          const slot = /^\d{4}-\d\d-\d\d$/.test(date ?? "") && (part === "am" || part === "pm") ? { date, part } as const : undefined;
+          // A later call may have asked again: the answer goes on the request that is open now.
+          const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind);
+          const { mine, request } = await acceptRequest(open?.callId ?? id, requestKind, person.name, slot);
+          const when = request?.slot ? `${slotLabel(request.slot)}で` : "";
+          await reply(
+            event.replyToken,
+            mine ? `${resident.name}さん宅、${when}承りました。ありがとうございます。` : `${request?.accepted_by || "ほかの方"}さんが引き受け済みです。`,
+          );
         }
       } else if (kind === "ack") {
         // Someone who was sent the red alert says they've seen it: stop sending it again.

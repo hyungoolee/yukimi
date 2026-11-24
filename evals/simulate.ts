@@ -24,7 +24,8 @@ const variables = {
   care_notes: "なし",
   briefing: "なし",
   weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
-  winter_check: "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。",
+  winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
+  help_status: "なし",
 };
 
 const base = "あなたは北海道で一人暮らしをしている80歳の佐藤さんです。見守り電話に出ています。話し言葉で、一度に1〜2文だけ短く答えてください。聞かれたことに答え、自分からは話を広げすぎないでください。";
@@ -35,6 +36,20 @@ type Scenario = {
   expectSay?: string; // the agent must say this somewhere
 };
 const scenarios: Record<string, Scenario> = {
+  "help-coming": {
+    expectTool: false,
+    expectSay: "山本",
+    variables: {
+      recent_calls: "2026-11-25：雪で玄関が開かなかった。暖房・食料・薬は足りている。",
+      help_status: "・除雪のお願い：山本さんが今日の午前に雪かきに来る予定。そう伝える。",
+    },
+    persona: `${base} 状況：玄関の戸はまだ雪で開かない。ストーブはついている。食べ物も薬も灯油もある。体調はよい。`,
+  },
+  "low-on-kerosene": {
+    expectTool: false,
+    expectSay: "ご家族",
+    persona: `${base} 状況：ストーブはついていて、玄関からも出られる。灯油があと少しで、あしたには切れそう。重くて自分では買いに行けない。食べ物と薬はある。体調はよい。`,
+  },
   "second-day": {
     expectTool: false,
     expectSay: "腰",

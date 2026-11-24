@@ -11,6 +11,7 @@ import { japanTime, RiskBadge } from "./ui";
 export function ResidentCard({
   resident,
   call,
+  requests,
   lang,
   t,
   flagGaps,
@@ -27,7 +28,7 @@ export function ResidentCard({
           {resident.active === false ? t.inactive : call ? t.last(japanTime(call.at, lang)) : t.daily(resident.call_time)}
         </span>
       </div>
-      <CallStatus resident={resident} call={call} lang={lang} t={t} />
+      <CallStatus resident={resident} call={call} requests={requests} lang={lang} t={t} />
       {flagGaps && resident.active !== false && <CoverageLine resident={resident} t={t} />}
       <div className="mt-3 flex flex-wrap gap-2">
         <CallNowButton resident={resident} t={t} />
@@ -43,8 +44,8 @@ export function ResidentCard({
   );
 }
 
-/** Why the call was flagged, whether the alert was seen, and the snow request. */
-export function CallStatus({ resident, call, lang, t }: Row & { lang: Lang; t: Strings }) {
+/** Why the call was flagged, whether the alert was seen, and the help requests still open. */
+export function CallStatus({ call, requests = [], lang, t }: Row & { lang: Lang; t: Strings }) {
   if (!call) return null;
   return (
     <>
@@ -56,12 +57,11 @@ export function CallStatus({ resident, call, lang, t }: Row & { lang: Lang; t: S
           {call.acknowledged_by ? t.alertSeen(call.acknowledged_by) : t.alertUnseen(call.alert_rounds ?? 0)}
         </p>
       )}
-      {call.actions.some((a) => a.type === "snow_request") && (
-        <p className="mt-1 text-sm text-zinc-600">
-          {t.snowRequest}
-          {call.snow_accepted ? t.snowAccepted(resident) : t.snowWaiting}
+      {requests.map((r) => (
+        <p key={r.kind} className="mt-1 text-sm text-zinc-600">
+          {t.request(r)}
         </p>
-      )}
+      ))}
     </>
   );
 }

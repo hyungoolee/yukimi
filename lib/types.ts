@@ -1,4 +1,5 @@
 import type { Observations } from "./measures";
+import type { RequestKind } from "./requests";
 // Shared formats from the Build plan. Change only with the whole team.
 
 export type LatLng = { lat: number; lng: number };
@@ -87,6 +88,7 @@ export type Signals = {
 };
 
 export type { Observations, Tri } from "./measures";
+export type { RequestKind } from "./requests";
 
 export type Extraction = {
   answered_by_person: boolean;
@@ -105,7 +107,11 @@ export type Risk = "green" | "yellow" | "red";
 export type AlertReasons = Partial<Record<Role, string[]>>;
 export type Action =
   | { type: "alert"; to: Role[]; reasonsByRole?: AlertReasons }
-  | { type: "snow_request"; to: Role[] };
+  | { type: "request"; kind: RequestKind; to: Role[] };
+/** Half a day someone has said they will come. `date` is a Japan date. */
+export type Slot = { date: string; part: "am" | "pm" };
+/** How a help request stands. Kept on the action it was raised by (lib/requests.ts). */
+export type RequestState = { accepted_by?: string; slot?: Slot; done?: boolean };
 /** One message to one person, as it was sent: kept so the dashboard shows history, not a reconstruction. */
 export type Delivery = {
   role: Role;
@@ -127,11 +133,10 @@ export type CallRecord = {
   kind: "call" | "missed" | "emergency" | "confirmed_ok";
   risk: Risk;
   reasons: string[];
-  actions: (Action & { sent: boolean; deliveries?: Delivery[] })[];
+  actions: (Action & { sent: boolean; deliveries?: Delivery[] } & RequestState)[];
   transcript?: Turn[];
   extraction?: Extraction;
   handled?: boolean;
   acknowledged_by?: string; // who tapped "確認しました" on a red alert
   alert_rounds?: number; // how many times an unacknowledged red alert was sent again
-  snow_accepted?: boolean;
 };

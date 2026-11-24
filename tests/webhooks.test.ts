@@ -138,24 +138,44 @@ describe("after a call", () => {
     expect(call).toMatchObject({ risk: "red", kind: "call", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
     expect(call!.actions).toMatchObject([
       { type: "alert", to: ["helper", "second_contact"], sent: true },
-      { type: "snow_request", to: ["snow_volunteer"], sent: true },
+      { type: "request", kind: "snow", to: ["snow_volunteer"], sent: true },
     ]);
 
     const sent = pushes();
     expect(sent.map((p) => p.to).sort()).toEqual(["U_family", "U_helper", "U_volunteer"]);
     expect(sent.find((p) => p.to === "U_helper")!.messages[0].text).toContain("【要確認】佐藤さん — 転倒・痛みあり");
-    expect(sent.find((p) => p.to === "U_volunteer")!.messages[0].template.actions[0].data).toBe("snow_accept:conv_slip");
+    expect(sent.find((p) => p.to === "U_volunteer")!.messages[0].template.actions[0].data).toMatch(/^accept:conv_slip:snow:\d{4}-\d\d-\d\d:[ap]m$/);
 
     const sato = await store.getResident("sato");
     expect(sato!.recent_calls[0].summary).toBe(extraction.summary);
     expect(sato!.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
   });
 
-  it("records the volunteer accepting the snow request, and nobody else", async () => {
-    await tap("snow_accept:conv_slip", "U_stranger");
-    expect((await store.getCall("conv_slip"))!.snow_accepted).toBeUndefined();
-    await tap("snow_accept:conv_slip", "U_volunteer");
-    expect((await store.getCall("conv_slip"))!.snow_accepted).toBe(true);
+  const snowOf = async (id: string) => (await store.getCall(id))!.actions.find((a) => a.type === "request" && a.kind === "snow")!;
+  const lastReply = () => lineCalls.filter((c) => c.url.endsWith("/reply")).at(-1)?.body.messages[0].text;
+
+  it("records the volunteer's time slot, from the volunteer and nobody else, and the first answer stands", async () => {
+    await tap("accept:conv_slip:snow:2026-11-26:am", "U_stranger");
+    await tap("accept:conv_slip:supplies:2026-11-26:am", "U_volunteer"); // not theirs to take
+    expect((await snowOf("conv_slip")).accepted_by).toBeUndefined();
+
+    await tap("accept:conv_slip:snow:2026-11-26:am", "U_volunteer");
+    expect(await snowOf("conv_slip")).toMatchObject({ accepted_by: "山本", slot: { date: "2026-11-26", part: "am" } });
+    expect(lastReply()).toContain("佐藤さん宅、");
+
+    await tap("accept:conv_slip:snow:2026-11-27:am", "U_volunteer");
+    expect((await snowOf("conv_slip")).slot).toEqual({ date: "2026-11-26", part: "am" });
+    expect(lastReply()).toBe("山本さんが引き受け済みです。");
+  });
+
+  it("still takes the button from before there were time slots", async () => {
+    await store.updateCall("conv_slip", () => ({ handled: true })); // closed, so the next call asks afresh
+    const body = fixture.replace("conv_slip", "conv_old_button");
+    await elevenlabs(signedElevenLabs(body));
+    await tap("snow_accept:conv_old_button", "U_volunteer");
+    const request = await snowOf("conv_old_button");
+    expect(request.accepted_by).toBe("山本");
+    expect(request.slot).toBeUndefined();
   });
 
   it("puts the call on the visit list and tells the helper when extraction fails", async () => {
@@ -600,10 +620,10 @@ describe("red alerts must be acknowledged", () => {
     await Promise.all([
       store.updateCall("conv_race", () => ({ alert_rounds: 1 })),
       tap("ack:conv_race", "U_helper"),
-      store.updateCall("conv_race", () => ({ snow_accepted: true })),
+      store.updateCall("conv_race", () => ({ handled: false })),
     ]);
     expect(await store.getCall("conv_race")).toMatchObject({
-      acknowledged_by: "民生委員 田中", alert_rounds: 1, snow_accepted: true,
+      acknowledged_by: "民生委員 田中", alert_rounds: 1, handled: false,
     });
   });
 
@@ -968,5 +988,100 @@ describe("today's brief on a call", () => {
     const broken = vi.spyOn(store, "listCalls").mockRejectedValueOnce(new Error("disk error"));
     expect(variablesOf(await startBrowserCall("sato")).briefing).toBe("なし");
     broken.mockRestore();
+  });
+});
+
+describe("help requests", () => {
+  const quiet = Object.fromEntries(Object.keys(extraction.signals).map((k) => [k, false])) as Extraction["signals"];
+  const fine = { ate: "yes", slept_well: "yes", went_out: "no", pain_or_injury: "no", low_mood: "no", heating_ok: "yes" } as const;
+  const heard = (id: string, snowedIn: boolean, short: boolean) => {
+    extract.mockResolvedValueOnce({
+      ...extraction,
+      signals: { ...quiet, snowed_in: snowedIn },
+      observations: { ...fine, can_get_out: snowedIn ? "no" : "yes", has_supplies: short ? "no" : "yes" },
+    });
+    return elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "post_call_transcription",
+      data: { conversation_id: id, conversation_initiation_client_data: { dynamic_variables: { resident_id: "suzuki" } },
+        transcript: [{ role: "user", message: "はい。" }] },
+    })));
+  };
+  const requestsOf = async (id: string) => (await store.getCall(id))!.actions.filter((a) => a.type === "request");
+  // LINE requests are recorded as usual; the token request for a browser call gets a token.
+  beforeEach(() => vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (init?.body) lineCalls.push({ url, body: JSON.parse(String(init.body)) });
+    return new Response(JSON.stringify({ token: "tok_test" }));
+  })));
+  const helpStatus = async () => {
+    const { startBrowserCall } = await import("@/app/actions");
+    return variablesOf(await startBrowserCall("suzuki")).help_status;
+  };
+
+  it("asks once, tells the resident who is coming, and closes when she says it is done", async () => {
+    const { slotChoices, slotLabel } = await import("@/lib/requests");
+    for (const c of await store.listCalls("suzuki")) await store.updateCall(c.id, () => ({ handled: true }));
+    const [first] = slotChoices();
+
+    await heard("conv_h1", true, true);
+    expect(await store.getCall("conv_h1")).toMatchObject({ risk: "yellow", reasons: ["雪で玄関から出られない", "食料・薬・灯油が足りない"] });
+    // The snow helper and the family are each asked, with three half-days to choose from.
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_volunteer"]);
+    expect(pushes()[0].messages[0].template.actions).toHaveLength(3);
+    expect(await helpStatus()).toContain("引き受ける人がまだ決まっていない");
+
+    await tap(`accept:conv_h1:supplies:${first.date}:${first.part}`, "U_volunteer"); // the family's to take, not theirs
+    await tap(`accept:conv_h1:snow:${first.date}:${first.part}`, "U_volunteer");
+    await tap(`accept:conv_h1:supplies:${first.date}:${first.part}`, "U_family");
+    expect(await requestsOf("conv_h1")).toMatchObject([
+      { kind: "snow", accepted_by: "山本", slot: first },
+      { kind: "supplies", accepted_by: "隣の高田さん", slot: first },
+    ]);
+    expect(await helpStatus()).toContain(`山本さんが${slotLabel(first)}に雪かきに来る予定。そう伝える。`);
+
+    // Nobody has come yet and she says so again: no second message for the same job.
+    lineCalls.length = 0;
+    await heard("conv_h2", true, true);
+    expect(pushes()).toEqual([]);
+    expect(await requestsOf("conv_h2")).toEqual([]);
+    const { rankedRows } = await import("@/lib/dashboard");
+    const [row] = rankedRows([(await store.getResident("suzuki"))!], await store.listCalls("suzuki"));
+    expect(row.requests).toMatchObject([{ kind: "snow", status: "accepted" }, { kind: "supplies", status: "accepted" }]);
+
+    await heard("conv_h3", false, false);
+    expect((await requestsOf("conv_h1")).map((a) => a.done)).toEqual([true, true]);
+    expect(await helpStatus()).toBe("なし");
+  });
+
+  it("asks again when nobody took it, and the old message's button answers the new request", async () => {
+    for (const c of await store.listCalls("suzuki")) await store.updateCall(c.id, () => ({ handled: true }));
+    await heard("conv_h4", true, false);
+    lineCalls.length = 0;
+    await heard("conv_h5", true, false);
+    expect(pushes().map((p) => p.to)).toEqual(["U_volunteer"]);
+    await tap("accept:conv_h4:snow:2026-11-26:am", "U_volunteer");
+    expect((await requestsOf("conv_h5"))[0].accepted_by).toBe("山本");
+    expect((await requestsOf("conv_h4"))[0].accepted_by).toBeUndefined();
+  });
+
+  it("takes the demo button's place for a tap, in demo mode", async () => {
+    for (const c of await store.listCalls("suzuki")) await store.updateCall(c.id, () => ({ handled: true }));
+    await heard("conv_h6", true, false);
+    const { acceptDemo } = await import("@/app/actions");
+    const form = new FormData();
+    form.set("call_id", "conv_h6");
+    form.set("kind", "snow");
+    await acceptDemo(form);
+    expect((await requestsOf("conv_h6"))[0]).toMatchObject({ accepted_by: "山本", slot: { part: expect.any(String) } });
+  });
+
+  it("reads a record from before requests had kinds", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const old = { id: "conv_old", resident_id: "suzuki", at: "2026-11-20T00:00:00.000Z", kind: "call", risk: "yellow", reasons: [],
+      actions: [{ type: "snow_request", to: ["snow_volunteer"], sent: true }], snow_accepted: true };
+    writeFileSync(`${process.env.DATA_DIR}/calls/conv_old.json`, JSON.stringify(old));
+    const call = (await store.getCall("conv_old"))!;
+    expect(call.actions).toEqual([{ type: "request", kind: "snow", to: ["snow_volunteer"], sent: true, accepted_by: "" }]);
+    expect("snow_accepted" in call).toBe(false);
+    expect((await store.listCalls("suzuki")).find((c) => c.id === "conv_old")!.actions[0].type).toBe("request");
   });
 });

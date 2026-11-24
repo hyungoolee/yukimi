@@ -3,8 +3,9 @@ import { extract } from "./extract";
 import { missed } from "./ladder";
 import { curateMemory } from "./memory";
 import { unanswered } from "./measures";
+import { arranged, openRequests, REQUESTS } from "./requests";
 import { applyRules } from "./rules";
-import { claimTrendFiring, clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
+import { claimTrendFiring, clearLadder, getResident, listCalls, saveCall, updateCall, updateResident } from "./store";
 import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
 import type { Extraction, RulesOutput, Turn } from "./types";
 import { getWeather } from "./weather";
@@ -45,7 +46,12 @@ export async function processCall(
       { at: new Date().toISOString(), observations: extraction.observations },
       ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
     ]);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), unanswered(today?.observations ?? {}, winterChecks));
+    rules = applyRules(
+      extraction.signals,
+      await getWeather(resident.amedas_station),
+      unanswered(today?.observations ?? {}, winterChecks),
+      extraction.observations?.has_supplies === "no",
+    );
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);
@@ -90,6 +96,25 @@ export async function processCall(
       await releaseClaims();
       console.error("Trend rules failed; using today's call alone", e);
     }
+  }
+
+  // Help already asked for (lib/requests.ts). Kept apart like the trends: if it fails, the call is still judged and sent.
+  try {
+    const open = openRequests(resident, (await listCalls(residentId)).filter((c) => c.id !== callId));
+    for (const request of open) {
+      // The resident says the problem is gone: the request is closed.
+      if (extraction?.observations?.[REQUESTS[request.kind].doneField] !== "yes") continue;
+      await updateCall(request.callId, (c) => ({
+        actions: c.actions.map((a) => (a.type === "request" && a.kind === request.kind ? { ...a, done: true } : a)),
+      }));
+    }
+    // Someone is already coming for it: no second message for the same job.
+    rules = {
+      ...rules,
+      actions: rules.actions.filter((a) => a.type !== "request" || !arranged(open.find((r) => r.kind === a.kind), now)),
+    };
+  } catch (e) {
+    console.error("Could not read open help requests", e);
   }
 
   const actions = await runActions(resident, callId, alertRisk, rules.reasons, rules.actions).catch(async (error) => {
