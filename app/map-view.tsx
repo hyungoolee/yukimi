@@ -1,77 +1,31 @@
 "use client";
 
-import "maplibre-gl/dist/maplibre-gl.css";
-import type { GeoJSONSource, Map as MapLibreMap, Marker } from "maplibre-gl";
+import "leaflet/dist/leaflet.css";
+import type { LayerGroup, Map as LeafletMap } from "leaflet";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { MapData } from "@/lib/dashboard";
-import { DEFAULT_CENTER, GSI_STYLE, RISK_COLOR, VOLUNTEER_COLOR } from "./map-style";
-
-const requestLines = (data: MapData) => ({
-  type: "FeatureCollection" as const,
-  features: data.requests.flatMap((r) =>
-    r.from && r.to
-      ? [
-          {
-            type: "Feature" as const,
-            properties: { status: r.status },
-            geometry: { type: "LineString" as const, coordinates: [[r.from.lng, r.from.lat], [r.to.lng, r.to.lat]] },
-          },
-        ]
-      : [],
-  ),
-});
-
-function pinElement(color: string, selected: boolean, shape: "circle" | "diamond") {
-  const el = document.createElement("div");
-  el.style.cssText =
-    `width:20px;height:20px;background:${color};border:2px solid #fff;cursor:pointer;` +
-    `border-radius:${shape === "circle" ? "50%" : "3px"};` +
-    `${shape === "diamond" ? "transform:rotate(45deg);" : ""}` +
-    `box-shadow:0 0 0 ${selected ? "3px #2563eb" : "1px rgba(0,0,0,.35)"};`;
-  return el;
-}
+import { DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, RISK_COLOR, VOLUNTEER_COLOR } from "./map-style";
 
 /** The coordinator's map: residents by risk, volunteers, and a line for each open snow request. */
 export function MapView({ data, selected }: { data: MapData; selected?: string }) {
   const router = useRouter();
   const container = useRef<HTMLDivElement>(null);
-  const map = useRef<MapLibreMap | null>(null);
-  const markers = useRef<Marker[]>([]);
+  const map = useRef<LeafletMap | null>(null);
+  const layer = useRef<LayerGroup | null>(null);
   const fitted = useRef(false);
   const [ready, setReady] = useState(false);
 
-  // Create the map once. The library needs a browser, so it is loaded here, not on the server.
+  // Create the map once. Leaflet needs a browser, so it is loaded here, not on the server.
   useEffect(() => {
     let cancelled = false;
-    import("maplibre-gl").then((ml) => {
+    import("leaflet").then(({ default: L }) => {
       if (cancelled || !container.current) return;
-      const m = new ml.Map({
-        container: container.current,
-        style: GSI_STYLE,
-        center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
-        zoom: 12,
-      });
-      m.addControl(new ml.NavigationControl({ showCompass: false }));
-      m.on("load", () => {
-        m.addSource("requests", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-        m.addLayer({
-          id: "requests-waiting",
-          type: "line",
-          source: "requests",
-          filter: ["!=", ["get", "status"], "accepted"],
-          paint: { "line-color": VOLUNTEER_COLOR, "line-width": 3, "line-dasharray": [2, 2] },
-        });
-        m.addLayer({
-          id: "requests-accepted",
-          type: "line",
-          source: "requests",
-          filter: ["==", ["get", "status"], "accepted"],
-          paint: { "line-color": VOLUNTEER_COLOR, "line-width": 4 },
-        });
-        map.current = m;
-        setReady(true);
-      });
+      const m = L.map(container.current, { center: [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], zoom: 12 });
+      L.tileLayer(GSI_TILES, GSI_OPTIONS).addTo(m);
+      layer.current = L.layerGroup().addTo(m);
+      map.current = m;
+      setReady(true);
     });
     return () => {
       cancelled = true;
@@ -83,33 +37,43 @@ export function MapView({ data, selected }: { data: MapData; selected?: string }
   // Redraw pins and lines whenever the data or the selection changes; the map itself stays put.
   useEffect(() => {
     const m = map.current;
-    if (!ready || !m) return;
+    const group = layer.current;
+    if (!ready || !m || !group) return;
     let stale = false;
-    import("maplibre-gl").then((ml) => {
+    import("leaflet").then(({ default: L }) => {
       if (stale) return;
-      markers.current.forEach((marker) => marker.remove());
-      markers.current = [
-        ...data.volunteers.map((v) => {
-          const el = pinElement(VOLUNTEER_COLOR, false, "diamond");
-          el.title = `除雪ボランティア ${v.name}さん`;
-          return new ml.Marker({ element: el }).setLngLat([v.location.lng, v.location.lat]).addTo(m);
-        }),
-        ...data.pins.map((p) => {
-          const el = pinElement(RISK_COLOR[p.risk ?? "none"], p.id === selected, "circle");
-          if (p.handled) el.style.opacity = "0.55";
-          el.addEventListener("click", () => router.replace(`/?view=map&selected=${p.id}`, { scroll: false }));
-          return new ml.Marker({ element: el }).setLngLat([p.location.lng, p.location.lat]).addTo(m);
-        }),
-      ];
-      (m.getSource("requests") as GeoJSONSource).setData(requestLines(data));
+      const icon = (html: string) => L.divIcon({ className: "", html, iconSize: [20, 20] });
+      group.clearLayers();
+
+      for (const r of data.requests) {
+        if (!r.from || !r.to) continue;
+        const accepted = r.status === "accepted";
+        L.polyline([[r.from.lat, r.from.lng], [r.to.lat, r.to.lng]], {
+          color: VOLUNTEER_COLOR,
+          weight: accepted ? 4 : 3,
+          dashArray: accepted ? undefined : "6 6", // dashed until the volunteer accepts
+        }).addTo(group);
+      }
+      for (const v of data.volunteers) {
+        L.marker([v.location.lat, v.location.lng], {
+          icon: icon(pinHtml(VOLUNTEER_COLOR, "diamond")),
+          title: `除雪ボランティア ${v.name}さん`,
+        }).addTo(group);
+      }
+      for (const p of data.pins) {
+        L.marker([p.location.lat, p.location.lng], {
+          icon: icon(pinHtml(RISK_COLOR[p.risk ?? "none"], "circle", p.id === selected, p.handled)),
+          zIndexOffset: 1000, // residents above volunteers
+        })
+          .on("click", () => router.replace(`/?view=map&selected=${p.id}`, { scroll: false }))
+          .addTo(group);
+      }
 
       // Frame everything once; later refreshes must not move a map someone is reading.
-      const points = [...data.pins, ...data.volunteers].map((p) => p.location);
+      const points = [...data.pins, ...data.volunteers].map((p) => [p.location.lat, p.location.lng] as [number, number]);
       if (!fitted.current && points.length > 0) {
         fitted.current = true;
-        const bounds = new ml.LngLatBounds();
-        points.forEach((p) => bounds.extend([p.lng, p.lat]));
-        m.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 0 });
+        m.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 15, animate: false });
       }
     });
     return () => {
@@ -122,8 +86,8 @@ export function MapView({ data, selected }: { data: MapData; selected?: string }
   const lat = selectedPin?.location.lat;
   const lng = selectedPin?.location.lng;
   useEffect(() => {
-    if (ready && lat !== undefined && lng !== undefined) map.current?.easeTo({ center: [lng, lat] });
+    if (ready && lat !== undefined && lng !== undefined) map.current?.panTo([lat, lng]);
   }, [ready, lat, lng]);
 
-  return <div ref={container} className="h-[60vh] min-h-80 w-full rounded-lg border border-zinc-200" />;
+  return <div ref={container} className="z-0 h-[60vh] min-h-80 w-full rounded-lg border border-zinc-200" />;
 }

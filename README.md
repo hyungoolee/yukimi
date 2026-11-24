@@ -23,5 +23,6 @@ Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set
 6. **Roles:** each teammate adds the bot and sends a role word with `REGISTER_CODE`, e.g. `家族 1234`. Words: `民生委員` (helper), `家族` (second contact), `除雪` (snow volunteer).
 7. **Phone number:** open a resident on the dashboard and save the number to call, in international format (`+81…`).
 8. **First call:** press 今すぐ電話.
+9. **Map (optional):** the dashboard's 地図 view shows residents and snow volunteers. Place each pin from the resident's page, under 地図上の位置. The base map is 国土地理院's tiles; keep the credit visible.
 
 For the demo, set `DEMO_MODE=1` (the missed-call ladder runs in under a minute) and `WEATHER_SOURCE=saved` (uses `data/seed/weather.json`).
