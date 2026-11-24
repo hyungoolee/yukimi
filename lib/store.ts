@@ -4,7 +4,11 @@ import type { CallRecord, Resident, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
 const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "seed");
-const file = (dir: string, id: string) => path.join(DATA_DIR, dir, `${id}.json`);
+function file(dir: string, id: string) {
+  // IDs come from forms and webhooks; never let one point outside its folder.
+  if (!/^[\w-]+$/.test(id)) throw new Error(`Invalid id: ${id}`);
+  return path.join(DATA_DIR, dir, `${id}.json`);
+}
 
 // First run on an empty disk: copy the fictional seed residents in.
 // One shared promise, so parallel reads on a fresh disk don't seed twice.
@@ -62,14 +66,11 @@ export async function listCalls(residentId?: string) {
 // A call we placed and are waiting to hear back about, keyed by ElevenLabs conversation ID.
 export type Pending = { resident_id: string; attempt: number };
 export const savePending = (conversationId: string, p: Pending) => write("pending", conversationId, p);
-export async function takePending(conversationId: string) {
-  const p = await read<Pending>("pending", conversationId);
-  if (p) await rm(file("pending", conversationId));
-  return p;
-}
+export const getPending = (conversationId: string) => read<Pending>("pending", conversationId);
+export const clearPending = (conversationId: string) => rm(file("pending", conversationId), { force: true });
 
 // Where a resident is on the missed-call ladder.
-export type LadderState = { stage: "retry" | "second_contact" };
+export type LadderState = { stage: "retry" | "second_contact"; at: number };
 export const getLadder = (residentId: string) => read<LadderState>("ladder", residentId);
 export const saveLadder = (residentId: string, s: LadderState) => write("ladder", residentId, s);
 export const clearLadder = (residentId: string) => rm(file("ladder", residentId), { force: true });

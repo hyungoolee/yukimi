@@ -9,6 +9,9 @@ import type { CallRecord, Resident } from "./types";
 const RETRY_MS = DEMO_MODE ? 20_000 : 30 * 60_000;
 const CONFIRM_MS = DEMO_MODE ? 20_000 : 10 * 60_000;
 
+const later = (ms: number, step: () => Promise<void>) =>
+  setTimeout(() => step().catch((e) => console.error("Ladder step failed", e)), ms);
+
 const record = (resident: Resident, fields: Pick<CallRecord, "kind" | "risk" | "reasons" | "actions">) =>
   saveCall({ id: `${fields.kind}-${Date.now()}`, resident_id: resident.id, at: new Date().toISOString(), ...fields });
 
@@ -29,28 +32,32 @@ export async function missed(residentId: string, attempt: number) {
   if (!resident) return;
 
   if (attempt === 1) {
-    await saveLadder(residentId, { stage: "retry" });
-    setTimeout(async () => {
+    // A ladder is already running (an extra manual call, or a double click): let it finish, don't restart it.
+    // Only while it is fresh, though: a file left behind by a restart must not block alerts for good.
+    const active = await getLadder(residentId);
+    if (active && Date.now() - active.at < RETRY_MS + CONFIRM_MS + 60_000) return;
+    await saveLadder(residentId, { stage: "retry", at: Date.now() });
+    later(RETRY_MS, async () => {
       // Someone may have reached the resident in the meantime.
       if ((await getLadder(residentId))?.stage !== "retry") return;
       // Re-read: the phone number may have been corrected since the first attempt.
-      placeCall((await getResident(residentId)) ?? resident, 2).catch(() => missed(residentId, 2));
-    }, RETRY_MS);
+      await placeCall((await getResident(residentId)) ?? resident, 2).catch(() => missed(residentId, 2));
+    });
     return;
   }
 
-  await saveLadder(residentId, { stage: "second_contact" });
+  await saveLadder(residentId, { stage: "second_contact", at: Date.now() });
   await push(resident.second_contact.line_id, [
     buttons(`${resident.name}さんが見守りの電話に2回出ませんでした。今日、ご様子を確認できていますか？`, [
       { label: "無事です", data: `ok:${residentId}` },
       { label: "確認できません", data: `ng:${residentId}` },
     ]),
   ]);
-  setTimeout(async () => {
+  later(CONFIRM_MS, async () => {
     if ((await getLadder(residentId))?.stage === "second_contact") {
       await redAlert(resident, "電話に2回応答なし。第二連絡先からも返事なし");
     }
-  }, CONFIRM_MS);
+  });
 }
 
 /** The second contact tapped a button on the LINE check. */

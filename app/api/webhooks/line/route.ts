@@ -25,9 +25,11 @@ export async function POST(request: Request) {
     const userId: string | undefined = event.source?.userId;
 
     if (event.type === "message" && event.message?.type === "text" && userId) {
-      const [word, code] = event.message.text.trim().toLowerCase().split(/\s+/);
+      // Japanese keyboards often type full-width digits and spaces.
+      const fold = (s: string) => s.normalize("NFKC").trim().toLowerCase();
+      const [word, code] = fold(event.message.text).split(/\s+/);
       const role = ROLE_WORDS[word];
-      if (!role || code !== env("REGISTER_CODE")) {
+      if (!role || code !== fold(env("REGISTER_CODE"))) {
         await reply(event.replyToken, "役割と登録コードを送ってください（例：家族 1234）");
         continue;
       }

@@ -32,7 +32,8 @@ const toolConfig = {
     request_body_schema: {
       type: "object",
       properties: {
-        resident_id: { type: "string", description: "The resident's ID from the system prompt" },
+        // Filled in by ElevenLabs from the call's variables, not by the model.
+        resident_id: { type: "string", dynamic_variable: "resident_id" },
         kind: { type: "string", enum: ["emergency", "self_harm"], description: "Which kind of emergency" },
         detail: { type: "string", description: "What the resident said, in Japanese, in one sentence" },
       },
