@@ -53,6 +53,20 @@ const agentConfig = {
     agent: {
       language: "ja",
       first_message: "もしもし、{{name}}さんですか。おはようございます。{{introducer}}からご紹介いただいた、見守り電話です。",
+      // Stand-in values for ElevenLabs' own test call, which doesn't go through our app.
+      // A real call always sends its own (lib/elevenlabs.ts).
+      dynamic_variables: {
+        dynamic_variable_placeholders: {
+          resident_id: "sato",
+          attempt: "1",
+          name: "佐藤",
+          introducer: "娘のゆきさん",
+          facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
+          recent_calls: "2026-11-25：元気。孫の健太の模試の結果を気にしていた。",
+          weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
+          winter_check: "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。",
+        },
+      },
       prompt: {
         prompt: readFileSync(new URL("./prompt.md", import.meta.url), "utf8"),
         // The fastest model that handles Japanese well; judge it on the M1 test call.
