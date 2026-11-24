@@ -881,6 +881,7 @@ describe("the helper's memory edits", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     expect((await actions.startBrowserCall("suzuki")).variables).toMatchObject({
       care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
+      briefing: "なし",
     });
   });
 
@@ -891,5 +892,25 @@ describe("the helper's memory edits", () => {
     await actions.addFactAction(form({ resident_id: "../calls/conv_slip", text: "x" }));
     expect(JSON.stringify(await store.getCall("conv_slip"))).toBe(call); // the call record was not rewritten as a resident
     expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
+  });
+});
+
+describe("today's brief on a call", () => {
+  const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
+
+  it("reaches the agent when a pattern is running, and never stops a call from being placed", async () => {
+    for (const daysAgo of [1, 2, 3]) {
+      await store.saveCall({
+        id: `conv_brief${daysAgo}`, resident_id: "sato", at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), kind: "call",
+        risk: "yellow", reasons: [], actions: [], handled: true, extraction: { ...extraction, observations: { ...blank, ate: "no" } },
+      });
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    const { startBrowserCall } = await import("@/app/actions");
+    expect((await startBrowserCall("sato")).variables.briefing).toBe("・食事のことを、いつもよりていねいに聞く。");
+
+    const broken = vi.spyOn(store, "listCalls").mockRejectedValueOnce(new Error("disk error"));
+    expect((await startBrowserCall("sato")).variables.briefing).toBe("なし");
+    broken.mockRestore();
   });
 });

@@ -17,7 +17,20 @@ type Measure = {
   /** The line the extraction model is given for this field. */
   ask: string;
   /** A pattern across days: `days` worrying answers running, all within `within` days. */
-  trend?: { id: string; days: number; within: number; risk: "yellow" | "red"; reason: string; reasonEn: string };
+  trend?: {
+    id: string;
+    days: number;
+    within: number;
+    risk: "yellow" | "red";
+    reason: string;
+    reasonEn: string;
+    /**
+     * What the agent is told before the next call while this pattern lasts. Fixed wording, never generated.
+     * It names a topic to take care over, not what the resident said: the agent must not repeat earlier
+     * answers back, or a polite "yes" would be recorded as today's answer and keep the pattern going.
+     */
+    brief: string;
+  };
 };
 
 export const MEASURES = [
@@ -26,14 +39,14 @@ export const MEASURES = [
     concern: "no",
     label: { ja: "食事", en: "Meals" },
     ask: `ate (since yesterday's call): "no" when they have not eaten today, or say they are not eating or have been skipping meals. "yes" when they say they have eaten. When the only thing they say is that they have not had breakfast yet this morning, answer "unknown".`,
-    trend: { id: "not_eating", days: 3, within: 5, risk: "red", reason: "3日続けて食事をとれていない", reasonEn: "Not eating for 3 days running" },
+    trend: { id: "not_eating", days: 3, within: 5, risk: "red", reason: "3日続けて食事をとれていない", reasonEn: "Not eating for 3 days running", brief: "食事のことを、いつもよりていねいに聞く。" },
   },
   {
     field: "slept_well",
     concern: "no",
     label: { ja: "睡眠", en: "Sleep" },
     ask: `slept_well (last night): "no" when they say they slept badly or could not sleep; "yes" when they say they slept well.`,
-    trend: { id: "poor_sleep", days: 3, within: 5, risk: "yellow", reason: "3日続けて眠れていない", reasonEn: "Sleeping badly for 3 nights running" },
+    trend: { id: "poor_sleep", days: 3, within: 5, risk: "yellow", reason: "3日続けて眠れていない", reasonEn: "Sleeping badly for 3 nights running", brief: "睡眠のことを、いつもよりていねいに聞く。" },
   },
   {
     field: "went_out",
@@ -52,7 +65,7 @@ export const MEASURES = [
     concern: "yes",
     label: { ja: "気分", en: "Mood" },
     ask: `low_mood: "yes" when they say they are lonely, hopeless, or that there is no point. "no" when they say they feel well or cheerful.`,
-    trend: { id: "low_mood", days: 3, within: 5, risk: "yellow", reason: "気分の落ち込みが3日続いている", reasonEn: "Low mood for 3 days running" },
+    trend: { id: "low_mood", days: 3, within: 5, risk: "yellow", reason: "気分の落ち込みが3日続いている", reasonEn: "Low mood for 3 days running", brief: "気持ちの様子を、急がずゆっくり聞く。" },
   },
 ] as const satisfies readonly Measure[];
 
