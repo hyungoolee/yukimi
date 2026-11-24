@@ -21,7 +21,8 @@ const FIELDS = ["ate", "slept_well", "went_out", "pain_or_injury", "low_mood"] a
 export function dailyObservations(calls: { at: string; observations?: Observations }[]): Day[] {
   const byDate = new Map<string, Observations>();
   for (const call of calls) {
-    if (!call.observations) continue;
+    // A record with an unreadable time is skipped, not allowed to break everyone's trends.
+    if (!call.observations || Number.isNaN(new Date(call.at).getTime())) continue;
     const date = japanDate(new Date(call.at));
     const day = byDate.get(date);
     if (!day) {
@@ -44,17 +45,21 @@ const RAISE_AGAIN_EVERY = 3;
 export type Trend = { reason: string; risk: Risk; fires: boolean };
 
 /**
- * Patterns across days, as of `today`. A streak counts the most recent days with a known answer;
- * unknown days are skipped and the opposite answer ends it.
- * A trend `fires` (raises the risk) on the day it reaches its threshold and every third day after,
- * and only when today's own answer is part of it. In between it is reported as ongoing.
+ * Patterns across days, as of `today`. A streak counts the most recent days with a known answer.
+ * Unknown days are skipped; the opposite answer ends it, and so does a gap too long for the days
+ * to count as "running" (so one bad day weeks ago can't shift when the alert goes out).
+ * A trend `fires` (sends its alert) on the day it reaches its threshold and every third day after,
+ * and only when today's own answer is part of it. In between it is ongoing: same risk, no new alert.
  */
 export function findTrends(days: Day[], today: string): Trend[] {
   const trends: Trend[] = [];
   for (const rule of RULES) {
     const known = days.filter((d) => d.date <= today && d.observations[rule.field] !== "unknown");
-    const firstOther = known.findIndex((d) => d.observations[rule.field] !== rule.bad);
-    const streak = firstOther === -1 ? known.length : firstOther;
+    const maxGap = rule.within - rule.days + 1;
+    const end = known.findIndex(
+      (d, i) => d.observations[rule.field] !== rule.bad || (i > 0 && d.date < daysBefore(known[i - 1].date, maxGap)),
+    );
+    const streak = end === -1 ? known.length : end;
     if (streak < rule.days) continue;
     // The days that make up the threshold must be recent, not spread over weeks of missed calls.
     if (known[rule.days - 1].date < daysBefore(today, rule.within - 1)) continue;
@@ -66,16 +71,19 @@ export function findTrends(days: Day[], today: string): Trend[] {
 
 const RANK: Record<Risk, number> = { green: 0, yellow: 1, red: 2 };
 
-/** Today's single-call result with the trends added. A red trend that fires alerts helper and family. */
+/**
+ * Today's single-call result with the trends added. An active trend sets the risk for as long as it
+ * lasts, so the resident stays at the top of the list; the alert to helper and family goes out only
+ * when a red trend fires.
+ */
 export function withTrends(rules: RulesOutput, trends: Trend[]): RulesOutput {
   let risk = rules.risk;
   const reasons = [...rules.reasons];
   let actions = rules.actions;
   for (const trend of trends) {
     reasons.push(trend.fires ? trend.reason : `${trend.reason}（継続中）`);
-    if (!trend.fires) continue;
     if (RANK[trend.risk] > RANK[risk]) risk = trend.risk;
-    if (trend.risk === "red") {
+    if (trend.fires && trend.risk === "red") {
       const everyone: Role[] = ["helper", "second_contact"];
       const alert = actions.find((a) => a.type === "alert");
       actions = [
