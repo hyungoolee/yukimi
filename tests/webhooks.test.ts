@@ -331,20 +331,20 @@ describe("phone number", () => {
   it("saves an international number and rejects anything else", async () => {
     vi.doMock("next/cache", () => ({ revalidatePath: () => {} }));
     const { savePhone } = await import("@/app/actions");
-    await savePhone(form({ resident_id: "takahashi", phone: "+81 90-1234-5678" }));
+    expect(await savePhone(undefined, form({ resident_id: "takahashi", phone: "+81 90-1234-5678" }))).toEqual({ status: "saved", typed: "+819012345678" });
     expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
-    await savePhone(form({ resident_id: "takahashi", phone: "+81 090 1234 5678" }));
+    await savePhone(undefined, form({ resident_id: "takahashi", phone: "+81 090 1234 5678" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+819012345678");
-    await savePhone(form({ resident_id: "takahashi", phone: "080-1111-2222" }));
+    await savePhone(undefined, form({ resident_id: "takahashi", phone: "080-1111-2222" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
-    await savePhone(form({ resident_id: "takahashi", phone: "not a number" }));
-    await savePhone(form({ resident_id: "takahashi", phone: "010-1234-5678" })); // a Korean mobile in local format
+    expect(await savePhone(undefined, form({ resident_id: "takahashi", phone: "not a number" }))).toEqual({ status: "invalid", typed: "not a number" });
+    await savePhone(undefined, form({ resident_id: "takahashi", phone: "010-1234-5678" })); // a Korean mobile in local format
     expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
-    await savePhone(form({ resident_id: "takahashi", phone: "+82 10-1234-5678" }));
+    await savePhone(undefined, form({ resident_id: "takahashi", phone: "+82 10-1234-5678" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+821012345678");
-    await savePhone(form({ resident_id: "takahashi", phone: "080-1111-2222" }));
+    await savePhone(undefined, form({ resident_id: "takahashi", phone: "080-1111-2222" }));
     expect((await store.getResident("takahashi"))!.phone).toBe("+818011112222");
-    await savePhone(form({ resident_id: "../calls/conv_slip", phone: "+819012345678" }));
+    expect(await savePhone(undefined, form({ resident_id: "../calls/conv_slip", phone: "+819012345678" }))).toMatchObject({ status: "invalid" });
     expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
   });
 
