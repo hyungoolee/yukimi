@@ -227,6 +227,7 @@ describe("in-call emergency", () => {
   });
 
   it("alerts at once, returns the fixed wording, and the after-call alert still goes out", async () => {
+    await store.saveResident({ ...(await store.getResident("takahashi"))!, phone: "+819000000002" });
     const res = await emergency(request({ resident_id: "takahashi", kind: "emergency", detail: "胸が苦しい" }));
     expect((await res.json()).say_exactly).toContain("いちいちきゅう番");
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
@@ -234,7 +235,7 @@ describe("in-call emergency", () => {
     // The resident may not manage the call herself: the people alerted are asked to make it.
     const alert = pushes().find((p) => p.to === "U_helper")!.messages[0].text;
     expect(alert).toContain("代わりに119番に電話して");
-    expect(alert).toContain((await store.getResident("takahashi"))!.phone);
+    expect(alert).toContain("電話してください（+819000000002）");
 
     lineCalls.length = 0;
     extract.mockResolvedValueOnce({ ...extraction, signals: { ...extraction.signals, emergency: true, snowed_in: false } });
@@ -242,6 +243,12 @@ describe("in-call emergency", () => {
     await elevenlabs(signedElevenLabs(body));
     expect((await store.getCall("conv_chest"))!.risk).toBe("red");
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+    expect(pushes()[0].messages[0].text).toContain("代わりに119番に電話して");
+  });
+
+  it("does not ask anyone to call 119 for a self-harm alert", async () => {
+    await emergency(request({ resident_id: "takahashi", kind: "self_harm", detail: "もう生きていたくない" }));
+    expect(pushes()[0].messages[0].text).not.toContain("119番に電話");
   });
 });
 

@@ -19,7 +19,7 @@ const ACK_BUTTON = "確認しました";
 // She was told to phone an ambulance herself, and may not manage it: whoever reads this does it for her.
 // We hold no street address, so they give the one they know.
 const callForThem = (r: Resident) =>
-  `\nいますぐ${r.name}さんに電話してください（${r.phone}）。出ないときや、ご本人が119番にかけられないときは、代わりに119番に電話して、${r.name}さんの住所を伝えてください。`;
+  `\nいますぐ${r.name}さんに電話してください${r.phone ? `（${r.phone}）` : ""}。出ないときや、ご本人が119番にかけられないときは、代わりに119番に電話して、${r.name}さんの住所を伝えてください。`;
 
 /** Sends one person's message and records exactly what went out and whether LINE took it. */
 async function deliver(resident: Resident, role: Role, sentText: string, messages: object[], extra: Partial<Delivery>): Promise<Delivery> {
