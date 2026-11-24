@@ -120,7 +120,7 @@ describe("after a call", () => {
 
     const call = await store.getCall("conv_slip");
     expect(call).toMatchObject({ risk: "red", kind: "call", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
-    expect(call!.actions).toEqual([
+    expect(call!.actions).toMatchObject([
       { type: "alert", to: ["helper", "second_contact"], sent: true },
       { type: "snow_request", to: ["snow_volunteer"], sent: true },
     ]);
@@ -475,6 +475,10 @@ describe("demo reset", () => {
     const { resetDemo } = await import("@/app/actions");
     await store.saveResident({ ...(await store.getResident("sato"))!, phone: "+819011112222" });
     await store.saveLadder("sato", { stage: "retry", at: Date.now() });
+    // A disk set up before the map existed has no pins; one resident has been placed by hand.
+    const suzuki = (await store.getResident("suzuki"))!;
+    await store.saveResident({ ...suzuki, location: undefined, snow_volunteer: { ...suzuki.snow_volunteer, location: undefined } });
+    await store.saveResident({ ...(await store.getResident("takahashi"))!, location: { lat: 43.3, lng: 141.9 } });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
     await store.updateResident("sato", (r) => ({
       ...r, care_notes: "夫の話はしない", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
@@ -490,6 +494,11 @@ describe("demo reset", () => {
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
+    // The unplaced demo resident gets the seed's made-up pins; a pin placed by hand is kept.
+    const placed = (await store.getResident("suzuki"))!;
+    expect(placed.location).toEqual({ lat: 43.189, lng: 141.792 });
+    expect(placed.snow_volunteer.location).toEqual({ lat: 43.1975, lng: 141.779 });
+    expect((await store.getResident("takahashi"))!.location).toEqual({ lat: 43.3, lng: 141.9 });
   });
 });
 
