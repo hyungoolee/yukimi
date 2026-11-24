@@ -3,6 +3,8 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type { Extraction, Resident, Turn } from "./types";
 
+const tri = z.enum(["yes", "no", "unknown"]);
+
 const ExtractionSchema = z.object({
   answered_by_person: z.boolean(),
   summary: z.string(),
@@ -12,18 +14,24 @@ const ExtractionSchema = z.object({
     winter: z.string(),
     needs: z.array(z.string()),
   }),
+  // not_eating, pain and low_mood are not asked for here: code derives them from observations,
+  // so the two can never disagree.
   signals: z.object({
     emergency: z.boolean(),
     self_harm: z.boolean(),
     fall_recent: z.boolean(),
-    pain: z.boolean(),
     cant_move: z.boolean(),
     snowed_in: z.boolean(),
     heater_problem: z.boolean(),
-    not_eating: z.boolean(),
     confused: z.boolean(),
     money_request: z.boolean(),
-    low_mood: z.boolean(),
+  }),
+  observations: z.object({
+    ate: tri,
+    slept_well: tri,
+    went_out: tri,
+    pain_or_injury: tri,
+    low_mood: tri,
   }),
   new_facts: z.array(z.string()),
   english: z.object({
@@ -45,14 +53,18 @@ Set each signal to true only when the resident's own words support it. When the 
 - emergency: describes something needing an ambulance now, such as chest pain, trouble breathing, or signs of a stroke.
 - self_harm: talks about wanting to die or to end their life.
 - fall_recent: slipped or fell today or in the last two days.
-- pain: reports physical pain or an injury now.
 - cant_move: cannot stand up or walk right now.
 - snowed_in: snow keeps them from opening the door or leaving the house.
 - heater_problem: the heater is broken, or they are out of fuel.
-- not_eating: has not eaten today, or says they are not eating.
 - confused: wrong about the day or season, repeats the same story within the call, or does not recognize this service.
 - money_request: someone else (a caller, visitor or message) asked them for money, a transfer, or bank or card details.
-- low_mood: says they are lonely, hopeless, or that there is no point.`;
+
+Each observation covers the time since yesterday's call. Answer "yes" or "no" only from the resident's own words, and "unknown" when it did not come up or the answer is unclear. Never guess: "unknown" is always safe, a wrong "no" is not.
+- ate: "no" when they have not eaten today, or say they are not eating or have been skipping meals. "yes" when they say they have eaten. When the only thing they say is that they have not had breakfast yet this morning, answer "unknown".
+- slept_well: "no" when they say they slept badly or could not sleep last night; "yes" when they say they slept well.
+- went_out: "yes" when they say they have been outside the house since yesterday's call; "no" when they say they have not.
+- pain_or_injury: "yes" when they report physical pain or an injury now, including an injury that does not hurt (swelling, a bruise, a cut). "no" when they say nothing hurts.
+- low_mood: "yes" when they say they are lonely, hopeless, or that there is no point. "no" when they say they feel well or cheerful.`;
 
 /** Turns a call transcript into notes and yes/no signals. Throws if the model returns nothing usable. */
 export async function extract(resident: Resident, transcript: Turn[]): Promise<Extraction> {
@@ -74,5 +86,15 @@ export async function extract(resident: Resident, transcript: Turn[]): Promise<E
   if (!response.parsed_output) {
     throw new Error(`Extraction returned no output (stop_reason: ${response.stop_reason})`);
   }
-  return response.parsed_output;
+  const { signals, observations, ...rest } = response.parsed_output;
+  return {
+    ...rest,
+    observations,
+    signals: {
+      ...signals,
+      not_eating: observations.ate === "no",
+      pain: observations.pain_or_injury === "yes",
+      low_mood: observations.low_mood === "yes",
+    },
+  };
 }
