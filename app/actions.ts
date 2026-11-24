@@ -6,6 +6,7 @@ import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
+import { removeFollowUp } from "@/lib/memory";
 import { getCall, getResident, listResidents, resetDemoData, saveCall, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
@@ -101,4 +102,12 @@ export async function resetDemo() {
   await requireAccess();
   if (DEMO_MODE) await resetDemoData();
   revalidatePath("/", "layout");
+}
+
+/** The helper drops a follow-up that no longer needs asking. */
+export async function deleteFollowUp(formData: FormData) {
+  await requireAccess();
+  const residentId = String(formData.get("resident_id"));
+  await updateResident(residentId, (r) => removeFollowUp(r, String(formData.get("follow_up_id"))));
+  revalidatePath(`/residents/${residentId}`);
 }
