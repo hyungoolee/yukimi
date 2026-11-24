@@ -8,7 +8,8 @@ export type Row = { resident: Resident; call?: CallRecord };
 
 /** One row per resident, most urgent first. `calls` must be newest first. */
 export function rankedRows(residents: Resident[], calls: CallRecord[]): Row[] {
-  const rank = (call?: CallRecord) => (call ? RANK[call.risk] + (call.handled ? 3 : 0) : 3);
+  // Handled alerts go last, below residents not yet called: nobody needs to act on them.
+  const rank = (call?: CallRecord) => (!call ? 3 : call.handled ? 4 : RANK[call.risk]);
   return residents
     .map((resident) => {
       const own = calls.filter((c) => c.resident_id === resident.id);
