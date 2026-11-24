@@ -193,6 +193,16 @@ describe("in-call emergency with a bad resident ID", () => {
     expect(pushes()[0].messages[0].text).toContain("利用者を特定できませんでした");
   });
 
+  it("alerts nobody and records nothing for a console test call", async () => {
+    const res = await emergency(request({ resident_id: "test", kind: "emergency", detail: "テスト" }));
+    expect((await res.json()).say_exactly).toContain("119番");
+    expect(pushes()).toEqual([]);
+    await elevenlabs(signedElevenLabs(fixture.replace("conv_slip", "conv_console").replace('"resident_id": "sato"', '"resident_id": "test"')));
+    expect(await store.getCall("conv_console")).toBeNull();
+    expect(await store.getCall("conv_console-error")).toBeNull();
+    expect(extract).not.toHaveBeenCalled();
+  });
+
   it("finds the resident by name when the ID is their name", async () => {
     await emergency(request({ resident_id: "高橋さん", kind: "emergency", detail: "倒れた" }));
     expect((await store.listCalls("takahashi"))[0]).toMatchObject({ kind: "emergency", risk: "red" });
@@ -407,7 +417,7 @@ describe("dashboard language", () => {
     const { reasonText, strings } = await import("@/lib/i18n");
     expect(reasonText("en", "転倒・痛みあり")).toBe("Fell and is in pain");
     expect(reasonText("en", "緊急の訴え（119番を案内）：胸が苦しい")).toBe("Emergency (told to call 119)：胸が苦しい");
-    expect(reasonText("en", "電話に応答なし。ゆきさんが無事を確認")).toContain("Second contact confirmed");
+    expect(reasonText("en", "電話に応答なし。ゆきさんが無事を確認")).toBe("No answer; the second contact confirmed they are fine");
     expect(reasonText("ja", "転倒・痛みあり")).toBe("転倒・痛みあり");
     expect(reasonText("en", "知らない理由")).toBe("知らない理由");
     const sato = (await store.getResident("sato"))!;

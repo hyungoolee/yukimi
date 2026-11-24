@@ -95,13 +95,14 @@ const REASONS_EN: [string, string][] = [
   ["気分の落ち込み", "Low mood"],
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],
   ["電話に2回応答なし。第二連絡先も確認できず", "No answer twice; the second contact can't confirm"],
-  ["電話に応答なし。", "No answer. Second contact confirmed they are fine: "],
   ["自動判定に失敗。通話メモを確認してください", "Automatic check failed; please read the call notes"],
   ["通話の処理に失敗。確認してください", "Processing the call failed; please check"],
 ];
 
 export function reasonText(lang: Lang, reason: string) {
   if (lang === "ja") return reason;
+  // "電話に応答なし。<name>さんが無事を確認": the name is the second contact's, in Japanese.
+  if (reason.startsWith("電話に応答なし。")) return "No answer; the second contact confirmed they are fine";
   const match = REASONS_EN.find(([japanese]) => reason.startsWith(japanese));
   return match ? match[1] + reason.slice(match[0].length) : reason;
 }
