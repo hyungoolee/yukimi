@@ -27,9 +27,11 @@ export async function processCall(residentId: string, callId: string, transcript
 
   let extraction: Extraction | undefined;
   let rules: RulesOutput;
+  let judged = false; // true only when the rules ran on a real extraction
   try {
     extraction = await extract(resident, transcript);
     rules = applyRules(extraction.signals, await getWeather(resident.amedas_station));
+    judged = true;
   } catch (e) {
     console.error("Extraction failed", e);
     rules = needsReview("自動判定に失敗。通話メモを確認してください");
@@ -104,6 +106,7 @@ export async function processCall(residentId: string, callId: string, transcript
 
   // Last, and on its own: the call is already judged, alerted and saved. If curation fails,
   // memory is simply left as it was, and nobody is alerted about it. A call that could not be
-  // judged is left for a person to read, not for memory to learn from.
-  if (extraction) await curateMemory(residentId, transcript).catch((e) => console.error("Memory curation failed", e));
+  // judged (even one whose extraction worked but whose rules could not run) is left for a person
+  // to read, not for memory to learn from.
+  if (judged) await curateMemory(residentId, callId, transcript).catch((e) => console.error("Memory curation failed", e));
 }
