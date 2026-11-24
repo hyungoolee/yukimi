@@ -45,6 +45,8 @@ export type Resident = {
   active?: boolean;
   /** The Japan date the daily call was last scheduled, so it is placed once a day. See lib/daily.ts. */
   scheduled_on?: string;
+  /** Waiting for a free line for that day's call. */
+  call_queued?: boolean;
   introducer: string;
   second_contact: Contact;
   helper: Contact;

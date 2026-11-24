@@ -293,6 +293,7 @@ const REASONS_EN: [string, string][] = [
   // Trend reasons come with their measures, and go first: one of them starts like a single-call reason.
   ...MEASURES.flatMap((m): [string, string][] => ("trend" in m ? [[m.trend.reason, m.trend.reasonEn]] : [])),
   ["緊急の訴え（119番を案内）", "Emergency (told to call 119)"],
+  ["今日の見守り電話をかけられませんでした", "Today's check-in call could not be placed"],
   ["死にたい気持ちの訴え", "Talked about wanting to die"],
   ["転倒・痛みあり", "Fell and is in pain"],
   ["転倒（痛みなし）", "Fell, no pain"],
