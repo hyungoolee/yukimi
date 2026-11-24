@@ -66,6 +66,16 @@ export type AlertReasons = Partial<Record<Role, string[]>>;
 export type Action =
   | { type: "alert"; to: Role[]; reasonsByRole?: AlertReasons }
   | { type: "snow_request"; to: Role[] };
+/** One message to one person, as it was sent: kept so the dashboard shows history, not a reconstruction. */
+export type Delivery = {
+  role: Role;
+  text: string;
+  button?: string; // label of the reply button sent with it, if any
+  reasons?: string[]; // an alert's reasons for this recipient
+  sent: boolean;
+  registered: boolean; // false: this person has no LINE ID on file, so nothing was attempted
+};
+
 export type RulesOutput = { risk: Risk; reasons: string[]; actions: Action[] };
 
 export type Turn = { role: string; message: string };
@@ -77,7 +87,7 @@ export type CallRecord = {
   kind: "call" | "missed" | "emergency" | "confirmed_ok";
   risk: Risk;
   reasons: string[];
-  actions: (Action & { sent: boolean })[];
+  actions: (Action & { sent: boolean; deliveries?: Delivery[] })[];
   transcript?: Turn[];
   extraction?: Extraction;
   handled?: boolean;

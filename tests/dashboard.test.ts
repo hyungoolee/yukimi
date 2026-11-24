@@ -34,6 +34,11 @@ describe("rankedRows", () => {
     const calls = newestFirst([call("a", "red", { handled: true }), call("b", "green")]);
     expect(rankedRows(people.slice(0, 2), calls).map((r) => r.resident.id)).toEqual(["b", "a"]);
   });
+
+  it("puts a handled alert below residents not yet called", () => {
+    const calls = newestFirst([call("a", "red", { handled: true }), call("b", "yellow", { handled: true })]);
+    expect(rankedRows(people.slice(0, 3), calls).map((r) => r.resident.id)).toEqual(["c", "a", "b"]);
+  });
 });
 
 describe("snowRequest", () => {
