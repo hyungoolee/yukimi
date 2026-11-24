@@ -5,6 +5,14 @@ import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
 
+/** How long an open request has gone without anyone taking it. */
+function waited(r: OpenRequest, lang: "ja" | "en") {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(r.since).getTime()) / 60_000));
+  const hours = Math.floor(minutes / 60);
+  if (lang === "en") return hours ? `for ${hours} h` : `for ${minutes} min`;
+  return hours ? `${hours}時間前から` : `${minutes}分前から`;
+}
+
 const ja = {
   switchTo: "English",
   title: "見守りリスト",
@@ -17,7 +25,7 @@ const ja = {
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
       r.status === "not_sent" ? "送信できていません" : r.status === "sent" ? "返事待ち" : `${r.who}さんが引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
-    }`,
+    }${r.status === "accepted" ? "" : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
@@ -125,6 +133,9 @@ const ja = {
   },
   role: { helper: "民生委員", second_contact: "家族", snow_volunteer: "除雪" },
   reach: { none: "未定", unregistered: "LINE未登録", registered: "LINE登録済み" },
+  coordinator: "コーディネーター（引き受け手のないお願いの連絡先）",
+  coordinatorShort: "コーディネーター",
+  noCoordinator: "LINEに登録済みのコーディネーターがいません。引き受け手のないお願いは、だれにも連絡されません。",
   peopleList: "登録されている人",
   serves: (n: number) => `${n}名を担当`,
   testSend: "テスト送信",
@@ -160,7 +171,7 @@ const en: typeof ja = {
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
       r.status === "not_sent" ? "request could not be sent" : r.status === "sent" ? "asked, waiting for a reply" : `accepted${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
-    }`,
+    }${r.status === "accepted" ? "" : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
@@ -268,6 +279,9 @@ const en: typeof ja = {
   },
   role: { helper: "Helper", second_contact: "Family", snow_volunteer: "Snow helper" },
   reach: { none: "Nobody assigned", unregistered: "Not on LINE", registered: "On LINE" },
+  coordinator: "Coordinator (told when a help request has nobody on it)",
+  coordinatorShort: "Coordinator",
+  noCoordinator: "No coordinator is registered on LINE. A help request nobody takes will be reported to no one.",
   peopleList: "People on file",
   serves: (n) => `serves ${n} resident${n === 1 ? "" : "s"}`,
   testSend: "Send a test message",

@@ -10,6 +10,8 @@ export type Person = {
   phone?: string;
   line_id?: string;
   location?: LatLng;
+  /** Told when a help request reaches nobody or goes unanswered (lib/actions.ts). */
+  coordinator?: boolean;
   /** Their LINE registration code, until they use it. */
   code?: string;
 };
@@ -119,7 +121,13 @@ export type Action =
 /** Half a day someone has said they will come. `date` is a Japan date. */
 export type Slot = { date: string; part: "am" | "pm" };
 /** How a help request stands. Kept on the action it was raised by (lib/requests.ts). */
-export type RequestState = { accepted_by?: string; slot?: Slot; done?: boolean };
+export type RequestState = {
+  accepted_by?: string;
+  slot?: Slot;
+  done?: boolean;
+  /** When the coordinators were told that nobody had taken it. */
+  escalated_at?: string;
+};
 /** One message to one person, as it was sent: kept so the dashboard shows history, not a reconstruction. */
 export type Delivery = {
   role: Role;
