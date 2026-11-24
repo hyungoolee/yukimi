@@ -71,7 +71,10 @@ export type Extraction = {
 };
 
 export type Risk = "green" | "yellow" | "red";
-export type Action = { type: "alert" | "snow_request"; to: Role[] };
+export type AlertReasons = Partial<Record<Role, string[]>>;
+export type Action =
+  | { type: "alert"; to: Role[]; reasonsByRole?: AlertReasons }
+  | { type: "snow_request"; to: Role[] };
 export type RulesOutput = { risk: Risk; reasons: string[]; actions: Action[] };
 
 export type Turn = { role: string; message: string };
@@ -87,5 +90,7 @@ export type CallRecord = {
   transcript?: Turn[];
   extraction?: Extraction;
   handled?: boolean;
+  acknowledged_by?: string; // who tapped "確認しました" on a red alert
+  alert_rounds?: number; // how many times an unacknowledged red alert was sent again
   snow_accepted?: boolean;
 };
