@@ -76,14 +76,14 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
     const t = clean(text);
     if (!fact || !fits(t) || has(t) || NOT_A_NOTE.test(t)) continue;
     facts = facts.map((f) => (f.id === id ? { ...f, text: t } : f));
-    log.push({ op: "update", text: t, before: fact.text });
+    log.push({ op: "update", fact: id, text: t, before: fact.text });
   }
   for (const { id, reason } of changes.retire.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const fact = editable(id);
     if (!fact) continue;
     facts = facts.filter((f) => f.id !== id);
     retired.push({ ...fact, retired: today, reason: clean(reason).slice(0, MAX_LENGTH) });
-    log.push({ op: "retire", text: fact.text });
+    log.push({ op: "retire", fact: id, text: fact.text });
   }
   for (const text of changes.add.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const t = clean(text);
@@ -92,8 +92,9 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
       log.push({ op: "refuse", text: t }); // full: recorded so a person can decide
       continue;
     }
-    facts.push({ id: newId(), text: t, since: today, source: "call" });
-    log.push({ op: "add", text: t });
+    const added: Fact = { id: newId(), text: t, since: today, source: "call" };
+    facts.push(added);
+    log.push({ op: "add", fact: added.id, text: t });
   }
   return logged({ ...resident, facts, retired_facts: retired }, by, log);
 }
@@ -123,7 +124,7 @@ export function addFact(resident: Resident, text: string, today: string): Reside
   const t = clean(text);
   if (!fits(t) || resident.facts.some((f) => f.text === t) || resident.facts.length >= MAX_FACTS) return resident;
   const fact: Fact = { id: newId(), text: t, since: today, source: "helper", locked: true };
-  return logged({ ...resident, facts: [...resident.facts, fact] }, "helper", [{ op: "add", text: t }]);
+  return logged({ ...resident, facts: [...resident.facts, fact] }, "helper", [{ op: "add", fact: fact.id, text: t }]);
 }
 
 export function editFact(resident: Resident, id: string, text: string): Resident {
@@ -131,7 +132,7 @@ export function editFact(resident: Resident, id: string, text: string): Resident
   const t = clean(text);
   if (!fact || !fits(t) || t === fact.text) return resident;
   const facts = resident.facts.map((f) => (f.id === id ? { ...f, text: t, locked: true } : f));
-  return logged({ ...resident, facts }, "helper", [{ op: "update", text: t, before: fact.text }]);
+  return logged({ ...resident, facts }, "helper", [{ op: "update", fact: id, text: t, before: fact.text }]);
 }
 
 export function retireFact(resident: Resident, id: string, today: string): Resident {
@@ -144,7 +145,7 @@ export function retireFact(resident: Resident, id: string, today: string): Resid
       retired_facts: [...(resident.retired_facts ?? []), { ...fact, retired: today, reason: "helper" }],
     },
     "helper",
-    [{ op: "retire", text: fact.text }],
+    [{ op: "retire", fact: id, text: fact.text }],
   );
 }
 
@@ -158,7 +159,7 @@ export function restoreFact(resident: Resident, id: string): Resident {
       retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
     },
     "helper",
-    [{ op: "restore", text: fact.text }],
+    [{ op: "restore", fact: id, text: fact.text }],
   );
 }
 
@@ -169,11 +170,8 @@ export function restoreFact(resident: Resident, id: string): Resident {
 export function deleteFact(resident: Resident, id: string): Resident {
   const fact = (resident.retired_facts ?? []).find((f) => f.id === id);
   if (!fact) return resident;
-  const scrub = (e: MemoryChange): MemoryChange => ({
-    ...e,
-    text: e.text === fact.text ? undefined : e.text,
-    before: e.before === fact.text ? undefined : e.before,
-  });
+  // Every earlier wording of this fact goes too, not just its last one.
+  const scrub = (e: MemoryChange): MemoryChange => (e.fact === id ? { at: e.at, by: e.by, op: e.op } : e);
   return logged(
     {
       ...resident,

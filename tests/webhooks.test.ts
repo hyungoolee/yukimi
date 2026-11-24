@@ -788,3 +788,45 @@ describe("follow-ups after a call", () => {
     expect((await store.getResident("sato"))!.follow_ups).toEqual([]);
   });
 });
+
+describe("the helper's memory edits", () => {
+  const form = (fields: Record<string, string>) => {
+    const data = new FormData();
+    for (const [k, v] of Object.entries(fields)) data.set(k, v);
+    return data;
+  };
+
+  it("adds, edits, retires, restores and deletes a fact, and saves care notes", async () => {
+    const actions = await import("@/app/actions");
+    const facts = async () => (await store.getResident("suzuki"))!;
+    await actions.addFactAction(form({ resident_id: "suzuki", text: "毎週木曜に書道教室に通う" }));
+    const added = (await facts()).facts.at(-1)!;
+    expect(added).toMatchObject({ text: "毎週木曜に書道教室に通う", source: "helper", locked: true });
+
+    await actions.editFactAction(form({ resident_id: "suzuki", fact_id: added.id, text: "毎週金曜に書道教室に通う" }));
+    expect((await facts()).facts.at(-1)!.text).toBe("毎週金曜に書道教室に通う");
+
+    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect((await facts()).facts.map((f) => f.id)).not.toContain(added.id);
+    await actions.restoreFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect((await facts()).facts.map((f) => f.id)).toContain(added.id);
+
+    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    await actions.deleteFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect(JSON.stringify(await facts())).not.toContain("書道教室"); // neither wording survives, in the log either
+
+    await actions.saveCareNotes(form({ resident_id: "suzuki", text: "奥さんの話はこちらからしない" }));
+    expect((await facts()).care_notes).toBe("奥さんの話はこちらからしない");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    expect((await actions.startBrowserCall("suzuki")).variables).toMatchObject({
+      care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
+    });
+  });
+
+  it("does nothing for a resident that doesn't exist or a path-style id", async () => {
+    const actions = await import("@/app/actions");
+    await actions.addFactAction(form({ resident_id: "nobody", text: "x" }));
+    await actions.addFactAction(form({ resident_id: "../calls/conv_slip", text: "x" }));
+    expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
+  });
+});
