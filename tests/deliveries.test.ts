@@ -94,6 +94,10 @@ describe("a help request nobody takes", () => {
     expect(pushed[0].text).toContain("https://example.test/residents/sato");
     expect(await open()).toMatchObject({ requestId: "wait_1", escalated: true });
 
+    // The same step run again (a restart before its task was deleted) sends nothing more.
+    await checkRequest({ id: "t", due: 0, kind: "request_check", resident_id: "sato", call_id: "wait_1", request_kind: "snow" });
+    expect(pushed).toHaveLength(1);
+
     // The next day's call writes a fresh record of the same request.
     await save("wait_2", [{ ...snow, request_id: "wait_1", sent: true }]);
     expect(await open()).toMatchObject({ requestId: "wait_1", callId: "wait_2", escalated: true });

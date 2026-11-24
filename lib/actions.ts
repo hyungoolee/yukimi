@@ -125,7 +125,8 @@ export async function checkRequest({ resident_id, call_id: requestId, request_ki
   if (!resident || !kind) return;
   // Closed, handled or gone stale: no longer open, so nothing to pass on.
   const open = openRequests(resident, await listCalls(resident_id)).find((r) => r.kind === kind && r.requestId === requestId);
-  if (!open || open.status === "accepted") return;
+  // Already told: this step can run twice if the server stops before its task is deleted.
+  if (!open || open.status === "accepted" || open.escalated) return;
   const label = REQUESTS[kind].label.ja;
   await tellCoordinators(resident, open.callId, kind, `【引き受け手なし】${resident.name}さんの${label}。${open.who}さんに依頼しましたが、まだ返事がありません。`);
 }
