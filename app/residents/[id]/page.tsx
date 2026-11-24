@@ -15,6 +15,8 @@ import { japanTime, RiskBadge, riskEdge } from "../../ui";
 import { LocationPicker } from "./location-picker";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
+import { WeekGrid } from "./week-grid";
+import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
 
 // English view: the model's English copy when the record has one (older records don't).
 function notesFor(e: Extraction, lang: Lang) {
@@ -115,6 +117,13 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         )}
       </section>
 
+      <h2 className="mt-8 font-medium">{t.week}</h2>
+      <WeekGrid
+        week={lastWeek(dailyObservations(calls.filter((c) => c.kind === "call").map((c) => ({ at: c.at, observations: c.extraction?.observations }))), japanDate())}
+        t={t}
+        lang={lang}
+      />
+
       <h2 className="mt-8 font-medium">{t.callLog}</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">{t.noCalls}</p>}
       {calls.map((call) => (
@@ -129,24 +138,30 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             <div className="mt-3 text-sm">
               <div className="text-zinc-500">{t.messagesSent}</div>
               <ul className="mt-1 space-y-2">
-                {call.actions.map((a) => (
-                  <li key={a.type} className="rounded border border-zinc-200 p-2">
-                    <div className="text-zinc-500">
-                      → {a.to.map((role) => resident[role].name).join("、")}
-                      <span className={a.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
-                        {a.sent ? t.messageDelivered : t.messageNotDelivered}
-                      </span>
-                    </div>
-                    <div>{a.type === "alert" ? `【要確認】${alertText(resident, call.reasons)}` : snowRequestText(resident)}</div>
-                    {lang === "en" && (
-                      <div className="text-zinc-600">
-                        {a.type === "alert"
-                          ? t.alertGloss(call.reasons.map((r) => reasonText(lang, r)).join(t.separator))
-                          : t.snowGloss}
-                      </div>
-                    )}
-                  </li>
-                ))}
+                {call.actions.flatMap((a) =>
+                  // One entry per recipient: an alert can give each person different reasons.
+                  a.to.map((role) => {
+                    const reasons = (a.type === "alert" && a.reasonsByRole?.[role]) || call.reasons;
+                    return (
+                      <li key={`${a.type}-${role}`} className="rounded border border-zinc-200 p-2">
+                        <div className="text-zinc-500">
+                          → {resident[role].name}
+                          <span className={a.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
+                            {a.sent ? t.messageDelivered : t.messageNotDelivered}
+                          </span>
+                        </div>
+                        <div>{a.type === "alert" ? `【要確認】${alertText(resident, reasons)}` : snowRequestText(resident)}</div>
+                        {lang === "en" && (
+                          <div className="text-zinc-600">
+                            {a.type === "alert"
+                              ? t.alertGloss(reasons.map((r) => reasonText(lang, r)).join(t.separator))
+                              : t.snowGloss}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  }),
+                )}
               </ul>
             </div>
           )}

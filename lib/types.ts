@@ -1,3 +1,4 @@
+import type { Observations } from "./measures";
 // Shared formats from the Build plan. Change only with the whole team.
 
 export type LatLng = { lat: number; lng: number };
@@ -41,18 +42,25 @@ export type Signals = {
   low_mood: boolean;
 };
 
+export type { Observations, Tri } from "./measures";
+
 export type Extraction = {
   answered_by_person: boolean;
   summary: string;
   notes: { mood: string; health: string; winter: string; needs: string[] };
   signals: Signals;
+  /** Absent on records from before observations were recorded. */
+  observations?: Observations;
   new_facts: string[];
   /** The same summary and notes in English, for the dashboard's English view. Absent on older records. */
   english?: { summary: string; mood: string; health: string; winter: string; needs: string[] };
 };
 
 export type Risk = "green" | "yellow" | "red";
-export type Action = { type: "alert" | "snow_request"; to: Role[] };
+export type AlertReasons = Partial<Record<Role, string[]>>;
+export type Action =
+  | { type: "alert"; to: Role[]; reasonsByRole?: AlertReasons }
+  | { type: "snow_request"; to: Role[] };
 export type RulesOutput = { risk: Risk; reasons: string[]; actions: Action[] };
 
 export type Turn = { role: string; message: string };
