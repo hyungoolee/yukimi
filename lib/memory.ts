@@ -117,7 +117,10 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
     facts.push(added);
     log.push({ op: "add", fact: added.id, text: t });
   }
-  return logged({ ...resident, facts, retired_facts: retired.slice(-RETIRED_KEPT) }, by, log);
+  // Only what the model retired is trimmed: what the helper retired stays restorable until they delete it.
+  let over = retired.length - RETIRED_KEPT;
+  const retired_facts = retired.filter((f) => f.reason === "helper" || over-- <= 0);
+  return logged({ ...resident, facts, retired_facts }, by, log);
 }
 
 /** Applies what the model proposed after a call, within the limits above. `by` names the call for the log. */
@@ -163,7 +166,8 @@ export function editFact(resident: Resident, id: string, text: string): Resident
   const t = clean(text);
   if (!fact || !fits(t) || t === fact.text) return resident;
   const facts = resident.facts.map((f) => (f.id === id ? { ...f, text: t, locked: true } : f));
-  return logged({ ...resident, facts }, "helper", [{ op: "update", fact: id, text: t, before: fact.text }]);
+  // A correction takes the old wording out, so the model can't learn it again as a new fact.
+  return logged(unblock(block({ ...resident, facts }, fact.text), t), "helper", [{ op: "update", fact: id, text: t, before: fact.text }]);
 }
 
 export function retireFact(resident: Resident, id: string, today: string): Resident {
@@ -185,12 +189,16 @@ export function retireFact(resident: Resident, id: string, today: string): Resid
 
 export function restoreFact(resident: Resident, id: string): Resident {
   const fact = (resident.retired_facts ?? []).find((f) => f.id === id);
-  if (!fact || resident.facts.length >= MAX_FACTS) return resident;
+  // The model may have learned the same thing again since: then that copy is kept, and locked.
+  const twin = fact && resident.facts.find((f) => f.text === fact.text);
+  if (!fact || (!twin && resident.facts.length >= MAX_FACTS)) return resident;
   return logged(
     unblock(
       {
         ...resident,
-        facts: [...resident.facts, { id: fact.id, text: fact.text, since: fact.since, source: fact.source, locked: true }],
+        facts: twin
+          ? resident.facts.map((f) => (f === twin ? { ...f, locked: true } : f))
+          : [...resident.facts, { id: fact.id, text: fact.text, since: fact.since, source: fact.source, locked: true }],
         retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
       },
       fact.text,
