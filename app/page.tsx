@@ -35,6 +35,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     { label: t.badge.none, n: rows.filter((r) => !r.call).length, className: "bg-zinc-200 text-zinc-700" },
   ];
   const unreached = criticalCount(residents);
+  // The line on a card singles a resident out. When the banner already covers everyone, it is only noise.
+  const flagGaps = LINE_READY && unreached < residents.length;
   const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
@@ -77,7 +79,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <ul className="mt-4 divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
           {rows.map((row) => (
             <li key={row.resident.id} className={`p-4 ${riskEdge(row.call) || "border-l-4 border-l-transparent"} ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
-              <ResidentCard {...row} lang={lang} t={t}>
+              <ResidentCard {...row} lang={lang} t={t} flagGaps={flagGaps}>
                 <Link href={href("map", row.resident.id)} className={linkClass}>
                   {t.viewOnMap}
                 </Link>
@@ -86,7 +88,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           ))}
         </ul>
       ) : (
-        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} />
+        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} flagGaps={flagGaps} />
       )}
       {DEMO_MODE && (
         <form action={resetDemo} className="mt-6 text-right">
@@ -106,6 +108,7 @@ function MapPanel({
   listHref,
   lang,
   t,
+  flagGaps,
 }: {
   rows: Row[];
   calls: CallRecord[];
@@ -113,6 +116,7 @@ function MapPanel({
   listHref: string;
   lang: Lang;
   t: Strings;
+  flagGaps: boolean;
 }) {
   const data = mapData(rows, calls);
   const row = rows.find((r) => r.resident.id === selected);
@@ -146,7 +150,7 @@ function MapPanel({
       <div className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(row?.call)}`}>
         {row ? (
           <>
-            <ResidentCard {...row} lang={lang} t={t}>
+            <ResidentCard {...row} lang={lang} t={t} flagGaps={flagGaps}>
               <Link href={listHref} className={linkClass}>
                 {t.viewInList}
               </Link>
