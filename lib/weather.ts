@@ -45,7 +45,7 @@ export function describeWeather(w: Weather) {
   return {
     weather: text,
     winter_check: winter
-      ? "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。"
+      ? "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。"
       : "不要。天気の話は軽くふれる程度でよい。",
   };
 }

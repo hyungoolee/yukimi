@@ -34,7 +34,7 @@ describe("a call that ends before a required question", () => {
 
   it("gives the helper the other yellow reasons too, and puts the alert before a snow request", () => {
     const out = applyRules({ ...none, snowed_in: true }, cold, ["has_supplies"]);
-    expect(out.actions.map((a) => a.type)).toEqual(["alert", "snow_request"]);
+    expect(out.actions.map((a) => a.type)).toEqual(["alert", "request"]);
     expect(out.actions[0]).toMatchObject({ to: ["helper"], reasonsByRole: { helper: ["雪で玄関から出られない", reason("食料・薬")] } });
   });
 });
@@ -105,13 +105,13 @@ describe("escalation rules", () => {
   it("sends a snow request and stays yellow when snowed in", () => {
     const out = rules({ snowed_in: true });
     expect(out.risk).toBe("yellow");
-    expect(out.actions).toEqual([{ type: "snow_request", to: ["snow_volunteer"] }]);
+    expect(out.actions).toEqual([{ type: "request", kind: "snow", to: ["snow_volunteer"] }]);
   });
 
   it("makes snowed in with a heater problem red, with both actions", () => {
     const out = rules({ snowed_in: true, heater_problem: true });
     expect(out.risk).toBe("red");
-    expect(out.actions.map((a) => a.type)).toEqual(["alert", "snow_request"]);
+    expect(out.actions.map((a) => a.type)).toEqual(["alert", "request"]);
   });
 
   it.each(["not_eating", "confused", "low_mood"] as const)("puts %s on the visit list", (signal) => {
@@ -126,7 +126,7 @@ describe("escalation rules", () => {
     expect(out.reasons).toEqual(["転倒・痛みあり", "雪で玄関から出られない"]);
     expect(out.actions).toEqual([
       { type: "alert", to: ["helper", "second_contact"], reasonsByRole: { helper: out.reasons, second_contact: out.reasons } },
-      { type: "snow_request", to: ["snow_volunteer"] },
+      { type: "request", kind: "snow", to: ["snow_volunteer"] },
     ]);
   });
 });

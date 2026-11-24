@@ -23,10 +23,10 @@ export const DEMO_SCRIPT: DemoLine[] = [
     meaning: "The stove is on. But the snow has blocked my front door.",
   },
   {
-    when: { ja: "食料と薬を聞かれたら", en: "Asks about food and medicine" },
-    say: "食べ物も薬もあります。",
-    romaji: "Tabemono mo kusuri mo arimasu.",
-    meaning: "I have food and medicine.",
+    when: { ja: "食料・薬・灯油を聞かれたら", en: "Asks about food, medicine and kerosene" },
+    say: "食べ物も薬も灯油もあります。",
+    romaji: "Tabemono mo kusuri mo tōyu mo arimasu.",
+    meaning: "I have food, medicine and kerosene.",
   },
   {
     when: { ja: "除雪をお願いすると言われたら", en: "Says it will ask a snow volunteer" },
@@ -52,5 +52,11 @@ export const DEMO_SCRIPT: DemoLine[] = [
     say: "いいえ、大丈夫です。ありがとうございました。",
     romaji: "Iie, daijōbu desu. Arigatō gozaimashita.",
     meaning: "No, I'm fine. Thank you.",
+  },
+  {
+    when: { ja: "2回目の電話：だれがいつ来るか言われたら", en: "Second call: says who is coming, and when" },
+    say: "まあ、助かります。ありがとうございます。",
+    romaji: "Mā, tasukarimasu. Arigatō gozaimasu.",
+    meaning: "Oh, that's a great help. Thank you.",
   },
 ];

@@ -3,10 +3,11 @@ import { extract } from "./extract";
 import { missed } from "./ladder";
 import { curateMemory } from "./memory";
 import { unanswered } from "./measures";
+import { arranged, openRequests, REQUESTS } from "./requests";
 import { applyRules } from "./rules";
-import { claimTrendFiring, clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
+import { claimTrendFiring, clearLadder, getCall, getResident, listCalls, saveCall, updateCall, updateResident } from "./store";
 import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
-import type { Extraction, RulesOutput, Turn } from "./types";
+import type { Action, Extraction, RulesOutput, Turn } from "./types";
 import { getWeather } from "./weather";
 
 export { japanDate };
@@ -33,6 +34,8 @@ export async function processCall(
 ) {
   const resident = await getResident(residentId);
   if (!resident) throw new Error(`Unknown resident ${residentId}`);
+  // The same call reported twice must not send its messages again, or overwrite a visit someone has accepted since.
+  if (await getCall(callId)) return;
 
   let extraction: Extraction | undefined;
   let rules: RulesOutput;
@@ -45,7 +48,12 @@ export async function processCall(
       { at: new Date().toISOString(), observations: extraction.observations },
       ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
     ]);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), unanswered(today?.observations ?? {}, winterChecks));
+    rules = applyRules(
+      extraction.signals,
+      await getWeather(resident.amedas_station),
+      unanswered(today?.observations ?? {}, winterChecks),
+      extraction.observations?.has_supplies === "no",
+    );
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);
@@ -92,11 +100,33 @@ export async function processCall(
     }
   }
 
-  const actions = await runActions(resident, callId, alertRisk, rules.reasons, rules.actions).catch(async (error) => {
-    // A failed schedule is retriable. Once actions finish, keep the claims even if the call record fails to save.
-    await releaseClaims();
-    throw error;
-  });
+  // Help already asked for (lib/requests.ts). Kept apart like the trends: if it fails, the call is still judged and sent.
+  try {
+    const open = openRequests(resident, (await listCalls(residentId)).filter((c) => c.id !== callId));
+    for (const request of open) {
+      // The resident says the problem is gone: the request is closed.
+      if (extraction?.observations?.[REQUESTS[request.kind].doneField] !== "yes") continue;
+      await updateCall(request.callId, (c) => ({
+        actions: c.actions.map((a) => (a.type === "request" && a.kind === request.kind ? { ...a, done: true } : a)),
+      }));
+    }
+    rules = {
+      ...rules,
+      actions: rules.actions.flatMap((a): Action[] => {
+        if (a.type !== "request") return [a];
+        const current = open.find((r) => r.kind === a.kind);
+        // Someone is already coming for it: no second message for the same job.
+        if (arranged(current, now)) return [];
+        // Still open and nobody took it: this is a reminder of the same request.
+        const needs = a.kind === "supplies" ? extraction?.notes.needs : undefined;
+        return [{ ...a, request_id: current?.requestId ?? callId, ...(needs?.length ? { needs } : {}) }];
+      }),
+    };
+  } catch (e) {
+    console.error("Could not read open help requests", e);
+  }
+
+  // Saved before anything is sent: a request's buttons can be tapped the moment LINE delivers them.
   await saveCall({
     id: callId,
     resident_id: residentId,
@@ -104,10 +134,18 @@ export async function processCall(
     kind: "call",
     risk: rules.risk,
     reasons: rules.reasons,
-    actions,
+    actions: rules.actions.map((a) => ({ ...a, sent: false })),
     transcript,
     extraction,
   });
+  const results = await runActions(resident, callId, alertRisk, rules.reasons, rules.actions).catch(async (error) => {
+    await releaseClaims();
+    throw error;
+  });
+  // Only what was sent is added, so an answer that arrived meanwhile is kept.
+  await updateCall(callId, (c) => ({
+    actions: c.actions.map((a, i) => ({ ...a, sent: results[i].sent, deliveries: results[i].deliveries })),
+  }));
 
   if (extraction) {
     const { summary } = extraction;

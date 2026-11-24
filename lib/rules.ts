@@ -1,12 +1,16 @@
 import { MEASURES, type MeasureField } from "./measures.ts";
+import { REQUESTS } from "./requests.ts";
 import type { Action, Risk, Role, RulesOutput, Signals, Weather } from "./types";
+
+export const SHORT_OF_SUPPLIES = "食料・薬・灯油が足りない";
 
 /** Followed by the labels of the questions that went unanswered. */
 export const UNCONFIRMED = "通話が終わる前に確認できなかった：";
 
 // The escalation table from the PRD, as code. The LLM only supplies the signals.
 // `unanswered` is the required questions this call ended without an answer to (lib/measures.ts).
-export function applyRules(s: Signals, weather: Weather, unanswered: MeasureField[] = []): RulesOutput {
+// `shortOfSupplies` is the has_supplies answer being "no".
+export function applyRules(s: Signals, weather: Weather, unanswered: MeasureField[] = [], shortOfSupplies = false): RulesOutput {
   const red: string[] = [];
   const yellow: string[] = [];
   const alerts = new Map<Role, string[]>();
@@ -31,7 +35,11 @@ export function applyRules(s: Signals, weather: Weather, unanswered: MeasureFiel
   if (s.snowed_in) {
     if (s.heater_problem) redAlert("雪で外に出られない・暖房も使えない", everyone);
     else yellow.push("雪で玄関から出られない");
-    actions.push({ type: "snow_request", to: ["snow_volunteer"] });
+    actions.push({ type: "request", kind: "snow", to: [REQUESTS.snow.role] });
+  }
+  if (shortOfSupplies) {
+    yellow.push(SHORT_OF_SUPPLIES);
+    actions.push({ type: "request", kind: "supplies", to: [REQUESTS.supplies.role] });
   }
   if (s.not_eating) yellow.push("食事をとれていない");
   if (s.confused) yellow.push("混乱した様子");
