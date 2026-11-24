@@ -41,6 +41,10 @@ export type Resident = {
   name: string;
   phone: string;
   call_time: string; // "HH:MM", Japan time
+  /** false: no longer in the service (moved into care, died, left). Not called; missed-call steps stop. */
+  active?: boolean;
+  /** The Japan date the daily call was last scheduled, so it is placed once a day. See lib/daily.ts. */
+  scheduled_on?: string;
   introducer: string;
   second_contact: Contact;
   helper: Contact;

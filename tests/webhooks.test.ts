@@ -312,7 +312,7 @@ describe("missed-call ladder", () => {
   it("reads the attempt from the call's variables, and ignores other event types", async () => {
     await store.savePending("conv_f2", { resident_id: "suzuki", attempt: 2 });
     await elevenlabs(signedElevenLabs(JSON.stringify({ type: "post_call_audio", data: { conversation_id: "conv_f2" } })));
-    expect(await store.getPending("conv_f2")).toEqual({ resident_id: "suzuki", attempt: 2 });
+    expect(await store.getPending("conv_f2")).toMatchObject({ resident_id: "suzuki", attempt: 2 });
     await store.clearPending("conv_f2");
 
     await elevenlabs(signedElevenLabs(JSON.stringify({

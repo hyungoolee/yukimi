@@ -37,7 +37,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const unreached = criticalCount(residents);
   // The card line singles a resident out. Skip it when the banner already says the same of everyone:
   // all are critical, or LINE isn't set up.
-  const flagGaps = LINE_READY && unreached < residents.length;
+  const flagGaps = LINE_READY && unreached < residents.filter((r) => r.active !== false).length;
   const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
