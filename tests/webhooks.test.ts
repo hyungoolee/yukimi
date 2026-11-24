@@ -762,10 +762,7 @@ describe("follow-ups after a call", () => {
 
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     const { startBrowserCall, deleteFollowUp } = await import("@/app/actions");
-    const followUps = async (id: string) => {
-      const started = await startBrowserCall(id);
-      return "error" in started ? started.error : started.variables.follow_ups;
-    };
+    const followUps = async (id: string) => variablesOf(await startBrowserCall(id)).follow_ups;
     expect(await followUps("takahashi")).toBe("・腰の痛みはその後どうか");
     expect(await followUps("suzuki")).toBe("なし");
 
