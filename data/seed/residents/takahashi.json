@@ -4,12 +4,37 @@
   "phone": "",
   "call_time": "10:00",
   "introducer": "息子のまさるさん",
-  "second_contact": { "name": "まさる", "phone": "", "line_id": "" },
-  "helper": { "name": "民生委員 田中", "line_id": "" },
-  "snow_volunteer": { "name": "山本", "line_id": "" },
+  "second_contact": {
+    "name": "まさる",
+    "phone": "",
+    "line_id": ""
+  },
+  "helper": {
+    "name": "民生委員 田中",
+    "line_id": ""
+  },
+  "snow_volunteer": {
+    "name": "山本",
+    "line_id": "",
+    "location": {
+      "lat": 43.1975,
+      "lng": 141.779
+    }
+  },
   "amedas_station": "15356",
-  "facts": ["編み物が趣味", "毎朝ラジオ体操をする", "血圧の薬を飲んでいる"],
+  "facts": [
+    "編み物が趣味",
+    "毎朝ラジオ体操をする",
+    "血圧の薬を飲んでいる"
+  ],
   "recent_calls": [
-    { "date": "2026-11-25", "summary": "元気。孫に編んでいるマフラーがもうすぐ完成する。" }
-  ]
+    {
+      "date": "2026-11-25",
+      "summary": "元気。孫に編んでいるマフラーがもうすぐ完成する。"
+    }
+  ],
+  "location": {
+    "lat": 43.2105,
+    "lng": 141.76
+  }
 }
