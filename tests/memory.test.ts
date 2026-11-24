@@ -277,3 +277,32 @@ describe("resident files from before facts were objects", () => {
     expect(normalizeResident(once)).toEqual(once);
   });
 });
+
+describe("review fixes for the editor", () => {
+  const withFacts = (facts: Fact[]): Resident => ({ ...resident([]), facts });
+  const adding = (text: string): Curation => ({ resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, add: [text] } });
+
+  it("keeps the wording a helper corrected from coming back as a new fact", () => {
+    const edited = editFact(withFacts([fact("k", "木曜にデイサービス")]), "k", "金曜にデイサービス");
+    expect(factsLine(applyCuration(edited, adding("木曜にデイサービス"), TODAY))).toBe("金曜にデイサービス");
+  });
+
+  it("trims only model-retired facts, never ones the helper retired", () => {
+    let r = withFacts([fact("h", "夫と二人暮らし"), ...Array.from({ length: 3 }, (_, i) => fact(`m${i}`, `話${i}`))]);
+    r = { ...r, retired_facts: Array.from({ length: 50 }, (_, i) => ({ ...fact(`old${i}`, `昔${i}`), retired: TODAY, reason: "古い" })) };
+    r = retireFact(r, "h", TODAY);
+    r = applyCuration(r, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, retire: [{ id: "m0", reason: "古い" }] } }, TODAY);
+    const ids = (r.retired_facts ?? []).map((f) => f.id);
+    expect(ids).toHaveLength(50); // the two oldest model retirements made room
+    expect(ids).toContain("h");
+    expect(ids).not.toContain("old0");
+  });
+
+  it("restoring a fact the model has learned again keeps one locked copy", () => {
+    let r = withFacts([fact("a", "猫を飼っている")]);
+    r = applyCuration(r, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, retire: [{ id: "a", reason: "古い" }] } }, TODAY);
+    r = restoreFact(applyCuration(r, adding("猫を飼っている"), TODAY), "a");
+    expect(r.facts).toEqual([expect.objectContaining({ text: "猫を飼っている", locked: true })]);
+    expect(r.retired_facts).toEqual([]);
+  });
+});
