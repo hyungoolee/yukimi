@@ -40,7 +40,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <Refresh />
       <h1 className="text-2xl font-semibold">{t.title}</h1>
       {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
-      <p aria-label={t.overview} className="mt-3 flex flex-wrap gap-2 text-sm">
+      <p className="mt-3 flex flex-wrap gap-2 text-sm">
         {counts.map(({ label, n, className }) => (
           <span key={label} className={`rounded px-2 py-0.5 ${n > 0 ? `font-medium ${className}` : "bg-zinc-100 text-zinc-400"}`}>
             {label} {n}
@@ -61,9 +61,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       </nav>
 
       {view === "list" ? (
-        <ul className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200">
+        <ul className="mt-4 divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
           {rows.map((row) => (
-            <li key={row.resident.id} className={`p-4 ${riskEdge(row.call)} ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
+            <li key={row.resident.id} className={`p-4 ${riskEdge(row.call) || "border-l-4 border-l-transparent"} ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
               <ResidentCard {...row} lang={lang} t={t}>
                 <Link href={href("map", row.resident.id)} className={linkClass}>
                   {t.viewOnMap}

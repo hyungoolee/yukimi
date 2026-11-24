@@ -19,6 +19,6 @@ export const japanTime = (iso: string, lang: Lang) =>
 
 /** A left edge in the risk's colour while an alert is open, so urgent rows stand out at a glance. */
 export function riskEdge(call?: CallRecord) {
-  const open = call && !call.handled;
-  return `border-l-4 ${open && call.risk === "red" ? "border-l-red-600" : open && call.risk === "yellow" ? "border-l-amber-400" : "border-l-transparent"}`;
+  if (!call || call.handled || call.risk === "green") return "";
+  return `border-l-4 ${call.risk === "red" ? "border-l-red-600" : "border-l-amber-400"}`;
 }
