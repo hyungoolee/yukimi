@@ -7,7 +7,7 @@ import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { translateToEnglish } from "@/lib/translate";
-import { getCall, getResident, listResidents, resetDemoData, saveCall, saveResident } from "@/lib/store";
+import { getResident, listResidents, resetDemoData, saveResident, updateCall } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -28,8 +28,7 @@ export async function callNow(formData: FormData) {
 
 export async function markHandled(formData: FormData) {
   await requireAccess();
-  const call = await getCall(String(formData.get("call_id")));
-  if (call) await saveCall({ ...call, handled: true });
+  await updateCall(String(formData.get("call_id")), () => ({ handled: true }));
   revalidatePath("/");
 }
 

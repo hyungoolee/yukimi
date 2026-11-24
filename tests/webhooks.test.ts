@@ -71,7 +71,9 @@ const tap = (data: string, userId = "U_family") =>
   line(signedLine([{ type: "postback", source: { userId }, postback: { data } }]));
 const pushes = () => lineCalls.filter((c) => c.url.endsWith("/push")).map((c) => c.body);
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Each test starts with no scheduled work, so nothing left by an earlier test can fire in this one.
+  for (const task of await store.listTasks()) await store.deleteTask(task.id);
   lineCalls.length = 0;
   extract.mockClear();
   placeCall.mockClear();
@@ -223,6 +225,8 @@ describe("missed-call ladder", () => {
     await failure("conv_a1");
     expect(await store.getLadder("suzuki")).toMatchObject({ stage: "retry" });
 
+    await after(0);
+    expect(placeCall).not.toHaveBeenCalled(); // not before its time
     await after(21);
     expect(placeCall).toHaveBeenCalledWith(expect.objectContaining({ id: "suzuki" }), 2);
 
@@ -518,6 +522,45 @@ describe("red alerts must be acknowledged", () => {
     lineCalls.length = 0;
     await after(200);
     expect(about("高橋")).toEqual([]);
+  });
+
+  it("re-sends the in-call emergency alert and the missed-call alert too", async () => {
+    await emergency(new Request("http://test", {
+      method: "POST", headers: { "x-app-secret": "test-app-secret" },
+      body: JSON.stringify({ resident_id: "takahashi", kind: "emergency", detail: "胸が苦しい" }),
+    }));
+    expect(about("高橋")[0].messages[1].template.actions[0].data).toMatch(/^ack:emergency-/);
+    await store.savePending("conv_m2", { resident_id: "takahashi", attempt: 2 });
+    await elevenlabs(signedElevenLabs(JSON.stringify({ type: "call_initiation_failure", data: { conversation_id: "conv_m2" } })));
+    await tap("ng:takahashi");
+    lineCalls.length = 0;
+    await after(31);
+    const resent = about("高橋").map((p) => p.messages[0].text);
+    expect(resent.some((t) => t.includes("再通知1回目") && t.includes("緊急の訴え"))).toBe(true);
+    expect(resent.some((t) => t.includes("再通知1回目") && t.includes("電話に2回応答なし"))).toBe(true);
+  });
+
+  it("keeps re-sending even if the call record was never saved", async () => {
+    await store.schedule({
+      kind: "alert_recheck", resident_id: "takahashi", call_id: "conv_never_saved", round: 1,
+      to: ["helper"], reasons: ["転倒・痛みあり"], due: Date.now() - 1,
+    });
+    await after(0);
+    expect(about("高橋").map((p) => p.to)).toEqual(["U_helper"]);
+    expect((await store.listTasks()).some((t) => t.call_id === "conv_never_saved" && t.round === 2)).toBe(true);
+  });
+
+  it("keeps an acknowledgement that arrives while other changes are being saved", async () => {
+    const body = fixture.replace("conv_slip", "conv_race").replace('"resident_id": "sato"', '"resident_id": "takahashi"');
+    await elevenlabs(signedElevenLabs(body));
+    await Promise.all([
+      store.updateCall("conv_race", () => ({ alert_rounds: 1 })),
+      tap("ack:conv_race", "U_helper"),
+      store.updateCall("conv_race", () => ({ snow_accepted: true })),
+    ]);
+    expect(await store.getCall("conv_race")).toMatchObject({
+      acknowledged_by: "民生委員 田中", alert_rounds: 1, snow_accepted: true,
+    });
   });
 
   it("ignores a step left over from an earlier ladder", async () => {
