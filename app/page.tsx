@@ -142,7 +142,7 @@ function MapPanel({
           {DEMO_MODE && <p className="mt-1 text-zinc-600">{t.mapEmptyDemo}</p>}
         </div>
       )}
-      <MapView data={data} selected={selected} volunteerLabel={t.volunteer("")} />
+      <MapView data={data} selected={selected} volunteerLabel={t.volunteer("{name}")} />
       {data.unplaced > 0 && data.pins.length > 0 && (
         <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>
       )}

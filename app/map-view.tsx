@@ -15,6 +15,7 @@ export function MapView({
 }: {
   data: MapData;
   selected?: string;
+  /** The volunteer pin's hover text, with "{name}" where their name goes. */
   volunteerLabel: string;
 }) {
   const router = useRouter();
@@ -71,10 +72,12 @@ export function MapView({
         }).addTo(group);
       }
       for (const v of data.volunteers) {
-        L.marker([v.location.lat, v.location.lng], {
+        const pin = L.marker([v.location.lat, v.location.lng], {
           icon: icon(pinHtml(VOLUNTEER_COLOR, "diamond")),
-          title: volunteerLabel,
-        }).addTo(group);
+          title: volunteerLabel.replace("{name}", v.name),
+        });
+        if (v.id) pin.on("click", () => router.push(`/people/${encodeURIComponent(v.id!)}`));
+        pin.addTo(group);
       }
       for (const p of data.pins) {
         L.marker([p.location.lat, p.location.lng], {
