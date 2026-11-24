@@ -4,7 +4,6 @@ import { coverage, criticalCount, reach, ROLES, served, type Reach } from "@/lib
 import { LINE_READY } from "@/lib/env";
 import { listPeople, listResidents } from "@/lib/store";
 import { getStrings } from "../lang";
-import { Refresh } from "../refresh";
 import { SubmitButton } from "../submit-button";
 import { assignRoles, createPerson } from "./actions";
 import { TestMessage } from "./test-message";
@@ -25,7 +24,6 @@ export default async function PeoplePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <Refresh />
       <Link href="/" className="text-sm text-zinc-500 hover:underline">{t.back}</Link>
       <h1 className="mt-2 text-2xl font-semibold">{t.people}</h1>
       <p className="mt-1 text-sm text-zinc-600">{t.peopleIntro}</p>
