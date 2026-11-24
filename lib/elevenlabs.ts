@@ -45,7 +45,7 @@ export async function browserCall(resident: Resident) {
   );
   const body = await res.json();
   if (!res.ok || !body.token) throw new Error(`ElevenLabs token request failed (${res.status})`);
-  return { token: body.token as string, variables: await callVariables(resident, 1) };
+  return { token: body.token as string, variables: { ...(await callVariables(resident, 1)), channel: "browser" } };
 }
 
 /** Checks the ElevenLabs-Signature header ("t=<unix>,v0=<hex hmac>"). Throws if invalid. */

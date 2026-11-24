@@ -2,28 +2,35 @@
 
 import { Conversation } from "@elevenlabs/client";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startBrowserCall } from "../../actions";
 
+type Labels = { start: string; connecting: string; end: string; micError: string };
+
 /** Takes the check-in call in this tab, using its microphone and speaker as the resident's phone. */
-export function BrowserCall({ residentId }: { residentId: string }) {
+export function BrowserCall({ residentId, labels }: { residentId: string; labels: Labels }) {
   const router = useRouter();
   const call = useRef<Conversation | null>(null);
   const [state, setState] = useState<"idle" | "connecting" | "live">("idle");
   const [error, setError] = useState("");
 
+  // Leaving the page hangs up, so the microphone never stays live with no button to end it.
+  useEffect(() => () => void call.current?.endSession(), []);
+
   async function start() {
     setError("");
     setState("connecting");
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
-        throw new Error("マイクの使用を許可してください");
+      // Ask for the microphone up front for a clear error; the SDK opens its own stream.
+      const probe = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {
+        throw new Error(labels.micError);
       });
+      probe.getTracks().forEach((track) => track.stop());
+
       const { token, variables } = await startBrowserCall(residentId);
       call.current = await Conversation.startSession({
         conversationToken: token,
         dynamicVariables: variables,
-        onConnect: () => setState("live"),
         onDisconnect: () => {
           call.current = null;
           setState("idle");
@@ -31,6 +38,7 @@ export function BrowserCall({ residentId }: { residentId: string }) {
         },
         onError: (message) => setError(message),
       });
+      setState("live"); // only once there is a session the end button can close
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setState("idle");
@@ -41,7 +49,7 @@ export function BrowserCall({ residentId }: { residentId: string }) {
     <>
       {state === "live" ? (
         <button onClick={() => call.current?.endSession()} className="rounded bg-red-600 px-3 py-1 text-white">
-          通話を終了
+          {labels.end}
         </button>
       ) : (
         <button
@@ -49,7 +57,7 @@ export function BrowserCall({ residentId }: { residentId: string }) {
           disabled={state === "connecting"}
           className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50 disabled:opacity-40"
         >
-          {state === "connecting" ? "接続中…" : "ブラウザで通話"}
+          {state === "connecting" ? labels.connecting : labels.start}
         </button>
       )}
       {error && <span className="text-red-600">{error}</span>}
