@@ -4,7 +4,8 @@
 import { readFileSync } from "node:fs";
 import { extract } from "../lib/extract.ts";
 import { applyRules } from "../lib/rules.ts";
-import type { Resident, Weather } from "../lib/types.ts";
+import { dailyObservations, daysBefore, findTrends, japanDate, withTrends } from "../lib/trends.ts";
+import type { Observations, Resident, Weather } from "../lib/types.ts";
 
 type Persona = {
   id: string;
@@ -12,6 +13,7 @@ type Persona = {
   expected: "green" | "yellow" | "red" | "missed";
   expected_reasons: string[];
   snow_request: boolean;
+  observations?: Partial<Observations>; // the ones this script must get right
   holdout?: boolean;
   transcript: [string, string][];
 };
@@ -28,8 +30,12 @@ async function run(p: Persona) {
   const got = answered ? rules.risk : "missed";
   const snow = answered && rules.actions.some((a) => a.type === "snow_request");
   // Right level for the right reasons: every expected reason must be among the rules' reasons.
-  const ok = got === p.expected && snow === p.snow_request && p.expected_reasons.every((r) => rules.reasons.includes(r));
-  return { got, snow, ok, reasons: answered ? rules.reasons : [] };
+  const wrong = Object.entries(p.observations ?? {})
+    .filter(([field, want]) => extraction.observations?.[field as keyof Observations] !== want)
+    .map(([field, want]) => `${field} should be ${want}, got ${extraction.observations?.[field as keyof Observations]}`);
+  const ok =
+    got === p.expected && snow === p.snow_request && p.expected_reasons.every((r) => rules.reasons.includes(r)) && wrong.length === 0;
+  return { got, snow, ok, reasons: answered ? [...rules.reasons, ...wrong] : [] };
 }
 
 // One at a time, so a rate limit or outage on one persona doesn't lose the rest.
@@ -52,3 +58,19 @@ console.log(`green left alone:              ${count(of("green"))}`);
 console.log(`voicemail as missed:           ${count(of("missed"))}`);
 console.log(`false red alerts:              ${falseReds.filter((r) => r.got === "red").length}/${falseReds.length}`);
 console.log(`held-out personas:             ${count(results.filter((r) => r.holdout))}`);
+
+// Three days of calls for one resident: each day is extracted for real, then the trend rules run over them.
+const sequence: { resident: string; days: [string, string][][] } = json("./sequence.json");
+const today = japanDate();
+const seqResident: Resident = json(`../data/seed/residents/${sequence.resident}.json`);
+const seen: { at: string; observations?: Observations }[] = [];
+let last = { risk: "green", reasons: [] as string[] };
+for (const [i, transcript] of sequence.days.entries()) {
+  const date = daysBefore(today, sequence.days.length - 1 - i);
+  const extraction = await extract(seqResident, transcript.map(([role, message]) => ({ role, message })));
+  seen.unshift({ at: `${date}T09:00:00+09:00`, observations: extraction.observations });
+  last = withTrends(applyRules(extraction.signals, weather), findTrends(dailyObservations(seen), date));
+  console.log(`day ${i + 1}: ate=${extraction.observations?.ate} -> ${last.risk}  ${last.reasons.join("、")}`);
+}
+const fired = last.risk === "red" && last.reasons.includes("3日続けて食事をとれていない");
+console.log(`three-day trend fires:         ${fired ? "1/1" : "0/1"}`);

@@ -2,11 +2,12 @@ import { runActions } from "./actions";
 import { extract } from "./extract";
 import { missed } from "./ladder";
 import { applyRules } from "./rules";
-import { clearLadder, getResident, saveCall, updateResident } from "./store";
+import { claimTrendFiring, clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
+import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
 import type { Extraction, RulesOutput, Turn } from "./types";
 import { getWeather } from "./weather";
 
-export const japanDate = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+export { japanDate };
 
 /** A call we could not judge automatically: a person must read it, so the helper is told. */
 export const needsReview = (reason: string): RulesOutput => ({
@@ -37,14 +38,55 @@ export async function processCall(residentId: string, callId: string, transcript
   if (extraction && !extraction.answered_by_person) return attempt === null ? undefined : missed(residentId, attempt);
   await clearLadder(residentId);
 
+  const now = new Date();
+  const at = now.toISOString();
+  const today = japanDate(now);
+  let alertRisk = rules.risk;
+  const claims: (() => Promise<void>)[] = [];
+  const releaseClaims = async () => {
+    const releases = await Promise.allSettled(claims.map((release) => release()));
+    for (const result of releases) {
+      if (result.status === "rejected") console.error("Could not release trend firing", result.reason);
+    }
+    claims.length = 0;
+  };
+
+  // Patterns across days. Kept apart from the step above: if this fails, today's call is still judged on its own.
+  if (extraction?.observations) {
+    try {
+      const earlier = (await listCalls(residentId)).filter((c) => c.kind === "call" && c.id !== callId);
+      const days = dailyObservations([
+        { at, observations: extraction.observations },
+        ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
+      ].sort((a, b) => b.at.localeCompare(a.at)));
+      const trends = findTrends(days, today);
+      for (const trend of trends) {
+        if (!trend.fires) continue;
+        const release = await claimTrendFiring(residentId, trend.id, today);
+        if (release) claims.push(release);
+        else trend.fires = false;
+      }
+      rules = withTrends(rules, trends);
+      if (trends.some((trend) => trend.fires && trend.risk === "red")) alertRisk = "red";
+    } catch (e) {
+      await releaseClaims();
+      console.error("Trend rules failed; using today's call alone", e);
+    }
+  }
+
+  const actions = await runActions(resident, callId, alertRisk, rules.reasons, rules.actions).catch(async (error) => {
+    // A failed schedule is retriable. Once actions finish, keep the claims even if the call record fails to save.
+    await releaseClaims();
+    throw error;
+  });
   await saveCall({
     id: callId,
     resident_id: residentId,
-    at: new Date().toISOString(),
+    at,
     kind: "call",
     risk: rules.risk,
     reasons: rules.reasons,
-    actions: await runActions(resident, callId, rules.risk, rules.reasons, rules.actions),
+    actions,
     transcript,
     extraction,
   });
@@ -54,7 +96,7 @@ export async function processCall(residentId: string, callId: string, transcript
     // Applied to the freshest copy: the profile may have changed while the model was working.
     await updateResident(residentId, (fresh) => ({
       ...fresh,
-      recent_calls: [{ date: japanDate(), summary }, ...fresh.recent_calls].slice(0, 7),
+      recent_calls: [{ date: today, summary }, ...fresh.recent_calls].slice(0, 7),
       facts: [...new Set([...fresh.facts, ...new_facts])],
     }));
   }

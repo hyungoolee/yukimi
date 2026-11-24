@@ -1,3 +1,4 @@
+import { MEASURES } from "./measures";
 import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
@@ -55,6 +56,8 @@ const ja = {
   none: "なし",
   showTranscript: "会話を見る",
   history: "これまでのまとめ",
+  week: "この7日間",
+  weekKey: "○ 問題なし　! 気になる　– 話題なし",
   separator: "、",
   alertSeen: (name: string) => `通知を確認：${name}`,
   alertUnseen: (resends: number) => (resends ? `通知は未確認（再通知${resends}回）` : "通知は未確認"),
@@ -133,6 +136,8 @@ const en: typeof ja = {
   none: "None",
   showTranscript: "Show conversation",
   history: "Earlier summaries",
+  week: "Last 7 days",
+  weekKey: "○ fine   ! a concern   – not discussed",
   separator: "; ",
   alertSeen: (name) => `Alert acknowledged by ${name}`,
   alertUnseen: (resends) => (resends ? `Alert not acknowledged (sent again ${resends} times)` : "Alert not acknowledged yet"),
@@ -163,6 +168,8 @@ export type Strings = typeof ja;
 // The fixed reasons written by the rules, the ladder and the emergency tool. Anything after the
 // matched text (such as what the resident said) is kept as written.
 const REASONS_EN: [string, string][] = [
+  // Trend reasons come with their measures, and go first: one of them starts like a single-call reason.
+  ...MEASURES.flatMap((m): [string, string][] => ("trend" in m ? [[m.trend.reason, m.trend.reasonEn]] : [])),
   ["緊急の訴え（119番を案内）", "Emergency (told to call 119)"],
   ["死にたい気持ちの訴え", "Talked about wanting to die"],
   ["転倒・痛みあり", "Fell and is in pain"],
@@ -186,5 +193,5 @@ export function reasonText(lang: Lang, reason: string) {
   // "電話に応答なし。<name>さんが無事を確認": the name is the second contact's, in Japanese.
   if (reason.startsWith("電話に応答なし。")) return "No answer; the second contact confirmed they are fine";
   const match = REASONS_EN.find(([japanese]) => reason.startsWith(japanese));
-  return match ? match[1] + reason.slice(match[0].length) : reason;
+  return match ? match[1] + reason.slice(match[0].length).replace("（継続中）", " (ongoing)") : reason;
 }
