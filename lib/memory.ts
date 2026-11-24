@@ -170,6 +170,20 @@ export function editFact(resident: Resident, id: string, text: string): Resident
   return logged(unblock(block({ ...resident, facts }, fact.text), t), "helper", [{ op: "update", fact: id, text: t, before: fact.text }]);
 }
 
+/**
+ * The helper's whole list at once, one fact per line: a fact whose line is gone is retired, a new line
+ * is added. A reworded line counts as both, which blocks the old wording just as a correction does.
+ */
+export function replaceFacts(resident: Resident, text: string, today: string): Resident | "too_long" | "too_many" {
+  const lines = [...new Set(text.split("\n").map(clean).filter(Boolean))];
+  if (lines.some((line) => !fits(line))) return "too_long";
+  if (lines.length > MAX_FACTS) return "too_many";
+  let r = resident;
+  for (const fact of resident.facts) if (!lines.includes(fact.text)) r = retireFact(r, fact.id, today);
+  for (const line of lines) if (!r.facts.some((f) => f.text === line)) r = addFact(r, line, today);
+  return r;
+}
+
 export function retireFact(resident: Resident, id: string, today: string): Resident {
   const fact = resident.facts.find((f) => f.id === id);
   if (!fact) return resident;
