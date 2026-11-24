@@ -56,18 +56,18 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </Link>
       )}
       <div className="mt-4 flex items-center gap-4">
-      <nav className="inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
-        {(["list", "map"] as const).map((v) => (
-          <Link
-            key={v}
-            href={href(v)}
-            aria-current={view === v ? "page" : undefined}
-            className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
-          >
-            {t[v]}
-          </Link>
-        ))}
-      </nav>
+        <nav className="inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
+          {(["list", "map"] as const).map((v) => (
+            <Link
+              key={v}
+              href={href(v)}
+              aria-current={view === v ? "page" : undefined}
+              className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
+            >
+              {t[v]}
+            </Link>
+          ))}
+        </nav>
         <Link href="/people" className={linkClass}>
           {t.people}
         </Link>
