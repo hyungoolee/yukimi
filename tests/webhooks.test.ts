@@ -749,6 +749,7 @@ describe("follow-ups after a call", () => {
     curate.mockRejectedValueOnce(new Error("model unavailable"));
     const before = (await store.getResident("suzuki"))!.follow_ups;
     await call("conv_fu3", "suzuki");
+    expect(curate).toHaveBeenCalledTimes(1);
     expect(await store.getCall("conv_fu3")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
     expect(await store.getCall("conv_fu3-error")).toBeNull();
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper", "U_volunteer"]);
@@ -757,12 +758,22 @@ describe("follow-ups after a call", () => {
     expect(after.follow_ups).toEqual(before);
   });
 
-  it("does not curate a voicemail, a silent call or a console test call", async () => {
+  it("does not curate a voicemail, a silent call, or a call that could not be judged", async () => {
     extract.mockResolvedValueOnce({ ...extraction, answered_by_person: false });
     await call("conv_fu4", "takahashi");
-    await call("conv_fu5", "test");
-    expect(curate).not.toHaveBeenCalled();
     await store.clearLadder("takahashi");
+
+    await elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "post_call_transcription",
+      data: { conversation_id: "conv_fu5", conversation_initiation_client_data: { dynamic_variables: { resident_id: "takahashi" } },
+        transcript: [{ role: "agent", message: "もしもし、高橋さんですか。" }] },
+    })));
+    await store.clearLadder("takahashi");
+
+    extract.mockRejectedValueOnce(new Error("model unavailable"));
+    await call("conv_fu6", "takahashi");
+    expect(await store.getCall("conv_fu6")).toMatchObject({ risk: "yellow" });
+    expect(curate).not.toHaveBeenCalled();
   });
 
   it("clears follow-ups on a demo reset", async () => {
