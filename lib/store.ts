@@ -81,10 +81,10 @@ export const clearLadder = (residentId: string) => rm(file("ladder", residentId)
  */
 export async function resetDemoData() {
   await ensureSeeded();
-  await Promise.all(["calls", "ladder", "pending"].map((dir) => rm(path.join(DATA_DIR, dir), { recursive: true, force: true })));
+  await Promise.all(["calls", "ladder", "pending"].map((dir) => rm(path.join(/* turbopackIgnore: true */ DATA_DIR, dir), { recursive: true, force: true })));
   for (const current of await readAll<Resident>("residents")) {
     const seed = JSON.parse(
-      await readFile(path.join(SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
+      await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
     ) as Resident | null;
     if (seed) await saveResident({ ...current, facts: seed.facts, recent_calls: seed.recent_calls });
   }
