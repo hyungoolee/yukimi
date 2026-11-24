@@ -16,3 +16,9 @@ export const japanTime = (iso: string, lang: Lang) =>
   new Date(iso).toLocaleString(lang === "ja" ? "ja-JP" : "en-GB", {
     timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
+
+/** A left edge in the risk's colour while an alert is open, so urgent rows stand out at a glance. */
+export function riskEdge(call?: CallRecord) {
+  const open = call && !call.handled;
+  return `border-l-4 ${open && call.risk === "red" ? "border-l-red-600" : open && call.risk === "yellow" ? "border-l-amber-400" : "border-l-transparent"}`;
+}

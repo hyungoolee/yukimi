@@ -15,10 +15,16 @@ const ja = {
   snowAccepted: (r: Resident) => `${r.snow_volunteer.name}さんが引き受けました`,
   snowWaiting: "返事待ち",
   callNow: "今すぐ電話",
+  calling: "発信中…",
   addPhone: "電話番号を登録",
   markHandled: "対応済みにする",
   phone: "電話番号",
   save: "保存",
+  saving: "保存中…",
+  saved: "保存しました",
+  phoneInvalid: "電話番号として読めません（例：090-1234-5678）",
+  settings: "設定",
+  overview: "いまの状況",
   phoneHint: "090… または +81…（海外の番号は + から）",
   browserCall: "ブラウザで通話",
   connecting: "接続中…",
@@ -61,7 +67,7 @@ const ja = {
     `地図上の位置（自宅：${home ? "登録済み" : "未登録"}、除雪ボランティア：${volunteer ? "登録済み" : "未登録"}）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
-  picker: { save: "この位置で保存", placed: "登録済み。地図をクリックで変更", unplaced: "地図をクリックして位置を決める" },
+  picker: { save: "この位置で保存", saving: "保存中…", placed: "登録済み。地図をクリックで変更", unplaced: "地図をクリックして位置を決める" },
 };
 
 const en: typeof ja = {
@@ -78,10 +84,16 @@ const en: typeof ja = {
   snowAccepted: () => "accepted by the volunteer",
   snowWaiting: "waiting for a reply",
   callNow: "Call now",
+  calling: "Calling…",
   addPhone: "Add a phone number",
   markHandled: "Mark as handled",
   phone: "Phone",
   save: "Save",
+  saving: "Saving…",
+  saved: "Saved",
+  phoneInvalid: "That doesn't look like a phone number (e.g. 090-1234-5678)",
+  settings: "Settings",
+  overview: "Right now",
   phoneHint: "090… or +81… (other countries: start with +)",
   browserCall: "Call in browser",
   connecting: "Connecting…",
@@ -124,7 +136,7 @@ const en: typeof ja = {
     `Map locations (home: ${home ? "set" : "not set"}; snow volunteer: ${volunteer ? "set" : "not set"})`,
   home: "Home",
   volunteer: () => "Snow volunteer",
-  picker: { save: "Save this spot", placed: "Set. Click the map to change it", unplaced: "Click the map to choose a spot" },
+  picker: { save: "Save this spot", saving: "Saving…", placed: "Set. Click the map to change it", unplaced: "Click the map to choose a spot" },
 };
 
 export const strings = { ja, en };
