@@ -47,6 +47,8 @@ export type Extraction = {
   notes: { mood: string; health: string; winter: string; needs: string[] };
   signals: Signals;
   new_facts: string[];
+  /** The same summary and notes in English, for the dashboard's English view. Absent on older records. */
+  english?: { summary: string; mood: string; health: string; winter: string; needs: string[] };
 };
 
 export type Risk = "green" | "yellow" | "red";

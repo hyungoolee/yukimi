@@ -13,6 +13,7 @@ const extraction: Extraction = {
     heater_problem: false, not_eating: false, confused: false, money_request: false, low_mood: false,
   },
   new_facts: ["健太の模試はよくできた"],
+  english: { summary: "Snowed in; slipped on ice yesterday and her hip hurts.", mood: "Calm", health: "Hip pain", winter: "Door blocked by snow", needs: ["Snow clearing"] },
 };
 const extract = vi.fn(async () => extraction);
 vi.mock("@/lib/extract", () => ({ extract }));
@@ -169,7 +170,7 @@ describe("in-call emergency", () => {
 
   it("alerts at once, returns the fixed wording, and the after-call alert still goes out", async () => {
     const res = await emergency(request({ resident_id: "takahashi", kind: "emergency", detail: "胸が苦しい" }));
-    expect((await res.json()).say_exactly).toContain("119番");
+    expect((await res.json()).say_exactly).toContain("いちいちきゅう番");
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
     expect((await store.listCalls("takahashi"))[0]).toMatchObject({ kind: "emergency", risk: "red" });
 
@@ -195,7 +196,7 @@ describe("in-call emergency with a bad resident ID", () => {
 
   it("alerts nobody and records nothing for a console test call", async () => {
     const res = await emergency(request({ resident_id: "test", kind: "emergency", detail: "テスト" }));
-    expect((await res.json()).say_exactly).toContain("119番");
+    expect((await res.json()).say_exactly).toContain("いちいちきゅう番");
     expect(pushes()).toEqual([]);
     await elevenlabs(signedElevenLabs(fixture.replace("conv_slip", "conv_console").replace('"resident_id": "sato"', '"resident_id": "test"')));
     expect(await store.getCall("conv_console")).toBeNull();
@@ -464,5 +465,25 @@ describe("dashboard language", () => {
       ...applyRules({ ...all, heater_problem: false }, weather).reasons,
     ];
     for (const reason of new Set(reasons)) expect(reasonText("en", reason), reason).not.toBe(reason);
+  });
+});
+
+describe("demo reset", () => {
+  it("clears calls and ladders and restores memory, keeping phone numbers and LINE registrations", async () => {
+    const { resetDemo } = await import("@/app/actions");
+    await store.saveResident({ ...(await store.getResident("sato"))!, phone: "+819011112222" });
+    await store.saveLadder("sato", { stage: "retry", at: Date.now() });
+    expect((await store.listCalls()).length).toBeGreaterThan(0);
+    expect((await store.getResident("sato"))!.facts).toContain("健太の模試はよくできた");
+
+    await resetDemo();
+
+    expect(await store.listCalls()).toEqual([]);
+    expect(await store.getLadder("sato")).toBeNull();
+    const sato = (await store.getResident("sato"))!;
+    expect(sato.facts).not.toContain("健太の模試はよくできた");
+    expect(sato.recent_calls[0].date).toBe("2026-11-25");
+    expect(sato.phone).toBe("+819011112222");
+    expect(sato.helper.line_id).toBe("U_helper");
   });
 });
