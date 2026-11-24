@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Action } from "@/lib/types";
 
-const { runActions, sendRedAlert } = await import("@/lib/actions");
+const { checkRequest, runActions, sendRedAlert } = await import("@/lib/actions");
+const { openRequests } = await import("@/lib/requests");
 const store = await import("@/lib/store");
 
 const pushed: { to: string; text: string }[] = [];
@@ -59,5 +61,65 @@ describe("what was sent, per recipient", () => {
     expect(snow.deliveries).toMatchObject([{ role: "snow_volunteer", sent: false, registered: true }]);
     expect(snow.deliveries[0].button!.split(" / ")).toHaveLength(3);
     expect(snow).toMatchObject({ type: "request", kind: "snow" });
+  });
+});
+
+describe("a help request nobody takes", () => {
+  const snow: Extract<Action, { type: "request" }> = { type: "request", kind: "snow", to: ["snow_volunteer"] };
+  const save = (id: string, actions: object[]) =>
+    store.saveCall({ id, resident_id: "sato", at: new Date().toISOString(), kind: "call", risk: "yellow", reasons: [], actions } as never);
+  const checks = async () => (await store.listTasks()).filter((t) => t.kind === "request_check");
+  const open = async () => openRequests((await store.getResident("sato"))!, await store.listCalls("sato"))[0];
+
+  beforeEach(async () => {
+    for (const task of await store.listTasks()) await store.deleteTask(task.id);
+    for (const call of await store.listCalls()) await store.updateCall(call.id, () => ({ handled: true }));
+    // The helper doubles as the coordinator here.
+    await store.updatePerson("p_tanaka", (p) => ({ ...p, coordinator: true }));
+  });
+
+  it("books one check when first sent, and none for a reminder on a later call", async () => {
+    const sato = (await store.getResident("sato"))!;
+    await runActions(sato, "ask_1", "yellow", [], [snow]);
+    await runActions(sato, "ask_2", "yellow", [], [{ ...snow, request_id: "ask_1" }]);
+    expect(await checks()).toMatchObject([{ call_id: "ask_1", request_kind: "snow", resident_id: "sato" }]);
+    expect(pushed.map((p) => p.to)).toEqual(["U_volunteer", "U_volunteer"]);
+  });
+
+  it("tells the coordinator once the wait is over, and keeps that across a reminder", async () => {
+    await save("wait_1", [{ ...snow, sent: true }]);
+    await checkRequest({ id: "t", due: 0, kind: "request_check", resident_id: "sato", call_id: "wait_1", request_kind: "snow" });
+    expect(pushed).toMatchObject([{ to: "U_helper" }]);
+    expect(pushed[0].text).toContain("【引き受け手なし】");
+    expect(pushed[0].text).toContain("https://example.test/residents/sato");
+    expect(await open()).toMatchObject({ requestId: "wait_1", escalated: true });
+
+    // The next day's call writes a fresh record of the same request.
+    await save("wait_2", [{ ...snow, request_id: "wait_1", sent: true }]);
+    expect(await open()).toMatchObject({ requestId: "wait_1", callId: "wait_2", escalated: true });
+  });
+
+  it("stays quiet when someone has taken it", async () => {
+    await save("taken_1", [{ ...snow, sent: true, accepted_by: "山本" }]);
+    await checkRequest({ id: "t", due: 0, kind: "request_check", resident_id: "sato", call_id: "taken_1", request_kind: "snow" });
+    expect(pushed).toEqual([]);
+  });
+
+  it("tells the coordinator at once when the request reached nobody", async () => {
+    await store.updatePerson("p_yamamoto", (p) => ({ ...p, line_id: undefined }));
+    await save("nobody_1", [{ ...snow, sent: false }]);
+    await runActions((await store.getResident("sato"))!, "nobody_1", "yellow", [], [snow]);
+    expect(pushed).toMatchObject([{ to: "U_helper" }]);
+    expect(pushed[0].text).toContain("【依頼先なし】");
+    expect(await checks()).toEqual([]);
+    expect(await open()).toMatchObject({ status: "not_sent", escalated: true });
+  });
+
+  it("does not claim the coordinator was told when the message reached none", async () => {
+    await store.updatePerson("p_tanaka", (p) => ({ ...p, coordinator: undefined }));
+    await save("silent_1", [{ ...snow, sent: true }]);
+    await checkRequest({ id: "t", due: 0, kind: "request_check", resident_id: "sato", call_id: "silent_1", request_kind: "snow" });
+    expect(pushed).toEqual([]);
+    expect(await open()).toMatchObject({ escalated: false });
   });
 });

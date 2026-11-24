@@ -39,8 +39,8 @@ describe("open requests", () => {
     const older = call([request("snow", { sent: false })]);
     const newer = call([request("snow"), request("supplies", { accepted_by: "ゆき", slot: slotChoices(morning)[1] })]);
     expect(openRequests(sato, [newer, older])).toEqual([
-      { kind: "snow", requestId: newer.id, callId: newer.id, status: "sent", who: "山本", slot: undefined },
-      { kind: "supplies", requestId: newer.id, callId: newer.id, status: "accepted", who: "ゆき", slot: { date: "2026-11-26", part: "pm" } },
+      { kind: "snow", requestId: newer.id, callId: newer.id, since: newer.at, escalated: false, status: "sent", who: "山本", slot: undefined },
+      { kind: "supplies", requestId: newer.id, callId: newer.id, since: newer.at, escalated: false, status: "accepted", who: "ゆき", slot: { date: "2026-11-26", part: "pm" } },
     ]);
     expect(openRequests(sato, [older])[0].status).toBe("not_sent");
   });

@@ -31,6 +31,9 @@ export default async function PeoplePage() {
       {!LINE_READY && (
         <p className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800">{t.lineNotReady}</p>
       )}
+      {!everyone.some((person) => person.coordinator && person.line_id) && (
+        <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-800">{t.noCoordinator}</p>
+      )}
       <p className={`mt-3 rounded-lg border p-3 text-sm font-medium ${
         critical > 0 ? "border-red-300 bg-red-50 text-red-800" : "border-emerald-300 bg-emerald-50 text-emerald-800"
       }`}>
@@ -98,7 +101,7 @@ export default async function PeoplePage() {
               <span className={`inline-block size-2 rounded-full ${DOT[state]}`} />
               <Link href={`/people/${person.id}`} className="font-medium hover:underline">{person.name}</Link>
               <span className="text-zinc-500">
-                {[...roles.map((role) => t.role[role]), t.serves(theirs.length), t.reach[state]].join("・")}
+                {[...(person.coordinator ? [t.coordinatorShort] : []), ...roles.map((role) => t.role[role]), t.serves(theirs.length), t.reach[state]].join("・")}
               </span>
               {state === "registered" && LINE_READY && (
                 <span className="ml-auto">
