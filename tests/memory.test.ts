@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { applyCuration, followUpsLine, openFollowUps, removeFollowUp } from "@/lib/memory";
-import type { FollowUp, Resident } from "@/lib/types";
+import {
+  addFact, applyCuration, careNotesLine, deleteFact, editFact, factsLine, followUpsLine, MAX_FACTS, openFollowUps,
+  removeFollowUp, restoreFact, retireFact, setCareNotes,
+} from "@/lib/memory";
+import type { Curation } from "@/lib/curate";
+import { normalizeResident } from "@/lib/resident";
+import type { Fact, FollowUp, Resident } from "@/lib/types";
 
 const TODAY = "2026-11-26";
+const noFacts: Curation["fact_changes"] = { add: [], update: [], retire: [] };
 const followUp = (id: string, text: string, expires: string): FollowUp => ({ id, text, created: "2026-11-24", expires });
 const resident = (follow_ups?: FollowUp[]): Resident => ({
   id: "sato", name: "佐藤", phone: "", call_time: "09:00", introducer: "娘のゆきさん", amedas_station: "15356",
   second_contact: { name: "ゆき" }, helper: { name: "田中" }, snow_volunteer: { name: "山本" },
   facts: [], recent_calls: [], follow_ups,
 });
+const fact = (id: string, text: string, extra: Partial<Fact> = {}): Fact => ({ id, text, since: "2026-11-01", source: "call", ...extra });
 const texts = (r: Resident) => (r.follow_ups ?? []).map((f) => f.text);
 
 describe("follow-ups", () => {
@@ -24,19 +31,18 @@ describe("follow-ups", () => {
   });
 
   it("adds new ones with an end date worked out in code", () => {
-    const out = applyCuration(resident([]), { resolved: [], new_follow_ups: [{ text: " 腰の痛みはその後どうか ", days: 3 }] }, TODAY);
+    const out = applyCuration(resident([]), { fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: " 腰の痛みはその後どうか ", days: 3 }] }, TODAY);
     expect(out.follow_ups).toEqual([{ id: expect.any(String), text: "腰の痛みはその後どうか", created: TODAY, expires: "2026-11-29" }]);
   });
 
   it("drops settled and expired ones, and ignores ids it does not know", () => {
     const r = resident([followUp("a", "腰", "2026-11-30"), followUp("b", "受験", "2026-11-30"), followUp("c", "古い", "2026-11-20")]);
-    const out = applyCuration(r, { resolved: ["a", "zzz"], new_follow_ups: [] }, TODAY);
+    const out = applyCuration(r, { fact_changes: noFacts, resolved: ["a", "zzz"], new_follow_ups: [] }, TODAY);
     expect(texts(out)).toEqual(["受験"]);
   });
 
   it("keeps the day count between 1 and 14 whatever the model says", () => {
-    const out = applyCuration(resident([]), {
-      resolved: [],
+    const out = applyCuration(resident([]), { fact_changes: noFacts, resolved: [],
       new_follow_ups: [{ text: "長すぎ", days: 400 }, { text: "ゼロ", days: 0 }, { text: "変な値", days: Number.NaN }],
     }, TODAY);
     expect(out.follow_ups!.map((f) => f.expires)).toEqual(["2026-12-10", "2026-11-27", "2026-11-27"]);
@@ -44,8 +50,7 @@ describe("follow-ups", () => {
 
   it("takes at most three per call, and skips blanks, repeats and overlong text", () => {
     const r = resident([followUp("a", "腰", "2026-11-30")]);
-    const out = applyCuration(r, {
-      resolved: [],
+    const out = applyCuration(r, { fact_changes: noFacts, resolved: [],
       new_follow_ups: [
         { text: "腰", days: 2 }, { text: "  ", days: 2 }, { text: "あ".repeat(81), days: 2 },
         { text: "一", days: 2 }, { text: "一", days: 2 }, { text: "二", days: 2 }, { text: "三", days: 2 }, { text: "四", days: 2 },
@@ -56,19 +61,151 @@ describe("follow-ups", () => {
 
   it("never holds more than five, dropping the oldest", () => {
     const five = ["1", "2", "3", "4", "5"].map((n) => followUp(n, `件${n}`, "2026-11-30"));
-    const out = applyCuration(resident(five), { resolved: [], new_follow_ups: [{ text: "新しい件", days: 2 }] }, TODAY);
+    const out = applyCuration(resident(five), { fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "新しい件", days: 2 }] }, TODAY);
     expect(texts(out)).toEqual(["件2", "件3", "件4", "件5", "新しい件"]);
   });
 
   it("leaves every other field of the resident alone", () => {
-    const r = { ...resident([]), facts: ["庭でバラを育てている"], phone: "+819012345678" };
-    const out = applyCuration(r, { resolved: [], new_follow_ups: [{ text: "腰", days: 2 }] }, TODAY);
-    expect({ ...out, follow_ups: [] }).toEqual(r);
+    const r = { ...resident([]), facts: [fact("rose", "庭でバラを育てている")], phone: "+819012345678" };
+    const out = applyCuration(r, { fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "腰", days: 2 }] }, TODAY);
+    expect({ ...out, follow_ups: [] }).toEqual({ ...r, retired_facts: [] });
   });
 
   it("lets the helper remove one", () => {
     const r = resident([followUp("a", "腰", "2026-11-30"), followUp("b", "受験", "2026-11-30")]);
     expect(texts(removeFollowUp(r, "a"))).toEqual(["受験"]);
     expect(texts(removeFollowUp(resident(undefined), "a"))).toEqual([]);
+  });
+});
+
+describe("facts proposed by the model", () => {
+  const withFacts = (facts: Fact[]) => ({ ...resident([]), facts });
+  const propose = (r: Resident, fact_changes: Partial<Curation["fact_changes"]>) =>
+    applyCuration(r, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, ...fact_changes } }, TODAY, "call:conv_1");
+  const factTexts = (r: Resident) => r.facts.map((f) => f.text);
+  const ops = (r: Resident) => (r.memory_log ?? []).map((e) => e.op);
+
+  it("adds a new fact, unlocked, and logs which call it came from", () => {
+    const out = propose(withFacts([]), { add: [" 毎週木曜にデイサービスに通う "] });
+    expect(out.facts).toEqual([{ id: expect.any(String), text: "毎週木曜にデイサービスに通う", since: TODAY, source: "call" }]);
+    expect(out.memory_log).toEqual([{ at: expect.any(String), by: "call:conv_1", op: "add", text: "毎週木曜にデイサービスに通う" }]);
+  });
+
+  it("updates and retires unlocked facts, keeping the retired one with its reason", () => {
+    const r = withFacts([fact("k", "孫の健太が大学受験中"), fact("d", "犬のポチを飼っている")]);
+    const out = propose(r, {
+      update: [{ id: "k", text: "孫の健太は北大に合格した" }],
+      retire: [{ id: "d", reason: "ポチは亡くなった" }],
+    });
+    expect(factTexts(out)).toEqual(["孫の健太は北大に合格した"]);
+    expect(out.retired_facts).toEqual([expect.objectContaining({ id: "d", text: "犬のポチを飼っている", retired: TODAY, reason: "ポチは亡くなった" })]);
+    expect(out.memory_log).toEqual([
+      expect.objectContaining({ op: "update", text: "孫の健太は北大に合格した", before: "孫の健太が大学受験中" }),
+      expect.objectContaining({ op: "retire", text: "犬のポチを飼っている" }),
+    ]);
+  });
+
+  it("can't touch a locked fact or one it made up an id for", () => {
+    const r = withFacts([fact("h", "夫は去年亡くなった", { source: "helper", locked: true }), fact("i", "ひざが少し悪い", { source: "intake", locked: true })]);
+    const out = propose(r, {
+      update: [{ id: "h", text: "夫は元気" }, { id: "nope", text: "作り話" }],
+      retire: [{ id: "i", reason: "治った" }, { id: "nope", reason: "x" }],
+    });
+    expect(out).toEqual({ ...r, retired_facts: [] });
+  });
+
+  it("changes at most three of each kind per call", () => {
+    const many = ["a", "b", "c", "d", "e"].map((id) => fact(id, `事実${id}`));
+    const out = propose(withFacts(many), {
+      retire: many.map((f) => ({ id: f.id, reason: "忘れてと言われた" })),
+      add: ["一", "二", "三", "四"],
+    });
+    expect(factTexts(out)).toEqual(["事実d", "事実e", "一", "二", "三"]);
+    expect(out.retired_facts).toHaveLength(3);
+  });
+
+  it("skips blanks, overlong text and anything already known", () => {
+    const out = propose(withFacts([fact("a", "庭でバラを育てている")]), {
+      add: ["庭でバラを育てている", "  ", "あ".repeat(81)],
+      update: [{ id: "a", text: "" }],
+    });
+    expect(factTexts(out)).toEqual(["庭でバラを育てている"]);
+    expect(out.memory_log).toBeUndefined();
+  });
+
+  it("refuses new facts once the list is full, and says so in the log", () => {
+    const full = Array.from({ length: MAX_FACTS }, (_, i) => fact(`f${i}`, `事実${i}`));
+    const out = propose(withFacts(full), { add: ["三十一番目"] });
+    expect(out.facts).toHaveLength(MAX_FACTS);
+    expect(out.memory_log).toEqual([expect.objectContaining({ op: "refuse", text: "三十一番目" })]);
+  });
+
+  it("keeps only the last hundred log entries", () => {
+    let r: Resident = withFacts([]);
+    for (let i = 0; i < 40; i++) r = propose(r, { add: [`a${i}`, `b${i}`, `c${i}`] });
+    expect(r.memory_log).toHaveLength(100);
+    expect(ops(r).every((op) => op === "add" || op === "refuse")).toBe(true);
+  });
+});
+
+describe("facts edited by the helper", () => {
+  const base = { ...resident([]), facts: [fact("k", "孫の健太が大学受験中")] };
+
+  it("locks whatever the helper adds or edits", () => {
+    const added = addFact(base, "夫は去年亡くなった", TODAY);
+    expect(added.facts[1]).toEqual({ id: expect.any(String), text: "夫は去年亡くなった", since: TODAY, source: "helper", locked: true });
+    const edited = editFact(added, "k", "孫の健太は北大に合格した");
+    expect(edited.facts[0]).toMatchObject({ text: "孫の健太は北大に合格した", source: "call", locked: true });
+    expect((edited.memory_log ?? []).map((e) => [e.by, e.op])).toEqual([["helper", "add"], ["helper", "update"]]);
+  });
+
+  it("ignores empty, repeated or unchanged text", () => {
+    expect(addFact(base, "  ", TODAY)).toBe(base);
+    expect(addFact(base, "孫の健太が大学受験中", TODAY)).toBe(base);
+    expect(editFact(base, "k", "孫の健太が大学受験中")).toBe(base);
+    expect(editFact(base, "nope", "x")).toBe(base);
+  });
+
+  it("retires, restores (locked) and deletes for good, scrubbing the text from the log", () => {
+    const retired = retireFact(base, "k", TODAY);
+    expect(retired.facts).toEqual([]);
+    expect(retired.retired_facts).toEqual([expect.objectContaining({ id: "k", retired: TODAY })]);
+
+    const restored = restoreFact(retired, "k");
+    expect(restored.facts).toEqual([{ id: "k", text: "孫の健太が大学受験中", since: "2026-11-01", source: "call", locked: true }]);
+    expect(restored.retired_facts).toEqual([]);
+
+    const gone = deleteFact(retired, "k");
+    expect(gone.retired_facts).toEqual([]);
+    expect(JSON.stringify(gone)).not.toContain("健太");
+    expect((gone.memory_log ?? []).map((e) => e.op)).toEqual(["retire", "delete"]);
+    expect(deleteFact(base, "k")).toBe(base); // only a retired fact can be deleted for good
+  });
+
+  it("saves care notes, trimmed and capped, and gives the agent a value either way", () => {
+    expect(careNotesLine(base)).toBe("なし");
+    const noted = setCareNotes(base, "  夫の話は\nこちらからしない  ");
+    expect(noted.care_notes).toBe("夫の話は こちらからしない");
+    expect(careNotesLine(noted)).toBe("夫の話は こちらからしない");
+    expect(setCareNotes(base, "あ".repeat(500)).care_notes).toHaveLength(300);
+    expect(setCareNotes(noted, "夫の話は こちらからしない")).toBe(noted);
+  });
+
+  it("gives the agent the facts as one line, or なし", () => {
+    expect(factsLine(base)).toBe("孫の健太が大学受験中");
+    expect(factsLine({ ...base, facts: [] })).toBe("なし");
+  });
+});
+
+describe("resident files from before facts were objects", () => {
+  it("turns string facts into locked intake facts with the same id on every read", () => {
+    const old = { ...resident(undefined), facts: ["庭でバラを育てている", "ひざが少し悪い"] } as unknown as Resident;
+    const once = normalizeResident(old);
+    expect(once.facts).toEqual([
+      { id: expect.stringMatching(/^[0-9a-f]{8}$/), text: "庭でバラを育てている", since: "", source: "intake", locked: true },
+      { id: expect.stringMatching(/^[0-9a-f]{8}$/), text: "ひざが少し悪い", since: "", source: "intake", locked: true },
+    ]);
+    expect(normalizeResident(old)).toEqual(once);
+    expect(normalizeResident(once)).toEqual(once);
   });
 });

@@ -1,5 +1,6 @@
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { normalizeResident } from "./resident";
 import type { CallRecord, Resident, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
@@ -47,7 +48,10 @@ async function readAll<T>(dir: string): Promise<T[]> {
   return items.filter((x) => x !== null);
 }
 
-export const getResident = (id: string) => read<Resident>("residents", id);
+export const getResident = async (id: string) => {
+  const raw = await read<Resident>("residents", id);
+  return raw && normalizeResident(raw);
+};
 export const saveResident = (r: Resident) => write("residents", r.id, r);
 
 // One writer per resident at a time. Kept on globalThis so route handlers and server actions,
@@ -75,7 +79,7 @@ export function updateResident(id: string, change: (resident: Resident) => Resid
   return run;
 }
 export async function listResidents() {
-  return (await readAll<Resident>("residents")).sort((a, b) => a.call_time.localeCompare(b.call_time));
+  return (await readAll<Resident>("residents")).map(normalizeResident).sort((a, b) => a.call_time.localeCompare(b.call_time));
 }
 
 export const getCall = (id: string) => read<CallRecord>("calls", id);
@@ -111,7 +115,12 @@ export async function resetDemoData() {
     const seed = JSON.parse(
       await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
     ) as Resident | null;
-    if (seed) await updateResident(current.id, (r) => ({ ...r, facts: seed.facts, recent_calls: seed.recent_calls, follow_ups: [] }));
+    if (seed) {
+      const { facts, recent_calls } = normalizeResident(seed);
+      await updateResident(current.id, (r) => ({
+        ...r, facts, recent_calls, follow_ups: [], retired_facts: [], care_notes: "", memory_log: [],
+      }));
+    }
   }
 }
 

@@ -71,16 +71,15 @@ export async function processCall(residentId: string, callId: string, transcript
   });
 
   if (extraction) {
-    const { summary, new_facts } = extraction;
+    const { summary } = extraction;
     // Applied to the freshest copy: the profile may have changed while the model was working.
     await updateResident(residentId, (fresh) => ({
       ...fresh,
       recent_calls: [{ date: japanDate(), summary }, ...fresh.recent_calls].slice(0, 7),
-      facts: [...new Set([...fresh.facts, ...new_facts])],
     }));
   }
 
   // Last, and on its own: the call is already judged, alerted and saved. If curation fails,
   // memory is simply left as it was, and nobody is alerted about it.
-  await curateMemory(residentId, transcript).catch((e) => console.error("Memory curation failed", e));
+  await curateMemory(residentId, callId, transcript).catch((e) => console.error("Memory curation failed", e));
 }

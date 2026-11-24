@@ -6,7 +6,9 @@ import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
-import { removeFollowUp } from "@/lib/memory";
+import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
+import { japanDate } from "@/lib/trends";
+import type { Resident } from "@/lib/types";
 import { getCall, getResident, listResidents, resetDemoData, saveCall, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
@@ -111,3 +113,20 @@ export async function deleteFollowUp(formData: FormData) {
   await updateResident(residentId, (r) => removeFollowUp(r, String(formData.get("follow_up_id"))));
   revalidatePath(`/residents/${residentId}`);
 }
+
+// The helper's edits to what Yukimi remembers. The rules for each live in lib/memory.ts.
+async function editMemory(formData: FormData, change: (resident: Resident, value: string) => Resident) {
+  await requireAccess();
+  const residentId = String(formData.get("resident_id"));
+  const value = String(formData.get("fact_id") ?? formData.get("text") ?? "");
+  await updateResident(residentId, (r) => change(r, value));
+  revalidatePath(`/residents/${residentId}`);
+}
+
+export const addFactAction = async (formData: FormData) => editMemory(formData, (r, text) => addFact(r, text, japanDate()));
+export const retireFactAction = async (formData: FormData) => editMemory(formData, (r, id) => retireFact(r, id, japanDate()));
+export const restoreFactAction = async (formData: FormData) => editMemory(formData, restoreFact);
+export const deleteFactAction = async (formData: FormData) => editMemory(formData, deleteFact);
+export const saveCareNotes = async (formData: FormData) => editMemory(formData, setCareNotes);
+export const editFactAction = async (formData: FormData) =>
+  editMemory(formData, (r, id) => editFact(r, id, String(formData.get("text") ?? "")));

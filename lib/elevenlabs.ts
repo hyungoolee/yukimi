@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "./env";
-import { followUpsLine } from "./memory";
+import { careNotesLine, factsLine, followUpsLine } from "./memory";
 import { savePending } from "./store";
 import type { Resident } from "./types";
 import { describeWeather, getWeather } from "./weather";
@@ -12,7 +12,8 @@ async function callVariables(resident: Resident, attempt: number) {
     attempt: String(attempt),
     name: resident.name,
     introducer: resident.introducer,
-    facts: resident.facts.join("、"),
+    facts: factsLine(resident),
+    care_notes: careNotesLine(resident),
     recent_calls: resident.recent_calls.map((c) => `${c.date}：${c.summary}`).join(" / ") || "なし",
     follow_ups: followUpsLine(resident),
     ...describeWeather(await getWeather(resident.amedas_station)),
