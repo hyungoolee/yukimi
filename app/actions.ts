@@ -6,6 +6,7 @@ import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
+import { translateToEnglish } from "@/lib/translate";
 import { getResident, listResidents, resetDemoData, saveResident, updateCall } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
@@ -100,4 +101,13 @@ export async function resetDemo() {
   await requireAccess();
   if (DEMO_MODE) await resetDemoData();
   revalidatePath("/", "layout");
+}
+
+/** English for one line of a live call, shown as a caption. Empty if the translation fails. */
+export async function translateCaption(text: string) {
+  await requireAccess();
+  return translateToEnglish(text.slice(0, 1000)).catch((e) => {
+    console.error("Caption translation failed", e);
+    return "";
+  });
 }
