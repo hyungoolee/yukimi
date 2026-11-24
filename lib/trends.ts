@@ -1,4 +1,5 @@
-import type { Observations, Risk, Role, RulesOutput, Tri } from "./types";
+import { MEASURES } from "./measures.ts";
+import type { AlertReasons, Observations, Risk, Role, RulesOutput } from "./types";
 
 export const japanDate = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
@@ -11,7 +12,6 @@ export function daysBefore(date: string, n: number) {
 
 export type Day = { date: string; observations: Observations };
 
-const FIELDS = ["ate", "slept_well", "went_out", "pain_or_injury", "low_mood"] as const;
 
 /**
  * One entry per Japan date, newest first, from answered calls (newest first).
@@ -22,49 +22,54 @@ export function dailyObservations(calls: { at: string; observations?: Observatio
   const byDate = new Map<string, Observations>();
   for (const call of calls) {
     // A record with an unreadable time is skipped, not allowed to break everyone's trends.
-    if (!call.observations || Number.isNaN(new Date(call.at).getTime())) continue;
-    const date = japanDate(new Date(call.at));
+    const at = new Date(call.at);
+    if (!call.observations || Number.isNaN(at.getTime())) continue;
+    const date = japanDate(at);
     const day = byDate.get(date);
     if (!day) {
       byDate.set(date, { ...call.observations });
       continue;
     }
-    for (const field of FIELDS) if (day[field] === "unknown") day[field] = call.observations[field];
+    for (const { field } of MEASURES) if (day[field] === "unknown") day[field] = call.observations[field];
   }
   return [...byDate].map(([date, observations]) => ({ date, observations })).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-// Starting values, to tune with a 民生委員. Everyone gets the same thresholds: there is no personal baseline yet.
-const RULES: { field: keyof Observations; bad: Tri; days: number; within: number; risk: Risk; reason: string }[] = [
-  { field: "ate", bad: "no", days: 3, within: 5, risk: "red", reason: "3日続けて食事をとれていない" },
-  { field: "low_mood", bad: "yes", days: 3, within: 5, risk: "yellow", reason: "気分の落ち込みが3日続いている" },
-  { field: "slept_well", bad: "no", days: 3, within: 5, risk: "yellow", reason: "3日続けて眠れていない" },
-];
+// The measures that have a pattern across days (lib/measures.ts).
+const RULES = MEASURES.flatMap((m) => ("trend" in m ? [{ field: m.field, bad: m.concern, ...m.trend }] : []));
 const RAISE_AGAIN_EVERY = 3;
 
-export type Trend = { reason: string; risk: Risk; fires: boolean };
+export type Trend = { id: string; reason: string; risk: Risk; fires: boolean };
 
 /**
- * Patterns across days, as of `today`. A streak counts the most recent days with a known answer.
- * Unknown days are skipped; the opposite answer ends it, and so does a gap too long for the days
- * to count as "running" (so one bad day weeks ago can't shift when the alert goes out).
- * A trend `fires` (sends its alert) on the day it reaches its threshold and every third day after,
- * and only when today's own answer is part of it. In between it is ongoing: same risk, no new alert.
+ * A trend fires on the first eligible day and every third qualifying observation day thereafter.
+ * A positive answer or expiry of the qualifying window ends the episode. Unknowns add no days.
  */
 export function findTrends(days: Day[], today: string): Trend[] {
   const trends: Trend[] = [];
+  const history = days.filter((day) => day.date <= today).reverse();
   for (const rule of RULES) {
-    const known = days.filter((d) => d.date <= today && d.observations[rule.field] !== "unknown");
-    const maxGap = rule.within - rule.days + 1;
-    const end = known.findIndex(
-      (d, i) => d.observations[rule.field] !== rule.bad || (i > 0 && d.date < daysBefore(known[i - 1].date, maxGap)),
-    );
-    const streak = end === -1 ? known.length : end;
-    if (streak < rule.days) continue;
-    // The days that make up the threshold must be recent, not spread over weeks of missed calls.
-    if (known[rule.days - 1].date < daysBefore(today, rule.within - 1)) continue;
-    const fires = known[0].date === today && (streak - rule.days) % RAISE_AGAIN_EVERY === 0;
-    trends.push({ reason: rule.reason, risk: rule.risk, fires });
+    const recent: string[] = [];
+    let qualifyingDays = 0;
+    for (const { date, observations } of history) {
+      const value = observations[rule.field];
+      if (value === "unknown") continue;
+      if (value !== rule.bad) {
+        recent.length = 0;
+        qualifyingDays = 0;
+        continue;
+      }
+
+      // Check whether the previous window had already expired the day before this observation.
+      if (qualifyingDays && recent[0] < daysBefore(date, rule.within)) qualifyingDays = 0;
+      recent.push(date);
+      if (recent.length > rule.days) recent.shift();
+      const qualifies = recent.length === rule.days && recent[0] >= daysBefore(date, rule.within - 1);
+      qualifyingDays = qualifies ? qualifyingDays + 1 : 0;
+    }
+    if (!qualifyingDays || recent[0] < daysBefore(today, rule.within - 1)) continue;
+    const fires = recent.at(-1) === today && (qualifyingDays - 1) % RAISE_AGAIN_EVERY === 0;
+    trends.push({ id: rule.id, reason: rule.reason, risk: rule.risk, fires });
   }
   return trends;
 }
@@ -86,8 +91,11 @@ export function withTrends(rules: RulesOutput, trends: Trend[]): RulesOutput {
     if (trend.fires && trend.risk === "red") {
       const everyone: Role[] = ["helper", "second_contact"];
       const alert = actions.find((a) => a.type === "alert");
+      const acuteReasons = alert?.reasonsByRole ?? Object.fromEntries((alert?.to ?? []).map((role) => [role, rules.reasons]));
+      const reasonsByRole: AlertReasons = { ...acuteReasons };
+      for (const role of everyone) reasonsByRole[role] = [...(reasonsByRole[role] ?? []), trend.reason];
       actions = [
-        { type: "alert", to: [...new Set([...(alert?.to ?? []), ...everyone])] },
+        { type: "alert", to: [...new Set([...(alert?.to ?? []), ...everyone])], reasonsByRole },
         ...actions.filter((a) => a.type !== "alert"),
       ];
     }
@@ -102,7 +110,3 @@ export function lastWeek(days: Day[], today: string) {
     return { date, observations: days.find((d) => d.date === date)?.observations };
   });
 }
-
-/** Whether a value is the worrying one for its field. */
-export const isConcern = (field: keyof Observations, value: Tri) =>
-  value !== "unknown" && value === (field === "pain_or_injury" || field === "low_mood" ? "yes" : "no");

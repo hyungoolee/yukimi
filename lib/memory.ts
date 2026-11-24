@@ -12,6 +12,10 @@ const MAX_OPEN = 5;
 const MAX_NEW_PER_CALL = 3;
 const MAX_DAYS = 14;
 const MAX_LENGTH = 80;
+// What the model writes (follow-ups and facts) is placed in tomorrow's agent prompt, so it must stay a
+// plain one-line note: nothing that reads as prompt structure, and nothing about money, whoever said
+// it on the call. What the helper writes is trusted.
+const NOT_A_NOTE = /[#{}<>]|口座|暗証|カード|振込|振り込|送金|お金|現金|ATM|ＡＴＭ/i;
 export const MAX_FACTS = 30;
 const MAX_FACT_CHANGES_PER_CALL = 3; // each of: added, updated, retired
 const MAX_CARE_NOTES = 300;
@@ -49,14 +53,14 @@ function applyFollowUps(resident: Resident, proposed: Curation, today: string): 
   const added: FollowUp[] = [];
   for (const { text, days } of proposed.new_follow_ups) {
     const t = clean(text);
-    if (added.length === MAX_NEW_PER_CALL) break;
-    if (!fits(t) || known.has(t)) continue;
+    // Full is full: a new item never pushes out one that is still open.
+    if (added.length === MAX_NEW_PER_CALL || kept.length + added.length >= MAX_OPEN) break;
+    if (!fits(t) || known.has(t) || NOT_A_NOTE.test(t)) continue;
     known.add(t);
     const lasts = Math.min(MAX_DAYS, Math.max(1, Math.round(Number(days) || 1)));
     added.push({ id: newId(), text: t, created: today, expires: daysBefore(today, -lasts) });
   }
-  // Over the cap, the oldest go first.
-  return { ...resident, follow_ups: [...kept, ...added].slice(-MAX_OPEN) };
+  return { ...resident, follow_ups: [...kept, ...added] };
 }
 
 function applyFactChanges(resident: Resident, changes: Curation["fact_changes"], today: string, by: string): Resident {
@@ -70,7 +74,7 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
   for (const { id, text } of changes.update.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const fact = editable(id);
     const t = clean(text);
-    if (!fact || !fits(t) || has(t)) continue;
+    if (!fact || !fits(t) || has(t) || NOT_A_NOTE.test(t)) continue;
     facts = facts.map((f) => (f.id === id ? { ...f, text: t } : f));
     log.push({ op: "update", text: t, before: fact.text });
   }
@@ -83,7 +87,7 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
   }
   for (const text of changes.add.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const t = clean(text);
-    if (!fits(t) || has(t)) continue;
+    if (!fits(t) || has(t) || NOT_A_NOTE.test(t)) continue;
     if (facts.length >= MAX_FACTS) {
       log.push({ op: "refuse", text: t }); // full: recorded so a person can decide
       continue;
