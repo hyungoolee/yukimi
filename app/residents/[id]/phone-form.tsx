@@ -13,7 +13,7 @@ export function PhoneForm({ residentId, phone, labels }: { residentId: string; p
   return (
     <form action={action} className="mt-2 flex flex-wrap items-center gap-2 text-sm">
       <input type="hidden" name="resident_id" value={residentId} />
-      <label htmlFor="phone" className="text-zinc-500">{labels.phone}</label>
+      <label htmlFor="phone" className="w-28 text-zinc-500">{labels.phone}</label>
       <input
         id="phone"
         name="phone"

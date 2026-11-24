@@ -151,19 +151,14 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         phone={resident.phone}
         labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint }}
       />
-      <details className="mt-4">
-        <summary className="cursor-pointer text-sm text-zinc-500">
-          {t.mapLocations(!!resident.location, !!resident.snow_volunteer.location)}
-        </summary>
-        <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
-        <LocationPicker
-          residentId={resident.id}
-          who="snow_volunteer"
-          label={t.volunteer(resident.snow_volunteer.name)}
-          initial={resident.snow_volunteer.location}
-          labels={t.picker}
-        />
-      </details>
+      <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
+      <LocationPicker
+        residentId={resident.id}
+        who="snow_volunteer"
+        label={t.volunteer(resident.snow_volunteer.name)}
+        initial={resident.snow_volunteer.location}
+        labels={t.picker}
+      />
     </main>
   );
 }

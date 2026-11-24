@@ -8,7 +8,7 @@ import { saveLocation } from "../../actions";
 import { SubmitButton } from "../../submit-button";
 import { DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, VOLUNTEER_COLOR } from "../../map-style";
 
-/** A small map: click to place the pin, then save. */
+/** One Settings row: whether the spot is set, and a small map that opens to place or move the pin. */
 export function LocationPicker({
   residentId,
   who,
@@ -20,7 +20,7 @@ export function LocationPicker({
   who: "home" | "snow_volunteer";
   label: string;
   initial?: LatLng;
-  labels: { save: string; saving: string; placed: string; unplaced: string };
+  labels: { set: string; unset: string; place: string; change: string; save: string; saving: string; hint: string };
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [picked, setPicked] = useState<LatLng | undefined>();
@@ -60,19 +60,25 @@ export function LocationPicker({
   }, [initial?.lat, initial?.lng, who]);
 
   return (
-    <form action={saveLocation} className="mt-3 text-sm">
-      <input type="hidden" name="resident_id" value={residentId} />
-      <input type="hidden" name="who" value={who} />
-      <input type="hidden" name="lat" value={picked?.lat ?? ""} />
-      <input type="hidden" name="lng" value={picked?.lng ?? ""} />
-      <div className="flex items-center gap-2">
-        <span className="text-zinc-500">{label}</span>
-        <SubmitButton disabled={!picked} pending={labels.saving}>
-          {labels.save}
-        </SubmitButton>
-        <span className="text-zinc-500">{initial ? labels.placed : labels.unplaced}</span>
-      </div>
-      <div ref={container} className="z-0 mt-2 h-56 w-full rounded-lg border border-zinc-200" />
-    </form>
+    <details id={`location-${who}`} className="mt-2 scroll-mt-6 text-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <span className="w-28 text-zinc-500">{label}</span>
+        <span className={initial ? "" : "text-amber-700"}>{initial ? labels.set : labels.unset}</span>
+        <span className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">{initial ? labels.change : labels.place}</span>
+      </summary>
+      <form action={saveLocation} className="mt-2">
+        <input type="hidden" name="resident_id" value={residentId} />
+        <input type="hidden" name="who" value={who} />
+        <input type="hidden" name="lat" value={picked?.lat ?? ""} />
+        <input type="hidden" name="lng" value={picked?.lng ?? ""} />
+        <div ref={container} className="z-0 h-56 w-full rounded-lg border border-zinc-200" />
+        <div className="mt-2 flex items-center gap-2">
+          <SubmitButton disabled={!picked} pending={labels.saving}>
+            {labels.save}
+          </SubmitButton>
+          <span className="text-zinc-500">{labels.hint}</span>
+        </div>
+      </form>
+    </details>
   );
 }
