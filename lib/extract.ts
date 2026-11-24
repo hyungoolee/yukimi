@@ -1,7 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { MEASURES, type Observations } from "./measures.ts";
 import type { Extraction, Resident, Turn } from "./types";
+
+const tri = z.enum(["yes", "no", "unknown"]);
 
 const ExtractionSchema = z.object({
   answered_by_person: z.boolean(),
@@ -12,19 +15,20 @@ const ExtractionSchema = z.object({
     winter: z.string(),
     needs: z.array(z.string()),
   }),
+  // not_eating, pain and low_mood are not asked for here: code derives them from observations,
+  // so the two can never disagree.
   signals: z.object({
     emergency: z.boolean(),
     self_harm: z.boolean(),
     fall_recent: z.boolean(),
-    pain: z.boolean(),
     cant_move: z.boolean(),
     snowed_in: z.boolean(),
     heater_problem: z.boolean(),
-    not_eating: z.boolean(),
     confused: z.boolean(),
     money_request: z.boolean(),
-    low_mood: z.boolean(),
   }),
+  // One field per daily measure (lib/measures.ts).
+  observations: z.object(Object.fromEntries(MEASURES.map((m) => [m.field, tri]))),
   new_facts: z.array(z.string()),
   english: z.object({
     summary: z.string(),
@@ -45,14 +49,14 @@ Set each signal to true only when the resident's own words support it. When the 
 - emergency: describes something needing an ambulance now, such as chest pain, trouble breathing, or signs of a stroke.
 - self_harm: talks about wanting to die or to end their life.
 - fall_recent: slipped or fell today or in the last two days.
-- pain: reports physical pain or an injury now.
 - cant_move: cannot stand up or walk right now.
 - snowed_in: snow keeps them from opening the door or leaving the house.
 - heater_problem: the heater is broken, or they are out of fuel.
-- not_eating: has not eaten today, or says they are not eating.
 - confused: wrong about the day or season, repeats the same story within the call, or does not recognize this service.
 - money_request: someone else (a caller, visitor or message) asked them for money, a transfer, or bank or card details.
-- low_mood: says they are lonely, hopeless, or that there is no point.`;
+
+Each observation is "yes", "no" or "unknown", taken only from the resident's own words. Use "unknown" when the subject did not come up. When what they said points to the worrying answer, give that answer: do not soften it to "unknown". As with the signals, when the resident corrects or denies something, go with the correction.
+${MEASURES.map((m) => `- ${m.ask}`).join("\n")}`;
 
 /** Turns a call transcript into notes and yes/no signals. Throws if the model returns nothing usable. */
 export async function extract(resident: Resident, transcript: Turn[]): Promise<Extraction> {
@@ -74,5 +78,16 @@ export async function extract(resident: Resident, transcript: Turn[]): Promise<E
   if (!response.parsed_output) {
     throw new Error(`Extraction returned no output (stop_reason: ${response.stop_reason})`);
   }
-  return response.parsed_output;
+  const { signals, ...rest } = response.parsed_output;
+  const observations = rest.observations as Observations; // the schema above has exactly these fields
+  return {
+    ...rest,
+    observations,
+    signals: {
+      ...signals,
+      not_eating: observations.ate === "no",
+      pain: observations.pain_or_injury === "yes",
+      low_mood: observations.low_mood === "yes",
+    },
+  };
 }

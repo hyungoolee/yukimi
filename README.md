@@ -9,7 +9,9 @@ pnpm dev
 ```
 
 - `pnpm test`: rules and webhook replays, with the model call mocked.
-- `pnpm eval`: ten scripted residents through the real extraction and rules. Needs `ANTHROPIC_API_KEY`; costs one model call each.
+- `pnpm eval`: scripted calls and a multi-day trend through the real extraction and rules. Requires `ANTHROPIC_API_KEY` and makes one model call per scripted conversation.
+
+The resident page shows observations across seven Japan dates. A meal trend alerts the helper and family on its first qualifying day and every third qualifying observation day thereafter, once per Japan date. Persistent alert tasks retain the reasons intended for each recipient.
 
 ## Setup checklist
 
