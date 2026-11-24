@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { curate, type Curation } from "./curate";
 import { getResident, updateResident } from "./store";
 import { daysBefore, japanDate } from "./trends";
@@ -25,6 +25,20 @@ const RETIRED_KEPT = 50;
 const newId = () => randomUUID().slice(0, 8);
 const clean = (text: unknown) => String(text ?? "").replace(/\s+/g, " ").trim();
 const fits = (text: string) => text.length > 0 && text.length <= MAX_LENGTH;
+
+// Facts the helper took out, kept as hashes so the text itself need not be. This survives deleting
+// the fact for good and the cap on retired facts. It matches the exact wording only: a rewording
+// gets through, and catching those would need a model.
+const hashOf = (text: string) => createHash("sha1").update(text).digest("hex").slice(0, 16);
+const isBlocked = (resident: Resident, text: string) => (resident.blocked_facts ?? []).includes(hashOf(text));
+const block = (resident: Resident, text: string): Resident => ({
+  ...resident,
+  blocked_facts: [...new Set([...(resident.blocked_facts ?? []), hashOf(text)])],
+});
+const unblock = (resident: Resident, text: string): Resident => ({
+  ...resident,
+  blocked_facts: (resident.blocked_facts ?? []).filter((h) => h !== hashOf(text)),
+});
 
 function logged(resident: Resident, by: string, entries: Omit<MemoryChange, "at" | "by">[]): Resident {
   if (entries.length === 0) return resident;
@@ -71,14 +85,15 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
   // Locked facts (from intake or the helper) are not the model's to change.
   const editable = (id: string) => facts.find((f) => f.id === id && !f.locked);
   const has = (text: string) => facts.some((f) => f.text === text);
-  // What the helper took out stays out: the model can't bring it back by hearing it again.
-  const removedByHelper = new Set(retired.filter((f) => f.reason === "helper").map((f) => f.text));
+  // What the helper took out stays out: the model can't bring it back by hearing it again,
+  // whether as a new fact or by rewording an existing one into it.
+  const removedByHelper = { has: (text: string) => isBlocked(resident, text) };
   const alreadyRefused = new Set((resident.memory_log ?? []).filter((e) => e.op === "refuse").map((e) => e.text));
 
   for (const { id, text } of changes.update.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const fact = editable(id);
     const t = clean(text);
-    if (!fact || !fits(t) || has(t) || NOT_A_NOTE.test(t)) continue;
+    if (!fact || !fits(t) || has(t) || NOT_A_NOTE.test(t) || removedByHelper.has(t)) continue;
     facts = facts.map((f) => (f.id === id ? { ...f, text: t } : f));
     log.push({ op: "update", fact: id, text: t, before: fact.text });
   }
@@ -130,7 +145,7 @@ export function addFact(resident: Resident, text: string, today: string): Reside
   const t = clean(text);
   if (!fits(t) || resident.facts.some((f) => f.text === t) || resident.facts.length >= MAX_FACTS) return resident;
   const fact: Fact = { id: newId(), text: t, since: today, source: "helper", locked: true };
-  return logged({ ...resident, facts: [...resident.facts, fact] }, "helper", [{ op: "add", fact: fact.id, text: t }]);
+  return logged(unblock({ ...resident, facts: [...resident.facts, fact] }, t), "helper", [{ op: "add", fact: fact.id, text: t }]);
 }
 
 export function editFact(resident: Resident, id: string, text: string): Resident {
@@ -145,11 +160,14 @@ export function retireFact(resident: Resident, id: string, today: string): Resid
   const fact = resident.facts.find((f) => f.id === id);
   if (!fact) return resident;
   return logged(
-    {
-      ...resident,
-      facts: resident.facts.filter((f) => f.id !== id),
-      retired_facts: [...(resident.retired_facts ?? []), { ...fact, retired: today, reason: "helper" }],
-    },
+    block(
+      {
+        ...resident,
+        facts: resident.facts.filter((f) => f.id !== id),
+        retired_facts: [...(resident.retired_facts ?? []), { ...fact, retired: today, reason: "helper" }],
+      },
+      fact.text,
+    ),
     "helper",
     [{ op: "retire", fact: id, text: fact.text }],
   );
@@ -159,11 +177,14 @@ export function restoreFact(resident: Resident, id: string): Resident {
   const fact = (resident.retired_facts ?? []).find((f) => f.id === id);
   if (!fact || resident.facts.length >= MAX_FACTS) return resident;
   return logged(
-    {
-      ...resident,
-      facts: [...resident.facts, { id: fact.id, text: fact.text, since: fact.since, source: fact.source, locked: true }],
-      retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
-    },
+    unblock(
+      {
+        ...resident,
+        facts: [...resident.facts, { id: fact.id, text: fact.text, since: fact.since, source: fact.source, locked: true }],
+        retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
+      },
+      fact.text,
+    ),
     "helper",
     [{ op: "restore", fact: id, text: fact.text }],
   );
@@ -181,12 +202,16 @@ export function deleteFact(resident: Resident, id: string): Resident {
   const wordings = new Set([fact.text, ...log.filter((e) => e.fact === id).flatMap((e) => [e.text, e.before])]);
   const scrub = (e: MemoryChange): MemoryChange =>
     e.fact === id || (e.op === "refuse" && wordings.has(e.text)) ? { at: e.at, by: e.by, op: e.op } : e;
+  // Deleting is the strongest removal, so the block stays (and is added, if the model had retired it).
   return logged(
-    {
-      ...resident,
-      retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
-      memory_log: log.map(scrub),
-    },
+    block(
+      {
+        ...resident,
+        retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
+        memory_log: log.map(scrub),
+      },
+      fact.text,
+    ),
     "helper",
     [{ op: "delete" }],
   );
