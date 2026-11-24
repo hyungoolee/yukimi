@@ -9,7 +9,9 @@ pnpm dev
 ```
 
 - `pnpm test`: rules and webhook replays, with the model call mocked.
-- `pnpm eval`: ten scripted residents through the real extraction and rules. Needs `ANTHROPIC_API_KEY`; costs one model call each.
+- `pnpm eval`: scripted calls and a multi-day trend through the real extraction and rules. Requires `ANTHROPIC_API_KEY` and makes one model call per scripted conversation.
+
+The resident page shows observations across seven Japan dates. A meal trend alerts the helper and family on its first qualifying day and every third qualifying observation day thereafter, once per Japan date. Persistent alert tasks retain the reasons intended for each recipient.
 
 ## Setup checklist
 
@@ -18,9 +20,10 @@ Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set
 1. **ElevenLabs:** create an API key and choose a Japanese voice (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`).
 2. **Post-call webhook:** in ElevenLabs, create one pointing at `<APP_URL>/api/webhooks/elevenlabs` (`ELEVENLABS_WEBHOOK_ID`, `ELEVENLABS_WEBHOOK_SECRET`).
 3. **Agent:** run `pnpm agent:setup`. It prints `ELEVENLABS_TOOL_ID` and `ELEVENLABS_AGENT_ID`; add both to `.env` and the host. Run it again after editing `agent/prompt.md`.
+   **Order matters when the prompt gains a `{{variable}}`:** the deployed app must already be sending that variable, or calls may fail and the missed-call ladder will alert families. So deploy the app first, confirm it is live, then run `pnpm agent:setup`. To undo, go in reverse: check out the previous `agent/` and run `pnpm agent:setup` to restore the old prompt, then roll the app back. **Exception:** once the app stores facts as objects (`lib/resident.ts`), an older app cannot read the resident files it has rewritten in `DATA_DIR/residents`, so do not roll back past that release: fix forward, or restore the resident files from a copy taken before it.
 4. **Twilio:** buy a voice number, enable Japan under Voice geo permissions, and import the number into ElevenLabs (`ELEVENLABS_PHONE_NUMBER_ID`).
 5. **LINE:** create a Messaging API channel with webhook `<APP_URL>/api/webhooks/line` (`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`). Turn off the channel's auto-reply.
-6. **Roles:** each teammate adds the bot and sends a role word with `REGISTER_CODE`, e.g. `家族 1234`. Words: `民生委員` (helper), `家族` (second contact), `除雪` (snow volunteer).
+6. **People:** on the dashboard's 連絡体制 page (`/people`), add each helper, family contact and snow helper and assign them to residents. Each person's page shows an 8-digit code; they add the bot on LINE and send it the code to register.
 7. **Phone number:** open a resident on the dashboard and save the number to call, in international format (`+81…`).
 8. **First call:** press 今すぐ電話.
 9. **Map (optional):** the dashboard's 地図 view shows residents and snow volunteers. Place each pin from the resident's page, under 地図上の位置. The base map is 国土地理院's tiles; keep the credit visible.

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { setLanguage } from "./actions";
 import { getStrings } from "./lang";
+import { Refresh } from "./refresh";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           </button>
         </form>
         {children}
+        <Refresh />
       </body>
     </html>
   );

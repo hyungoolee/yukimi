@@ -4,12 +4,12 @@ import type { Action, Risk, Role, RulesOutput, Signals, Weather } from "./types"
 export function applyRules(s: Signals, weather: Weather): RulesOutput {
   const red: string[] = [];
   const yellow: string[] = [];
-  const alertTo = new Set<Role>();
+  const alerts = new Map<Role, string[]>();
   const actions: Action[] = [];
   const everyone: Role[] = ["helper", "second_contact"];
   const redAlert = (reason: string, to: Role[]) => {
     red.push(reason);
-    to.forEach((r) => alertTo.add(r));
+    for (const role of to) alerts.set(role, [...(alerts.get(role) ?? []), reason]);
   };
 
   if (s.emergency || s.cant_move) redAlert("緊急の訴え（119番を案内）", everyone);
@@ -33,6 +33,12 @@ export function applyRules(s: Signals, weather: Weather): RulesOutput {
   if (s.low_mood) yellow.push("気分の落ち込み");
 
   const risk: Risk = red.length ? "red" : yellow.length ? "yellow" : "green";
-  if (alertTo.size) actions.unshift({ type: "alert", to: [...alertTo] });
+  if (alerts.size) {
+    actions.unshift({
+      type: "alert",
+      to: [...alerts.keys()],
+      reasonsByRole: Object.fromEntries([...alerts].map(([role, reasons]) => [role, [...reasons, ...yellow]])),
+    });
+  }
   return { risk, reasons: [...red, ...yellow], actions };
 }

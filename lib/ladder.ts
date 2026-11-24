@@ -1,4 +1,4 @@
-import { sendRedAlert } from "./actions";
+import { anySent, sendRedAlert } from "./actions";
 import { placeCall } from "./elevenlabs";
 import { DEMO_MODE } from "./env";
 import { buttons, push } from "./line";
@@ -16,19 +16,19 @@ const record = (resident: Resident, id: string, fields: Pick<CallRecord, "kind" 
 async function redAlert(resident: Resident, reason: string) {
   await clearLadder(resident.id);
   const id = `missed-${Date.now()}`;
-  const sent = await sendRedAlert(resident, id, ["helper", "second_contact"], [reason]);
+  const deliveries = await sendRedAlert(resident, id, ["helper", "second_contact"], [reason]);
   await record(resident, id, {
     kind: "missed",
     risk: "red",
     reasons: [reason],
-    actions: [{ type: "alert", to: ["helper", "second_contact"], sent }],
+    actions: [{ type: "alert", to: ["helper", "second_contact"], sent: anySent(deliveries), deliveries }],
   });
 }
 
 /** A call went unanswered (no pickup, busy, answering machine, or nobody spoke). */
 export async function missed(residentId: string, attempt: number) {
   const resident = await getResident(residentId);
-  if (!resident) return;
+  if (!resident || resident.active === false) return;
 
   if (attempt === 1) {
     // A ladder is already running (an extra manual call, or a double click): let it finish, don't restart it.

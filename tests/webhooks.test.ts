@@ -12,11 +12,14 @@ const extraction: Extraction = {
     emergency: false, self_harm: false, fall_recent: true, pain: true, cant_move: false, snowed_in: true,
     heater_problem: false, not_eating: false, confused: false, money_request: false, low_mood: false,
   },
-  new_facts: ["健太の模試はよくできた"],
   english: { summary: "Snowed in; slipped on ice yesterday and her hip hurts.", mood: "Calm", health: "Hip pain", winter: "Door blocked by snow", needs: ["Snow clearing"] },
 };
 const extract = vi.fn(async () => extraction);
 vi.mock("@/lib/extract", () => ({ extract }));
+// The second model call, for memory. By default it proposes nothing.
+const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ fact_changes: noFacts, resolved: [], new_follow_ups: [] }));
+const noFacts: import("@/lib/curate").Curation["fact_changes"] = { add: [], update: [], retire: [] };
+vi.mock("@/lib/curate", () => ({ curate }));
 const placeCall = vi.fn(async () => "conv_retry");
 vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall }));
 
@@ -69,6 +72,11 @@ const say = (userId: string, text: string) =>
   line(signedLine([{ type: "message", replyToken: "r", source: { userId }, message: { type: "text", text } }]));
 const tap = (data: string, userId = "U_family") =>
   line(signedLine([{ type: "postback", source: { userId }, postback: { data } }]));
+/** A browser call's variables; fails the test with the reason if the call could not start. */
+function variablesOf<V>(started: { variables: V } | { error: string }) {
+  if ("error" in started) throw new Error(started.error);
+  return started.variables;
+}
 const pushes = () => lineCalls.filter((c) => c.url.endsWith("/push")).map((c) => c.body);
 
 beforeEach(async () => {
@@ -76,6 +84,7 @@ beforeEach(async () => {
   for (const task of await store.listTasks()) await store.deleteTask(task.id);
   lineCalls.length = 0;
   extract.mockClear();
+  curate.mockClear();
   placeCall.mockClear();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     lineCalls.push({ url, body: JSON.parse(String(init.body)) });
@@ -84,17 +93,27 @@ beforeEach(async () => {
 });
 
 describe("LINE roles", () => {
-  it("registers teammates for every resident", async () => {
-    await say("U_stranger", "家族");
-    await say("U_stranger", "家族 0000");
-    expect((await store.getResident("sato"))!.second_contact.line_id).toBe("");
+  it("registers each person with their own code, once", async () => {
+    const code = async (id: string) => (await store.renewCode(id))!.code!;
+    const helperCode = await code("p_tanaka");
+    await say("U_stranger", "家族 1234"); // the old shared code
+    await say("U_stranger", helperCode === "00000000" ? "11111111" : "00000000");
+    expect((await store.getPerson("p_tanaka"))!.line_id).toBeUndefined();
 
-    await say("U_helper", "民生委員　１２３４"); // full-width space and digits, as a Japanese keyboard types them
-    await say("U_family", "家族 1234");
-    await say("U_volunteer", "除雪 1234");
+    // Full-width digits, as a Japanese keyboard types them.
+    await say("U_helper", helperCode.replace(/\d/g, (d) => String.fromCharCode(d.charCodeAt(0) + 0xfee0)));
+    await say("U_stranger", helperCode); // a used code registers nobody else
+    await say("U_volunteer", await code("p_yamamoto"));
+    // In these tests one LINE account plays every resident's family contact.
+    for (const id of ["p_yuki", "p_takada", "p_masaru"]) await say("U_family", await code(id));
+
+    expect(await store.getPerson("p_tanaka")).toMatchObject({ line_id: "U_helper" });
+    expect((await store.getPerson("p_tanaka"))!.code).toBeUndefined();
     const sato = await store.getResident("sato");
     expect([sato!.helper.line_id, sato!.second_contact.line_id, sato!.snow_volunteer.line_id])
       .toEqual(["U_helper", "U_family", "U_volunteer"]);
+    expect((await store.getResident("takahashi"))!.second_contact).toMatchObject({ id: "p_masaru", line_id: "U_family" });
+    expect(lineCalls.at(-1)!.body.messages[0].text).toBe("登録しました（まさるさん）");
   });
 
   it("rejects a bad signature", async () => {
@@ -116,7 +135,7 @@ describe("after a call", () => {
 
     const call = await store.getCall("conv_slip");
     expect(call).toMatchObject({ risk: "red", kind: "call", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
-    expect(call!.actions).toEqual([
+    expect(call!.actions).toMatchObject([
       { type: "alert", to: ["helper", "second_contact"], sent: true },
       { type: "snow_request", to: ["snow_volunteer"], sent: true },
     ]);
@@ -128,7 +147,7 @@ describe("after a call", () => {
 
     const sato = await store.getResident("sato");
     expect(sato!.recent_calls[0].summary).toBe(extraction.summary);
-    expect(sato!.facts).toContain("健太の模試はよくできた");
+    expect(sato!.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
   });
 
   it("records the volunteer accepting the snow request, and nobody else", async () => {
@@ -298,7 +317,7 @@ describe("missed-call ladder", () => {
   it("reads the attempt from the call's variables, and ignores other event types", async () => {
     await store.savePending("conv_f2", { resident_id: "suzuki", attempt: 2 });
     await elevenlabs(signedElevenLabs(JSON.stringify({ type: "post_call_audio", data: { conversation_id: "conv_f2" } })));
-    expect(await store.getPending("conv_f2")).toEqual({ resident_id: "suzuki", attempt: 2 });
+    expect(await store.getPending("conv_f2")).toMatchObject({ resident_id: "suzuki", attempt: 2 });
     await store.clearPending("conv_f2");
 
     await elevenlabs(signedElevenLabs(JSON.stringify({
@@ -390,11 +409,20 @@ describe("calls without a phone line", () => {
     process.env.ELEVENLABS_AGENT_ID = "agent_test";
     process.env.ELEVENLABS_API_KEY = "key_test";
     const { startBrowserCall } = await import("@/app/actions");
-    const { token, variables } = await startBrowserCall("sato");
+    const started = await startBrowserCall("sato");
+    if ("error" in started) throw new Error(started.error);
+    const { token, variables } = started;
     expect(token).toBe("tok_test");
     expect(variables).toMatchObject({ resident_id: "sato", attempt: "1", name: "佐藤", introducer: "娘のゆきさん", channel: "browser" });
     expect(variables.weather).toContain("-12℃");
     expect(variables.winter_check).toMatch(/^必要/);
+  });
+
+  it("tells the page why a browser call could not start, since a thrown error loses its message in production", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    const { startBrowserCall } = await import("@/app/actions");
+    expect(await startBrowserCall("sato")).toEqual({ error: "ElevenLabs token request failed (401)" });
   });
 
   it("does not start the phone ladder for a silent or voicemail-like browser call", async () => {
@@ -443,6 +471,8 @@ describe("dashboard language", () => {
     expect(reasonText("en", "緊急の訴え（119番を案内）：胸が苦しい")).toBe("Emergency (told to call 119)：胸が苦しい");
     expect(reasonText("en", "電話に応答なし。ゆきさんが無事を確認")).toBe("No answer; the second contact confirmed they are fine");
     expect(reasonText("ja", "転倒・痛みあり")).toBe("転倒・痛みあり");
+    expect(reasonText("en", "3日続けて食事をとれていない")).toBe("Not eating for 3 days running");
+    expect(reasonText("en", "気分の落ち込みが3日続いている（継続中）")).toBe("Low mood for 3 days running (ongoing)");
     expect(reasonText("en", "知らない理由")).toBe("知らない理由");
     const sato = (await store.getResident("sato"))!;
     expect(strings.en.name(sato)).toBe("Sato-san");
@@ -471,17 +501,21 @@ describe("demo reset", () => {
     await store.saveLadder("sato", { stage: "retry", at: Date.now() });
     // A disk set up before the map existed has no pins; one resident has been placed by hand.
     const suzuki = (await store.getResident("suzuki"))!;
-    await store.saveResident({ ...suzuki, location: undefined, snow_volunteer: { ...suzuki.snow_volunteer, location: undefined } });
+    await store.saveResident({ ...suzuki, location: undefined });
+    await store.updatePerson("p_yamamoto", (p) => ({ ...p, location: undefined }));
     await store.saveResident({ ...(await store.getResident("takahashi"))!, location: { lat: 43.3, lng: 141.9 } });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
-    expect((await store.getResident("sato"))!.facts).toContain("健太の模試はよくできた");
+    await store.updateResident("sato", (r) => ({
+      ...r, care_notes: "夫の話はしない", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
+    }));
 
     await resetDemo();
 
     expect(await store.listCalls()).toEqual([]);
     expect(await store.getLadder("sato")).toBeNull();
     const sato = (await store.getResident("sato"))!;
-    expect(sato.facts).not.toContain("健太の模試はよくできた");
+    expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
+    expect([sato.care_notes, sato.retired_facts, sato.memory_log]).toEqual(["", [], []]);
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
@@ -618,12 +652,12 @@ describe("one writer at a time", () => {
     const before = (await store.getResident("sato"))!;
     await Promise.all([
       store.updateResident("sato", (r) => ({ ...r, phone: "+819011110000" })),
-      store.updateResident("sato", (r) => ({ ...r, facts: [...r.facts, "同時に書かれた事実"] })),
+      store.updateResident("sato", (r) => ({ ...r, care_notes: "同時に書かれた注意" })),
       store.updateResident("sato", (r) => ({ ...r, location: { lat: 43.2, lng: 141.77 } })),
     ]);
     const after = (await store.getResident("sato"))!;
     expect(after.phone).toBe("+819011110000");
-    expect(after.facts).toContain("同時に書かれた事実");
+    expect(after.care_notes).toBe("同時に書かれた注意");
     expect(after.location).toEqual({ lat: 43.2, lng: 141.77 });
     await store.saveResident(before);
   });
@@ -632,5 +666,266 @@ describe("one writer at a time", () => {
     await expect(store.updateResident("sato", () => { throw new Error("bad change"); })).rejects.toThrow("bad change");
     expect(await store.updateResident("sato", (r) => r)).toMatchObject({ id: "sato" });
     expect(await store.updateResident("nobody", (r) => r)).toBeNull();
+  });
+});
+
+describe("trends across days", () => {
+  const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
+  const notEaten = { ...extraction, observations: { ...blank, ate: "no" as const }, signals: { ...extraction.signals, fall_recent: false, pain: false, snowed_in: false, not_eating: true } };
+  const earlier = (id: string, daysAgo: number, residentId = "suzuki") =>
+    store.saveCall({
+      id, resident_id: residentId, at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), kind: "call",
+      risk: "yellow", reasons: ["食事をとれていない"], actions: [], handled: true, extraction: notEaten,
+    });
+  const callToday = (id: string, residentId = "suzuki") =>
+    elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
+
+  it("alerts helper and family on the third day of not eating, once", async () => {
+    await earlier("conv_t1", 1);
+    extract.mockResolvedValueOnce(notEaten);
+    await callToday("conv_t2");
+    expect(await store.getCall("conv_t2")).toMatchObject({ risk: "yellow", reasons: ["食事をとれていない"] });
+    expect(pushes()).toEqual([]);
+
+    await earlier("conv_t0", 2);
+    extract.mockResolvedValueOnce(notEaten).mockResolvedValueOnce(notEaten);
+    await Promise.all([callToday("conv_t3"), callToday("conv_t3b")]);
+    const calls = await Promise.all([store.getCall("conv_t3"), store.getCall("conv_t3b")]);
+    expect(calls.map((call) => call?.risk)).toEqual(["red", "red"]);
+    expect(calls.flatMap((call) => call?.reasons ?? [])).toContain("3日続けて食事をとれていない（継続中）");
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+    expect((await store.listTasks()).filter((task) => task.kind === "alert_recheck")).toHaveLength(1);
+
+    // A later call can inherit today's observation even when meals did not come up.
+    lineCalls.length = 0;
+    extract.mockResolvedValueOnce({ ...notEaten, observations: blank, signals: { ...notEaten.signals, not_eating: false } });
+    await callToday("conv_t3c");
+    expect(await store.getCall("conv_t3c")).toMatchObject({
+      risk: "red", reasons: ["3日続けて食事をとれていない（継続中）"],
+    });
+    expect(pushes()).toEqual([]);
+  });
+
+  it("keeps a helper-only reason out of the family's initial alert and resend", async () => {
+    await earlier("conv_private1", 1, "sato");
+    await earlier("conv_private2", 2, "sato");
+    extract.mockResolvedValueOnce({ ...notEaten, signals: { ...notEaten.signals, self_harm: true } });
+    await callToday("conv_private3", "sato");
+
+    const helper = () => pushes().find((p) => p.to === "U_helper")?.messages[0].text;
+    const family = () => pushes().find((p) => p.to === "U_family")?.messages[0].text;
+    expect(helper()).toContain("死にたい気持ちの訴え");
+    expect(family()).toContain("3日続けて食事をとれていない");
+    expect(family()).not.toContain("死にたい気持ちの訴え");
+
+    lineCalls.length = 0;
+    await after(31);
+    expect(helper()).toContain("死にたい気持ちの訴え");
+    expect(family()).toContain("3日続けて食事をとれていない");
+    expect(family()).not.toContain("死にたい気持ちの訴え");
+  });
+
+  it("still records and alerts the acute finding when trend history fails", async () => {
+    using history = vi.spyOn(store, "listCalls").mockRejectedValueOnce(new Error("history unavailable"));
+    extract.mockResolvedValueOnce({ ...extraction, observations: { ...blank, pain_or_injury: "yes" } });
+    await callToday("conv_after_bad", "takahashi");
+    expect(history).toHaveBeenCalledWith("takahashi");
+    expect(await store.getCall("conv_after_bad")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
+    expect(pushes().map((p) => p.to)).toContain("U_helper");
+  });
+
+  it("allows another call to fire a trend if the first call couldn't schedule its alert", async () => {
+    await earlier("conv_retry_trend1", 1, "takahashi");
+    await earlier("conv_retry_trend2", 2, "takahashi");
+    using schedule = vi.spyOn(store, "schedule").mockRejectedValueOnce(new Error("task storage unavailable"));
+    extract.mockResolvedValueOnce(notEaten).mockResolvedValueOnce(notEaten);
+    await callToday("conv_retry_trend_fail", "takahashi");
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(pushes().map((p) => p.to)).not.toContain("U_family");
+
+    lineCalls.length = 0;
+    await callToday("conv_retry_trend_ok", "takahashi");
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+  });
+});
+
+describe("follow-ups after a call", () => {
+  const call = (id: string, residentId: string) =>
+    elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
+
+  it("saves what the model proposes, hands it to the next call, and lets the helper remove it", async () => {
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
+    await call("conv_fu1", "takahashi");
+    const saved = (await store.getResident("takahashi"))!.follow_ups!;
+    expect(saved.map((f) => f.text)).toEqual(["腰の痛みはその後どうか"]);
+    expect(curate).toHaveBeenCalledWith(expect.objectContaining({ id: "takahashi" }), [], expect.any(Array), expect.any(String));
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    const { startBrowserCall, deleteFollowUp } = await import("@/app/actions");
+    const followUps = async (id: string) => variablesOf(await startBrowserCall(id)).follow_ups;
+    expect(await followUps("takahashi")).toBe("・腰の痛みはその後どうか");
+    expect(await followUps("suzuki")).toBe("なし");
+
+    const data = new FormData();
+    data.set("resident_id", "takahashi");
+    data.set("follow_up_id", saved[0].id);
+    await deleteFollowUp(data);
+    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+  });
+
+  it("shows the model the open follow-ups, and closes the ones it says are settled", async () => {
+    await store.updateResident("takahashi", (r) => ({
+      ...r, follow_ups: [{ id: "hip", text: "腰の痛みはその後どうか", created: "2026-11-01", expires: "2099-01-01" }],
+    }));
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: ["hip"], new_follow_ups: [] });
+    await call("conv_fu2", "takahashi");
+    expect(curate.mock.calls[0][1]).toEqual([expect.objectContaining({ id: "hip" })]);
+    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+  });
+
+  it("when curation fails: the call, its alerts and its summary are all still there, with no extra alert", async () => {
+    curate.mockRejectedValueOnce(new Error("model unavailable"));
+    const before = (await store.getResident("suzuki"))!.follow_ups;
+    await call("conv_fu3", "suzuki");
+    expect(curate).toHaveBeenCalledTimes(1);
+    expect(await store.getCall("conv_fu3")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
+    expect(await store.getCall("conv_fu3-error")).toBeNull();
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper", "U_volunteer"]);
+    const after = (await store.getResident("suzuki"))!;
+    expect(after.recent_calls[0].summary).toBe(extraction.summary);
+    expect(after.follow_ups).toEqual(before);
+  });
+
+  it("does not curate a voicemail, a silent call, or a call that could not be judged", async () => {
+    extract.mockResolvedValueOnce({ ...extraction, answered_by_person: false });
+    await call("conv_fu4", "takahashi");
+    await store.clearLadder("takahashi");
+
+    await elevenlabs(signedElevenLabs(JSON.stringify({
+      type: "post_call_transcription",
+      data: { conversation_id: "conv_fu5", conversation_initiation_client_data: { dynamic_variables: { resident_id: "takahashi" } },
+        transcript: [{ role: "agent", message: "もしもし、高橋さんですか。" }] },
+    })));
+    await store.clearLadder("takahashi");
+
+    extract.mockRejectedValueOnce(new Error("model unavailable"));
+    await call("conv_fu6", "takahashi");
+    expect(await store.getCall("conv_fu6")).toMatchObject({ risk: "yellow" });
+    expect(curate).not.toHaveBeenCalled();
+  });
+
+  it("does not curate a call whose extraction worked but whose rules could not run", async () => {
+    // The saved weather file goes missing, so the rules can't run even though extraction did.
+    const { rename } = await import("node:fs/promises");
+    const file = `${process.env.DATA_DIR}/weather.json`;
+    await rename(file, `${file}.away`);
+    await call("conv_fu7", "takahashi").finally(() => rename(`${file}.away`, file));
+    expect(extract).toHaveBeenCalled();
+    expect(await store.getCall("conv_fu7")).toMatchObject({ risk: "yellow", reasons: ["自動判定に失敗。通話メモを確認してください"] });
+    expect(curate).not.toHaveBeenCalled();
+  });
+
+  // A curation whose model call is still running while something else happens.
+  const deferred = () => {
+    let finish!: (c: import("@/lib/curate").Curation) => void;
+    curate.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    return (text: string) => finish({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text, days: 3 }] });
+  };
+
+  it("drops a slow curation when the demo was reset in the meantime", async () => {
+    const finish = deferred();
+    const pending = call("conv_fu8", "takahashi");
+    await vi.waitFor(() => expect(curate).toHaveBeenCalled());
+    const { resetDemo } = await import("@/app/actions");
+    await resetDemo();
+    finish("腰の痛みはその後どうか");
+    await pending;
+    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+  });
+
+  it("drops a slow curation from an older call once a newer call has been processed", async () => {
+    const finishOlder = deferred();
+    const older = call("conv_fu9", "takahashi");
+    await vi.waitFor(() => expect(curate).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 5)); // the newer call's record gets a later time
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "新しい通話からの確認", days: 3 }] });
+    await call("conv_fu10", "takahashi");
+    finishOlder("古い通話からの確認");
+    await older;
+    expect((await store.getResident("takahashi"))!.follow_ups!.map((f) => f.text)).toEqual(["新しい通話からの確認"]);
+  });
+
+  it("clears follow-ups on a demo reset", async () => {
+    await store.updateResident("sato", (r) => ({
+      ...r, follow_ups: [{ id: "x", text: "腰", created: "2026-11-01", expires: "2099-01-01" }],
+    }));
+    const { resetDemo } = await import("@/app/actions");
+    await resetDemo();
+    expect((await store.getResident("sato"))!.follow_ups).toEqual([]);
+  });
+});
+
+describe("the helper's memory edits", () => {
+  const form = (fields: Record<string, string>) => {
+    const data = new FormData();
+    for (const [k, v] of Object.entries(fields)) data.set(k, v);
+    return data;
+  };
+
+  it("adds, edits, retires, restores and deletes a fact, and saves care notes", async () => {
+    const actions = await import("@/app/actions");
+    const facts = async () => (await store.getResident("suzuki"))!;
+    await actions.addFactAction(form({ resident_id: "suzuki", text: "毎週木曜に書道教室に通う" }));
+    const added = (await facts()).facts.at(-1)!;
+    expect(added).toMatchObject({ text: "毎週木曜に書道教室に通う", source: "helper", locked: true });
+
+    await actions.editFactAction(form({ resident_id: "suzuki", fact_id: added.id, text: "毎週金曜に書道教室に通う" }));
+    expect((await facts()).facts.at(-1)!.text).toBe("毎週金曜に書道教室に通う");
+
+    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect((await facts()).facts.map((f) => f.id)).not.toContain(added.id);
+    await actions.restoreFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect((await facts()).facts.map((f) => f.id)).toContain(added.id);
+
+    await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    await actions.deleteFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
+    expect(JSON.stringify(await facts())).not.toContain("書道教室"); // neither wording survives, in the log either
+
+    await actions.saveCareNotes(form({ resident_id: "suzuki", text: "奥さんの話はこちらからしない" }));
+    expect((await facts()).care_notes).toBe("奥さんの話はこちらからしない");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    expect(variablesOf(await actions.startBrowserCall("suzuki"))).toMatchObject({
+      care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
+      briefing: "なし",
+    });
+  });
+
+  it("does nothing for a resident that doesn't exist or a path-style id", async () => {
+    const actions = await import("@/app/actions");
+    await actions.addFactAction(form({ resident_id: "nobody", text: "x" }));
+    const call = JSON.stringify(await store.getCall("conv_slip"));
+    await actions.addFactAction(form({ resident_id: "../calls/conv_slip", text: "x" }));
+    expect(JSON.stringify(await store.getCall("conv_slip"))).toBe(call); // the call record was not rewritten as a resident
+    expect((await store.listResidents()).map((r) => r.id).sort()).toEqual(["sato", "suzuki", "takahashi"]);
+  });
+});
+
+describe("today's brief on a call", () => {
+  const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
+
+  it("reaches the agent when a pattern is running, and never stops a call from being placed", async () => {
+    for (const daysAgo of [1, 2, 3]) {
+      await store.saveCall({
+        id: `conv_brief${daysAgo}`, resident_id: "sato", at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), kind: "call",
+        risk: "yellow", reasons: [], actions: [], handled: true, extraction: { ...extraction, observations: { ...blank, ate: "no" } },
+      });
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
+    const { startBrowserCall } = await import("@/app/actions");
+    expect(variablesOf(await startBrowserCall("sato")).briefing).toBe("・食事のことを、いつもよりていねいに聞く。");
+
+    const broken = vi.spyOn(store, "listCalls").mockRejectedValueOnce(new Error("disk error"));
+    expect(variablesOf(await startBrowserCall("sato")).briefing).toBe("なし");
+    broken.mockRestore();
   });
 });

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { criticalCount } from "@/lib/coverage";
 import { mapData, rankedRows, snowRequest, type Row } from "@/lib/dashboard";
-import { DEMO_MODE } from "@/lib/env";
+import { DEMO_MODE, LINE_READY } from "@/lib/env";
 import type { Lang, Strings } from "@/lib/i18n";
 import { listCalls, listResidents } from "@/lib/store";
 import type { CallRecord } from "@/lib/types";
@@ -10,7 +11,6 @@ import { resetDemo } from "./actions";
 import { getStrings } from "./lang";
 import { riskEdge } from "./ui";
 import { MapView } from "./map-view";
-import { Refresh } from "./refresh";
 import { ResidentCard } from "./resident-card";
 
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -33,11 +33,14 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     { label: t.badge.yellow, n: open("yellow"), className: "bg-amber-400 text-black" },
     { label: t.badge.none, n: rows.filter((r) => !r.call).length, className: "bg-zinc-200 text-zinc-700" },
   ];
+  const unreached = criticalCount(residents);
+  // The card line singles a resident out. Skip it when the banner already says the same of everyone:
+  // all are critical, or LINE isn't set up.
+  const flagGaps = LINE_READY && unreached < residents.filter((r) => r.active !== false).length;
   const href = (v: "list" | "map", id = selected) => `/?view=${v}${id ? `&selected=${encodeURIComponent(id)}` : ""}`;
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
-      <Refresh />
       <h1 className="text-2xl font-semibold">{t.title}</h1>
       {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
       <p className="mt-3 flex flex-wrap gap-2 text-sm">
@@ -47,24 +50,35 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </span>
         ))}
       </p>
-      <nav className="mt-4 inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
-        {(["list", "map"] as const).map((v) => (
-          <Link
-            key={v}
-            href={href(v)}
-            aria-current={view === v ? "page" : undefined}
-            className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
-          >
-            {t[v]}
-          </Link>
-        ))}
-      </nav>
+      {(!LINE_READY || unreached > 0) && (
+        // An alert that would reach nobody is the failure this product exists to prevent: say so up front.
+        <Link href="/people" className="mt-3 block rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800 hover:bg-red-100">
+          {LINE_READY ? t.coverageBanner(unreached) : t.lineNotReady} →
+        </Link>
+      )}
+      <div className="mt-4 flex items-center gap-4">
+        <nav className="inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
+          {(["list", "map"] as const).map((v) => (
+            <Link
+              key={v}
+              href={href(v)}
+              aria-current={view === v ? "page" : undefined}
+              className={`px-3 py-1 ${view === v ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}
+            >
+              {t[v]}
+            </Link>
+          ))}
+        </nav>
+        <Link href="/people" className={linkClass}>
+          {t.people}
+        </Link>
+      </div>
 
       {view === "list" ? (
         <ul className="mt-4 divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
           {rows.map((row) => (
             <li key={row.resident.id} className={`p-4 ${riskEdge(row.call) || "border-l-4 border-l-transparent"} ${row.resident.id === selected ? "bg-blue-50" : ""}`}>
-              <ResidentCard {...row} lang={lang} t={t}>
+              <ResidentCard {...row} lang={lang} t={t} flagGaps={flagGaps}>
                 <Link href={href("map", row.resident.id)} className={linkClass}>
                   {t.viewOnMap}
                 </Link>
@@ -73,7 +87,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           ))}
         </ul>
       ) : (
-        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} />
+        <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} flagGaps={flagGaps} />
       )}
       {DEMO_MODE && (
         <form action={resetDemo} className="mt-6 text-right">
@@ -93,6 +107,7 @@ function MapPanel({
   listHref,
   lang,
   t,
+  flagGaps,
 }: {
   rows: Row[];
   calls: CallRecord[];
@@ -100,6 +115,7 @@ function MapPanel({
   listHref: string;
   lang: Lang;
   t: Strings;
+  flagGaps: boolean;
 }) {
   const data = mapData(rows, calls);
   const row = rows.find((r) => r.resident.id === selected);
@@ -133,7 +149,7 @@ function MapPanel({
       <div className={`mt-4 rounded-lg border border-zinc-200 p-4 ${riskEdge(row?.call)}`}>
         {row ? (
           <>
-            <ResidentCard {...row} lang={lang} t={t}>
+            <ResidentCard {...row} lang={lang} t={t} flagGaps={flagGaps}>
               <Link href={listHref} className={linkClass}>
                 {t.viewInList}
               </Link>

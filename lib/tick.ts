@@ -1,4 +1,5 @@
 import { recheckAlert } from "./actions";
+import { placeDailyCalls } from "./daily";
 import { confirmStep, retryStep } from "./ladder";
 import { deleteTask, listTasks, type Task } from "./store";
 
@@ -11,7 +12,7 @@ const run = (task: Task) => {
 let running = false;
 
 /**
- * Runs every task that is due. Called every few seconds by instrumentation.ts.
+ * Runs every task that is due, then places the next daily call. Called every few seconds by instrumentation.ts.
  * A task is deleted after it runs, so a crash mid-task repeats it on restart instead of losing it;
  * each step checks the current state first, so a repeat is harmless.
  */
@@ -24,6 +25,7 @@ export async function runDue(now = Date.now()) {
       await run(task).catch((e) => console.error(`Task ${task.id} failed`, e));
       await deleteTask(task.id);
     }
+    await placeDailyCalls(new Date(now)).catch((e) => console.error("Daily calls failed", e));
   } finally {
     running = false;
   }
