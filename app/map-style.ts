@@ -11,7 +11,8 @@ export const GSI_OPTIONS = {
 /** Where the map opens when there is nothing to show yet: Iwamizawa. */
 export const DEFAULT_CENTER: LatLng = { lat: 43.196, lng: 141.776 };
 
-export const RISK_COLOR = { red: "#dc2626", yellow: "#f59e0b", green: "#059669", none: "#a1a1aa" };
+// "none" (not called yet) is dark, so the pin still shows on the pale base map.
+export const RISK_COLOR = { red: "#dc2626", yellow: "#f59e0b", green: "#059669", none: "#3f3f46" };
 export const VOLUNTEER_COLOR = "#2563eb";
 
 /** A pin drawn in HTML, so no image files are needed. */
