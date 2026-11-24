@@ -117,7 +117,7 @@ function MapPanel({
             {rows.map(({ resident }, i) => (
               <span key={resident.id}>
                 {i > 0 && t.separator}
-                <Link href={`/residents/${resident.id}`} className="underline">
+                <Link href={`/residents/${resident.id}#location-home`} className="underline">
                   {t.name(resident)}
                 </Link>
               </span>
@@ -154,7 +154,14 @@ function MapPanel({
                 {request.km !== undefined && t.straightLine(request.km)}
               </p>
             )}
-            {!home && <p className="mt-2 text-sm text-zinc-500">{t.noLocation}</p>}
+            {!home && (
+              <p className="mt-2 text-sm text-zinc-500">
+                {t.noLocation}{" "}
+                <Link href={`/residents/${row.resident.id}#location-home`} className="underline">
+                  {t.placeHome}
+                </Link>
+              </p>
+            )}
           </>
         ) : (
           <p className="text-sm text-zinc-500">{t.pickPin}</p>

@@ -61,17 +61,16 @@ const ja = {
   unplaced: (n: number) => `位置未登録：${n}名（利用者のページで登録できます）`,
   pickPin: "ピンを選ぶと、その方の状況が表示されます。",
   mapEmpty: "まだどなたの自宅も地図に登録されていません。",
-  mapEmptyHelp: "それぞれのページの「地図上の位置」で、自宅の場所を登録してください：",
+  mapEmptyHelp: "それぞれのページの「設定」で、自宅の場所を登録してください：",
   mapEmptyDemo: "デモ用の位置を入れるには、下の「デモをリセット」を押してください。",
   noLocation: "この方の位置はまだ登録されていません。",
+  placeHome: "自宅を地図で登録",
   requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted") =>
     `${volunteer}さんへ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
-  mapLocations: (home: boolean, volunteer: boolean) =>
-    `地図上の位置（自宅：${home ? "登録済み" : "未登録"}、除雪ボランティア：${volunteer ? "登録済み" : "未登録"}）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
-  picker: { save: "この位置で保存", saving: "保存中…", placed: "登録済み。地図をクリックで変更", unplaced: "地図をクリックして位置を決める" },
+  picker: { set: "登録済み", unset: "未登録", place: "地図で登録", change: "変更", save: "この位置で保存", saving: "保存中…", hint: "地図をクリックして位置を決める" },
 };
 
 const en: typeof ja = {
@@ -134,17 +133,16 @@ const en: typeof ja = {
   unplaced: (n) => `Not on the map yet: ${n} (place them from each resident's page)`,
   pickPin: "Choose a pin to see that resident's status.",
   mapEmpty: "No resident is on the map yet.",
-  mapEmptyHelp: "Place each home under \"Map locations\" on the resident's page:",
+  mapEmptyHelp: "Place each home under Settings on the resident's page:",
   mapEmptyDemo: "To fill in the demo locations, press \"Reset demo\" below.",
   noLocation: "This resident has no location yet.",
+  placeHome: "Place their home",
   requestStatus: (_volunteer, status) =>
     `Snow volunteer: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
-  mapLocations: (home, volunteer) =>
-    `Map locations (home: ${home ? "set" : "not set"}; snow volunteer: ${volunteer ? "set" : "not set"})`,
   home: "Home",
   volunteer: () => "Snow volunteer",
-  picker: { save: "Save this spot", saving: "Saving…", placed: "Set. Click the map to change it", unplaced: "Click the map to choose a spot" },
+  picker: { set: "Set", unset: "Not set", place: "Place on map", change: "Change", save: "Save this spot", saving: "Saving…", hint: "Click the map to choose a spot" },
 };
 
 export const strings = { ja, en };
