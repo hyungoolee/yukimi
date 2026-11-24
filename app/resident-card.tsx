@@ -26,6 +26,11 @@ export function ResidentCard({
       {call && call.reasons.length > 0 && (
         <p className="mt-2 text-sm">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>
       )}
+      {call?.risk === "red" && !call.handled && call.actions.some((a) => a.type === "alert") && (
+        <p className={`mt-1 text-sm ${call.acknowledged_by ? "text-zinc-600" : "font-medium text-red-700"}`}>
+          {call.acknowledged_by ? t.alertSeen(call.acknowledged_by) : t.alertUnseen(call.alert_rounds ?? 0)}
+        </p>
+      )}
       {call?.actions.some((a) => a.type === "snow_request") && (
         <p className="mt-1 text-sm text-zinc-600">
           {t.snowRequest}
