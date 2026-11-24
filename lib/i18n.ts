@@ -169,7 +169,7 @@ const en: typeof ja = {
   messageNotRecorded: "The wording and per-recipient results were not recorded for this call.",
   messageResent: (n) => `Not acknowledged, so it was sent again ${n} time${n === 1 ? "" : "s"} after this.`,
   alertGloss: (reasons) => `Please check: ${reasons}`,
-  requestGloss: { snow: "Request to clear the snow at the front door", supplies: "Request to bring what she is short of" },
+  requestGloss: { snow: "Request to clear the snow at the front door", supplies: "Request to bring what they are short of" },
   callNow: "Call now",
   calling: "Calling…",
   addPhone: "Add a phone number",

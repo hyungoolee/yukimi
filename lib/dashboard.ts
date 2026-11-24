@@ -1,5 +1,5 @@
 import { openRequests, type OpenRequest } from "./requests";
-import type { CallRecord, Contact, LatLng, Resident, Risk, Slot } from "./types";
+import type { CallRecord, Contact, LatLng, Resident, Risk } from "./types";
 
 // What the helper list and the coordinator's map both show. One rule, so they can't disagree.
 
@@ -35,7 +35,6 @@ export type SnowRequest = {
   residentId: string;
   status: "not_sent" | "sent" | "accepted";
   volunteer: string;
-  slot?: Slot;
   from?: LatLng;
   to?: LatLng;
   km?: number;
@@ -51,7 +50,6 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
     residentId: resident.id,
     status: request.status,
     volunteer: resident.snow_volunteer.name,
-    slot: request.slot,
     from,
     to,
     km: from && to ? distanceKm(from, to) : undefined,

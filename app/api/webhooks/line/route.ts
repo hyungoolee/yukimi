@@ -2,7 +2,7 @@ import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
 import { acceptRequest } from "@/lib/actions";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { isRequestKind, openRequests, REQUESTS, slotLabel } from "@/lib/requests";
+import { isRequestKind, openRequests, passed, REQUESTS, slotLabel } from "@/lib/requests";
 import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
@@ -35,12 +35,19 @@ export async function POST(request: Request) {
           const slot = /^\d{4}-\d\d-\d\d$/.test(date ?? "") && (part === "am" || part === "pm") ? { date, part } as const : undefined;
           // A later call may have asked again: the answer goes on the request that is open now.
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind);
-          const { mine, request } = await acceptRequest(open?.callId ?? id, requestKind, person.name, slot);
-          const when = request?.slot ? `${slotLabel(request.slot)}で` : "";
-          await reply(
-            event.replyToken,
-            mine ? `${resident.name}さん宅、${when}承りました。ありがとうございます。` : `${request?.accepted_by || "ほかの方"}さんが引き受け済みです。`,
-          );
+          if (!open) {
+            await reply(event.replyToken, "この件はもう済んでいます。ありがとうございます。");
+          } else if (slot && passed(slot, new Date())) {
+            // The buttons were set when the message went out; that half-day is over now.
+            await reply(event.replyToken, "その時間は過ぎています。ほかの時間を押してください。");
+          } else {
+            const { mine, request } = await acceptRequest(open.callId, requestKind, person.name, slot);
+            const when = request?.slot ? `${slotLabel(request.slot)}で` : "";
+            await reply(
+              event.replyToken,
+              mine ? `${resident.name}さん宅、${when}承りました。ありがとうございます。` : "すでに引き受け済みです。ありがとうございます。",
+            );
+          }
         }
       } else if (kind === "ack") {
         // Someone who was sent the red alert says they've seen it: stop sending it again.

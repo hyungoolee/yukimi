@@ -55,7 +55,7 @@ export function slotChoices(now = new Date()): Slot[] {
 }
 
 /** Over: nobody is still on their way. */
-const passed = (slot: Slot, now: Date) =>
+export const passed = (slot: Slot, now: Date) =>
   index(slot) < index({ date: japanDate(now), part: japanHour(now) < 12 ? "am" : "pm" });
 
 /** 「今日の午前」. A slot is saved by its date, so a button tapped the next day still means the day it said. */
@@ -79,17 +79,23 @@ export type OpenRequest = {
   slot?: Slot;
 };
 
+// A request nobody closed stops being talked about after this long: the questions that close it are
+// only required on winter-check mornings.
+const STALE_MS = 3 * 24 * 60 * 60_000;
+
 /**
- * The resident's open requests, at most one per kind: the newest one, unless it is done or its call
- * was marked handled. `calls` must be newest first.
+ * The resident's open requests, at most one per kind: the newest one, unless it is done, has gone
+ * stale, or its call was marked handled before anyone took it. `calls` must be newest first.
  */
-export function openRequests(resident: Resident, calls: CallRecord[]): OpenRequest[] {
+export function openRequests(resident: Resident, calls: CallRecord[], now = new Date()): OpenRequest[] {
   return (Object.keys(REQUESTS) as RequestKind[]).flatMap((kind) => {
     for (const call of calls) {
       if (call.resident_id !== resident.id) continue;
       const action = call.actions.find((a) => a.type === "request" && a.kind === kind);
       if (!action) continue;
-      if (action.done || call.handled) return [];
+      // "Handled" is about the alert. Someone who has said they are coming is still coming.
+      if (action.done || (call.handled && action.accepted_by === undefined)) return [];
+      if (now.getTime() - new Date(call.at).getTime() > STALE_MS) return [];
       return [{
         kind,
         callId: call.id,
@@ -111,7 +117,7 @@ export const arranged = (request: OpenRequest | undefined, now = new Date()) =>
  * there is none. A request that reached nobody is left out: the agent must not say someone was asked.
  */
 export function helpLine(resident: Resident, calls: CallRecord[], now = new Date()) {
-  const lines = openRequests(resident, calls).flatMap((r) => {
+  const lines = openRequests(resident, calls, now).flatMap((r) => {
     const def = REQUESTS[r.kind];
     if (r.status === "not_sent") return [];
     if (r.status === "sent") return [`・${def.label.ja}：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。`];
