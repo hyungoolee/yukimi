@@ -89,7 +89,10 @@
         "user",
         "助かるわ。ありがとうね。"
       ]
-    ]
+    ],
+    "observations": {
+      "can_get_out": "no"
+    }
   },
   {
     "id": "healthy-chatty",
@@ -269,7 +272,10 @@
         "user",
         "お願いね。"
       ]
-    ]
+    ],
+    "observations": {
+      "heating_ok": "no"
+    }
   },
   {
     "id": "not-eating-low-mood",
@@ -678,5 +684,101 @@
         "もうはいたから出られるよ。体もどこも痛くないし、元気だよ。"
       ]
     ]
+  },
+  {
+    "id": "hangs-up-early",
+    "about": "Answers, says the heater is on, then has to go before the other checks",
+    "resident": "sato",
+    "expected": "yellow",
+    "expected_reasons": [
+      "通話が終わる前に確認できなかった：睡眠／玄関・雪／食料・薬"
+    ],
+    "snow_request": false,
+    "transcript": [
+      [
+        "agent",
+        "もしもし、佐藤さんですか。おはようございます。娘のゆきさんからご紹介いただいた、見守り電話です。"
+      ],
+      [
+        "user",
+        "はい、佐藤です。おはようございます。"
+      ],
+      [
+        "agent",
+        "今朝はマイナス十二度まで冷えましたね。暖房はちゃんと動いていますか。"
+      ],
+      [
+        "user",
+        "ええ、ストーブはついてますよ。あ、ごめんなさい、お客さんが来たので切りますね。"
+      ],
+      [
+        "agent",
+        "わかりました。玄関の雪はいかがですか。"
+      ]
+    ],
+    "whole_call": true,
+    "observations": {
+      "heating_ok": "yes",
+      "can_get_out": "unknown",
+      "has_supplies": "unknown",
+      "slept_well": "unknown"
+    }
+  },
+  {
+    "id": "all-checks-done",
+    "about": "Short, well, answers every winter check",
+    "resident": "sato",
+    "expected": "green",
+    "expected_reasons": [],
+    "snow_request": false,
+    "transcript": [
+      [
+        "agent",
+        "もしもし、佐藤さんですか。おはようございます。娘のゆきさんからご紹介いただいた、見守り電話です。"
+      ],
+      [
+        "user",
+        "はい、おはようございます。"
+      ],
+      [
+        "agent",
+        "今朝は冷えましたね。暖房はちゃんと動いていますか。"
+      ],
+      [
+        "user",
+        "ストーブはついてますよ。"
+      ],
+      [
+        "agent",
+        "玄関の雪はいかがですか。外に出られそうでしょうか。"
+      ],
+      [
+        "user",
+        "朝のうちにはいたから、出られますよ。"
+      ],
+      [
+        "agent",
+        "食べ物やお薬は足りていますか。"
+      ],
+      [
+        "user",
+        "どっちも足りてます。"
+      ],
+      [
+        "agent",
+        "体調はいかがですか。ゆうべはよく眠れましたか。"
+      ],
+      [
+        "user",
+        "元気ですよ。よく眠れました。じゃあ、これで。"
+      ]
+    ],
+    "whole_call": true,
+    "observations": {
+      "heating_ok": "yes",
+      "can_get_out": "yes",
+      "has_supplies": "yes",
+      "slept_well": "yes"
+    }
   }
 ]

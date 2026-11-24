@@ -2,6 +2,7 @@ import { runActions } from "./actions";
 import { extract } from "./extract";
 import { missed } from "./ladder";
 import { curateMemory } from "./memory";
+import { unanswered } from "./measures";
 import { applyRules } from "./rules";
 import { claimTrendFiring, clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
 import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
@@ -20,8 +21,16 @@ export const needsReview = (reason: string): RulesOutput => ({
 /**
  * After a finished call: extract, apply the rules, send alerts and requests, update memory.
  * `attempt` is which phone attempt this was, or null for a browser call (which has no ladder).
+ * `winterChecks` is whether the agent was told to run the winter checks on this call. It comes from
+ * the call itself, not from the weather now, which may have changed or fallen back to saved data.
  */
-export async function processCall(residentId: string, callId: string, transcript: Turn[], attempt: number | null = 1) {
+export async function processCall(
+  residentId: string,
+  callId: string,
+  transcript: Turn[],
+  attempt: number | null = 1,
+  winterChecks = false,
+) {
   const resident = await getResident(residentId);
   if (!resident) throw new Error(`Unknown resident ${residentId}`);
 
@@ -30,7 +39,13 @@ export async function processCall(residentId: string, callId: string, transcript
   let judged = false; // true only when the rules ran on a real extraction
   try {
     extraction = await extract(resident, transcript);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station));
+    // A question an earlier call today already answered is not unanswered: a short second call is fine.
+    const earlier = (await listCalls(residentId).catch(() => [])).filter((c) => c.kind === "call" && c.id !== callId);
+    const [today] = dailyObservations([
+      { at: new Date().toISOString(), observations: extraction.observations },
+      ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
+    ]);
+    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), unanswered(today?.observations ?? {}, winterChecks));
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);

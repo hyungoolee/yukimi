@@ -1,7 +1,12 @@
+import { MEASURES, type MeasureField } from "./measures.ts";
 import type { Action, Risk, Role, RulesOutput, Signals, Weather } from "./types";
 
+/** Followed by the labels of the questions that went unanswered. */
+export const UNCONFIRMED = "通話が終わる前に確認できなかった：";
+
 // The escalation table from the PRD, as code. The LLM only supplies the signals.
-export function applyRules(s: Signals, weather: Weather): RulesOutput {
+// `unanswered` is the required questions this call ended without an answer to (lib/measures.ts).
+export function applyRules(s: Signals, weather: Weather, unanswered: MeasureField[] = []): RulesOutput {
   const red: string[] = [];
   const yellow: string[] = [];
   const alerts = new Map<Role, string[]>();
@@ -31,6 +36,14 @@ export function applyRules(s: Signals, weather: Weather): RulesOutput {
   if (s.not_eating) yellow.push("食事をとれていない");
   if (s.confused) yellow.push("混乱した様子");
   if (s.low_mood) yellow.push("気分の落ち込み");
+
+  // Reached, but hung up (or was cut off) before a required question: "no problem heard" is not "fine".
+  // The helper is told which. Left out when something red already has people on their way.
+  if (!red.length && unanswered.length) {
+    const labels = MEASURES.filter((m) => unanswered.includes(m.field)).map((m) => m.label.ja);
+    yellow.push(UNCONFIRMED + labels.join("／")); // not 、, which separates reasons in the alert
+    alerts.set("helper", []);
+  }
 
   const risk: Risk = red.length ? "red" : yellow.length ? "yellow" : "green";
   if (alerts.size) {

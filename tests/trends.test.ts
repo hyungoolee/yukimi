@@ -5,7 +5,7 @@ import type { Observations, RulesOutput } from "@/lib/types";
 
 const TODAY = "2026-11-26";
 const mealTrend = { id: "not_eating", reason: "3日続けて食事をとれていない", risk: "red" } as const;
-const blank: Observations = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" };
+const blank = Object.fromEntries(MEASURES.map((m) => [m.field, "unknown"])) as Observations;
 /** Days ago -> that day's observations, as findTrends wants them (newest first). */
 const days = (byAge: Record<number, Partial<Observations>>) =>
   Object.entries(byAge)

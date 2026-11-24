@@ -16,6 +16,12 @@ type Measure = {
   label: { ja: string; en: string };
   /** The line the extraction model is given for this field. */
   ask: string;
+  /**
+   * A question the agent must get an answer to: on every call, or only on a winter-check morning.
+   * A call that ends with one still "unknown" is flagged for the helper (lib/rules.ts).
+   * Meals are not required: "no breakfast yet" is deliberately recorded as "unknown".
+   */
+  required?: "always" | "winter";
   /** A pattern across days: `days` worrying answers running, all within `within` days. */
   trend?: {
     id: string;
@@ -46,6 +52,7 @@ export const MEASURES = [
     concern: "no",
     label: { ja: "睡眠", en: "Sleep" },
     ask: `slept_well (last night): "no" when they say they slept badly or could not sleep; "yes" when they say they slept well.`,
+    required: "always",
     trend: { id: "poor_sleep", days: 3, within: 5, risk: "yellow", reason: "3日続けて眠れていない", reasonEn: "Sleeping badly for 3 nights running", brief: "睡眠のことを、いつもよりていねいに聞く。" },
   },
   {
@@ -67,12 +74,42 @@ export const MEASURES = [
     ask: `low_mood: "yes" when they say they are lonely, hopeless, or that there is no point. "no" when they say they feel well or cheerful.`,
     trend: { id: "low_mood", days: 3, within: 5, risk: "yellow", reason: "気分の落ち込みが3日続いている", reasonEn: "Low mood for 3 days running", brief: "気持ちの様子を、急がずゆっくり聞く。" },
   },
+  {
+    field: "heating_ok",
+    concern: "no",
+    label: { ja: "暖房", en: "Heating" },
+    ask: `heating_ok (now): "yes" when they say their heating is on or working; "no" when it is broken or they are out of fuel.`,
+    required: "winter",
+  },
+  {
+    field: "can_get_out",
+    concern: "no",
+    label: { ja: "玄関・雪", en: "Front door" },
+    ask: `can_get_out (now): "yes" when they say they can get out of the front door; "no" when snow or ice keeps them from opening it or leaving.`,
+    required: "winter",
+  },
+  {
+    field: "has_supplies",
+    concern: "no",
+    label: { ja: "食料・薬", en: "Food and medicine" },
+    ask: `has_supplies (now): "yes" when they say they have enough food and medicine; "no" when they are short of either. "unknown" when only one of the two came up and it was fine.`,
+    required: "winter",
+  },
 ] as const satisfies readonly Measure[];
 
 export type MeasureField = (typeof MEASURES)[number]["field"];
 
 /** What the resident said about each measure on one call or one day. */
 export type Observations = Record<MeasureField, Tri>;
+
+/**
+ * The required questions a call left unanswered, in table order. `winterChecks` is whether this
+ * call's agent was told to run the winter checks. Fields missing on older records count as unanswered.
+ */
+export const unanswered = (observations: Partial<Observations>, winterChecks: boolean): MeasureField[] =>
+  MEASURES.filter(
+    (m) => "required" in m && (m.required === "always" || winterChecks) && (observations[m.field] ?? "unknown") === "unknown",
+  ).map((m) => m.field);
 
 /** Whether a value is the worrying one for its measure. */
 export const isConcern = (field: MeasureField, value: Tri) => value === MEASURES.find((m) => m.field === field)!.concern;
