@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
 import { DEMO_SCRIPT } from "@/lib/demo-script";
-import { alertText, snowRequestText } from "@/lib/actions";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
@@ -139,30 +138,34 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               <div className="text-zinc-500">{t.messagesSent}</div>
               <ul className="mt-1 space-y-2">
                 {call.actions.flatMap((a) =>
-                  // One entry per recipient: an alert can give each person different reasons.
-                  a.to.map((role) => {
-                    const reasons = (a.type === "alert" && a.reasonsByRole?.[role]) || call.reasons;
-                    return (
-                      <li key={`${a.type}-${role}`} className="rounded border border-zinc-200 p-2">
-                        <div className="text-zinc-500">
-                          → {resident[role].name}
-                          <span className={a.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
-                            {a.sent ? t.messageDelivered : t.messageNotDelivered}
-                          </span>
-                        </div>
-                        <div>{a.type === "alert" ? `【要確認】${alertText(resident, reasons)}` : snowRequestText(resident)}</div>
-                        {lang === "en" && (
-                          <div className="text-zinc-600">
-                            {a.type === "alert"
-                              ? t.alertGloss(reasons.map((r) => reasonText(lang, r)).join(t.separator))
-                              : t.snowGloss}
+                  // Older records kept neither the wording nor each person's result: say so, don't guess.
+                  !a.deliveries
+                    ? [
+                        <li key={a.type} className="rounded border border-zinc-200 p-2 text-zinc-500">
+                          → {a.to.map((role) => resident[role].name).join("、")}
+                          <div>{t.messageNotRecorded}</div>
+                        </li>,
+                      ]
+                    : a.deliveries.map((d) => (
+                        <li key={`${a.type}-${d.role}`} className="rounded border border-zinc-200 p-2">
+                          <div className="text-zinc-500">
+                            → {resident[d.role].name}
+                            <span className={d.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
+                              {d.sent ? t.messageDelivered : d.registered ? t.messageFailed : t.messageUnregistered}
+                            </span>
                           </div>
-                        )}
-                      </li>
-                    );
-                  }),
+                          <div className="whitespace-pre-wrap break-words">{d.text}</div>
+                          {d.button && <div className="text-zinc-500">{t.messageButton(d.button)}</div>}
+                          {lang === "en" && (
+                            <div className="text-zinc-600">
+                              {d.reasons ? t.alertGloss(d.reasons.map((r) => reasonText(lang, r)).join(t.separator)) : t.snowGloss}
+                            </div>
+                          )}
+                        </li>
+                      )),
                 )}
               </ul>
+              {call.alert_rounds ? <p className="mt-1 text-zinc-500">{t.messageResent(call.alert_rounds)}</p> : null}
             </div>
           )}
           {call.transcript && (
