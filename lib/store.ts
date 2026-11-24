@@ -49,6 +49,31 @@ async function readAll<T>(dir: string): Promise<T[]> {
 
 export const getResident = (id: string) => read<Resident>("residents", id);
 export const saveResident = (r: Resident) => write("residents", r.id, r);
+
+// One writer per resident at a time. Kept on globalThis so route handlers and server actions,
+// which Next may load as separate copies of this module, share the same queue.
+const queues: Map<string, Promise<unknown>> = ((globalThis as { yukimiQueues?: Map<string, Promise<unknown>> }).yukimiQueues ??=
+  new Map());
+
+/**
+ * Reads a resident, applies `change` and saves, without another writer getting in between.
+ * `change` gets the freshest copy and must be quick: do model calls before, not inside.
+ * Returns the saved resident, or null if there is no such resident.
+ */
+export function updateResident(id: string, change: (resident: Resident) => Resident): Promise<Resident | null> {
+  const run = (queues.get(id) ?? Promise.resolve())
+    .catch(() => {})
+    .then(async () => {
+      const resident = await getResident(id);
+      if (!resident) return null;
+      const next = change(resident);
+      await saveResident(next);
+      return next;
+    });
+  queues.set(id, run);
+  void run.finally(() => queues.get(id) === run && queues.delete(id)).catch(() => {});
+  return run;
+}
 export async function listResidents() {
   return (await readAll<Resident>("residents")).sort((a, b) => a.call_time.localeCompare(b.call_time));
 }
@@ -86,7 +111,7 @@ export async function resetDemoData() {
     const seed = JSON.parse(
       await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
     ) as Resident | null;
-    if (seed) await saveResident({ ...current, facts: seed.facts, recent_calls: seed.recent_calls });
+    if (seed) await updateResident(current.id, (r) => ({ ...r, facts: seed.facts, recent_calls: seed.recent_calls }));
   }
 }
 

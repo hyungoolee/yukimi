@@ -6,7 +6,7 @@ import { volunteerKey } from "@/lib/dashboard";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
-import { getCall, getResident, listResidents, resetDemoData, saveCall, saveResident } from "@/lib/store";
+import { getCall, getResident, listResidents, resetDemoData, saveCall, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -44,7 +44,7 @@ export async function savePhone(formData: FormData) {
     .replace(/^(\+81)?0(?!10)/, "+81");
   // International format only, e.g. +819012345678.
   if (resident && (phone === "" || /^\+\d{8,15}$/.test(phone))) {
-    await saveResident({ ...resident, phone });
+    await updateResident(resident.id, (fresh) => ({ ...fresh, phone }));
   }
   revalidatePath(`/residents/${resident?.id}`);
 }
@@ -62,14 +62,14 @@ export async function saveLocation(formData: FormData) {
     // The volunteer sits in each resident's profile, as LINE registration writes them: update every copy.
     const key = volunteerKey(resident.snow_volunteer);
     for (const { id } of await listResidents()) {
-      // Re-read just before saving, so a call or a LINE registration finishing meanwhile isn't overwritten.
-      const fresh = await getResident(id);
-      if (fresh && key && volunteerKey(fresh.snow_volunteer) === key) {
-        await saveResident({ ...fresh, snow_volunteer: { ...fresh.snow_volunteer, location } });
-      }
+      await updateResident(id, (fresh) =>
+        key && volunteerKey(fresh.snow_volunteer) === key
+          ? { ...fresh, snow_volunteer: { ...fresh.snow_volunteer, location } }
+          : fresh,
+      );
     }
   } else {
-    await saveResident({ ...resident, location });
+    await updateResident(resident.id, (fresh) => ({ ...fresh, location }));
   }
   revalidatePath(`/residents/${resident.id}`);
 }

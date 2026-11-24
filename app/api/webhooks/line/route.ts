@@ -1,7 +1,7 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { getCall, getResident, listResidents, saveCall, saveResident } from "@/lib/store";
+import { getCall, getResident, listResidents, saveCall, updateResident } from "@/lib/store";
 import type { Role } from "@/lib/types";
 
 // A teammate adds the bot and sends "<role word> <REGISTER_CODE>" to take a role for every demo resident.
@@ -33,9 +33,8 @@ export async function POST(request: Request) {
         await reply(event.replyToken, "役割と登録コードを送ってください（例：家族 1234）");
         continue;
       }
-      for (const resident of await listResidents()) {
-        resident[role].line_id = userId;
-        await saveResident(resident);
+      for (const { id } of await listResidents()) {
+        await updateResident(id, (fresh) => ({ ...fresh, [role]: { ...fresh[role], line_id: userId } }));
       }
       await reply(event.replyToken, `登録しました（${word}）`);
     }
