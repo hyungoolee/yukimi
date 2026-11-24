@@ -788,6 +788,47 @@ describe("follow-ups after a call", () => {
     expect(curate).not.toHaveBeenCalled();
   });
 
+  it("does not curate a call whose extraction worked but whose rules could not run", async () => {
+    // The saved weather file goes missing, so the rules can't run even though extraction did.
+    const { rename } = await import("node:fs/promises");
+    const file = `${process.env.DATA_DIR}/weather.json`;
+    await rename(file, `${file}.away`);
+    await call("conv_fu7", "takahashi").finally(() => rename(`${file}.away`, file));
+    expect(extract).toHaveBeenCalled();
+    expect(await store.getCall("conv_fu7")).toMatchObject({ risk: "yellow", reasons: ["自動判定に失敗。通話メモを確認してください"] });
+    expect(curate).not.toHaveBeenCalled();
+  });
+
+  // A curation whose model call is still running while something else happens.
+  const deferred = () => {
+    let finish!: (c: import("@/lib/curate").Curation) => void;
+    curate.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    return (text: string) => finish({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text, days: 3 }] });
+  };
+
+  it("drops a slow curation when the demo was reset in the meantime", async () => {
+    const finish = deferred();
+    const pending = call("conv_fu8", "takahashi");
+    await vi.waitFor(() => expect(curate).toHaveBeenCalled());
+    const { resetDemo } = await import("@/app/actions");
+    await resetDemo();
+    finish("腰の痛みはその後どうか");
+    await pending;
+    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+  });
+
+  it("drops a slow curation from an older call once a newer call has been processed", async () => {
+    const finishOlder = deferred();
+    const older = call("conv_fu9", "takahashi");
+    await vi.waitFor(() => expect(curate).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 5)); // the newer call's record gets a later time
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "新しい通話からの確認", days: 3 }] });
+    await call("conv_fu10", "takahashi");
+    finishOlder("古い通話からの確認");
+    await older;
+    expect((await store.getResident("takahashi"))!.follow_ups!.map((f) => f.text)).toEqual(["新しい通話からの確認"]);
+  });
+
   it("clears follow-ups on a demo reset", async () => {
     await store.updateResident("sato", (r) => ({
       ...r, follow_ups: [{ id: "x", text: "腰", created: "2026-11-01", expires: "2099-01-01" }],

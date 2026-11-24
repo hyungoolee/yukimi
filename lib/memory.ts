@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { curate, type Curation } from "./curate";
-import { getResident, updateResident } from "./store";
+import { getCall, getResident, listCalls, updateResident } from "./store";
 import { daysBefore, japanDate } from "./trends";
 import type { Fact, FollowUp, MemoryChange, Resident, Turn } from "./types";
 
@@ -130,7 +130,17 @@ export async function curateMemory(residentId: string, callId: string, transcrip
   if (!resident) return;
   const today = japanDate();
   const proposed = await curate(resident, openFollowUps(resident, today), transcript, today);
-  // The model call is done; only now take the lock, and apply to the freshest copy.
+
+  // The model call can take a while, and the world may have moved on. Its answer is only applied if
+  // the call it came from still exists (a demo reset removes it) and is still the resident's latest
+  // answered call (a later call may already have settled what this one would ask about).
+  const [source, calls] = await Promise.all([getCall(callId), listCalls(residentId)]);
+  const latest = calls.find((c) => c.kind === "call" && c.extraction);
+  if (!source || latest?.id !== callId) {
+    console.warn(`Memory curation for call ${callId} is out of date; not applied`);
+    return;
+  }
+  // Only now take the lock, and apply to the freshest copy.
   await updateResident(residentId, (fresh) => applyCuration(fresh, proposed, today, `call:${callId}`));
 }
 
