@@ -1,3 +1,4 @@
+import { MEASURES } from "./measures";
 import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
@@ -15,15 +16,23 @@ const ja = {
   snowAccepted: (r: Resident) => `${r.snow_volunteer.name}さんが引き受けました`,
   snowWaiting: "返事待ち",
   callNow: "今すぐ電話",
+  calling: "発信中…",
   addPhone: "電話番号を登録",
   markHandled: "対応済みにする",
   phone: "電話番号",
   save: "保存",
+  saving: "保存中…",
+  saved: "保存しました",
+  phoneInvalid: "電話番号として読めません（例：090-1234-5678）",
+  settings: "設定",
   phoneHint: "090… または +81…（海外の番号は + から）",
   browserCall: "ブラウザで通話",
   connecting: "接続中…",
   endCall: "通話を終了",
   micError: "マイクの使用を許可してください",
+  captionAgent: "AI",
+  captionYou: "あなた",
+  captionWaiting: "通話中。ここに会話が表示されます…",
   noAnswerDemo: "電話に出ない（デモ）",
   resetDemo: "デモをリセット",
   demoScript: "デモの台本（電話で言うこと）",
@@ -59,9 +68,10 @@ const ja = {
   followUpUntil: (date: string) => `${date}まで`,
   remove: "削除",
   week: "この7日間",
-  weekRows: { ate: "食事", slept_well: "睡眠", went_out: "外出", pain_or_injury: "痛み・けが", low_mood: "気分" },
   weekKey: "○ 問題なし　! 気になる　– 話題なし",
   separator: "、",
+  alertSeen: (name: string) => `通知を確認：${name}`,
+  alertUnseen: (resends: number) => (resends ? `通知は未確認（再通知${resends}回）` : "通知は未確認"),
   list: "リスト",
   map: "地図",
   viewOnMap: "地図で見る",
@@ -77,7 +87,7 @@ const ja = {
     `地図上の位置（自宅：${home ? "登録済み" : "未登録"}、除雪ボランティア：${volunteer ? "登録済み" : "未登録"}）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
-  picker: { save: "この位置で保存", placed: "登録済み。地図をクリックで変更", unplaced: "地図をクリックして位置を決める" },
+  picker: { save: "この位置で保存", saving: "保存中…", placed: "登録済み。地図をクリックで変更", unplaced: "地図をクリックして位置を決める" },
 };
 
 const en: typeof ja = {
@@ -94,15 +104,23 @@ const en: typeof ja = {
   snowAccepted: () => "accepted by the volunteer",
   snowWaiting: "waiting for a reply",
   callNow: "Call now",
+  calling: "Calling…",
   addPhone: "Add a phone number",
   markHandled: "Mark as handled",
   phone: "Phone",
   save: "Save",
+  saving: "Saving…",
+  saved: "Saved",
+  phoneInvalid: "That doesn't look like a phone number (e.g. 090-1234-5678)",
+  settings: "Settings",
   phoneHint: "090… or +81… (other countries: start with +)",
   browserCall: "Call in browser",
   connecting: "Connecting…",
   endCall: "End call",
   micError: "Please allow microphone access",
+  captionAgent: "Agent",
+  captionYou: "You",
+  captionWaiting: "Call connected. The conversation will appear here…",
   noAnswerDemo: "No answer (demo)",
   resetDemo: "Reset demo",
   demoScript: "Demo script (what to say on the call)",
@@ -138,9 +156,10 @@ const en: typeof ja = {
   followUpUntil: (date) => `until ${date}`,
   remove: "Remove",
   week: "Last 7 days",
-  weekRows: { ate: "Meals", slept_well: "Sleep", went_out: "Went out", pain_or_injury: "Pain or injury", low_mood: "Mood" },
   weekKey: "○ fine   ! a concern   – not discussed",
   separator: "; ",
+  alertSeen: (name) => `Alert acknowledged by ${name}`,
+  alertUnseen: (resends) => (resends ? `Alert not acknowledged (sent again ${resends} times)` : "Alert not acknowledged yet"),
   list: "List",
   map: "Map",
   viewOnMap: "Show on map",
@@ -156,7 +175,7 @@ const en: typeof ja = {
     `Map locations (home: ${home ? "set" : "not set"}; snow volunteer: ${volunteer ? "set" : "not set"})`,
   home: "Home",
   volunteer: () => "Snow volunteer",
-  picker: { save: "Save this spot", placed: "Set. Click the map to change it", unplaced: "Click the map to choose a spot" },
+  picker: { save: "Save this spot", saving: "Saving…", placed: "Set. Click the map to change it", unplaced: "Click the map to choose a spot" },
 };
 
 export const strings = { ja, en };
@@ -165,6 +184,8 @@ export type Strings = typeof ja;
 // The fixed reasons written by the rules, the ladder and the emergency tool. Anything after the
 // matched text (such as what the resident said) is kept as written.
 const REASONS_EN: [string, string][] = [
+  // Trend reasons come with their measures, and go first: one of them starts like a single-call reason.
+  ...MEASURES.flatMap((m): [string, string][] => ("trend" in m ? [[m.trend.reason, m.trend.reasonEn]] : [])),
   ["緊急の訴え（119番を案内）", "Emergency (told to call 119)"],
   ["死にたい気持ちの訴え", "Talked about wanting to die"],
   ["転倒・痛みあり", "Fell and is in pain"],
@@ -176,9 +197,6 @@ const REASONS_EN: [string, string][] = [
   ["雪で玄関から出られない", "Snowed in"],
   ["食事をとれていない", "Not eating"],
   ["混乱した様子", "Seems confused"],
-  ["3日続けて食事をとれていない", "Not eating for 3 days running"],
-  ["気分の落ち込みが3日続いている", "Low mood for 3 days running"],
-  ["3日続けて眠れていない", "Sleeping badly for 3 nights running"],
   ["気分の落ち込み", "Low mood"],
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],
   ["電話に2回応答なし。第二連絡先も確認できず", "No answer twice; the second contact can't confirm"],

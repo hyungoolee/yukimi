@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { MEASURES, type Observations } from "./measures.ts";
 import type { Extraction, Resident, Turn } from "./types";
 
 const tri = z.enum(["yes", "no", "unknown"]);
@@ -26,13 +27,8 @@ const ExtractionSchema = z.object({
     confused: z.boolean(),
     money_request: z.boolean(),
   }),
-  observations: z.object({
-    ate: tri,
-    slept_well: tri,
-    went_out: tri,
-    pain_or_injury: tri,
-    low_mood: tri,
-  }),
+  // One field per daily measure (lib/measures.ts).
+  observations: z.object(Object.fromEntries(MEASURES.map((m) => [m.field, tri]))),
   english: z.object({
     summary: z.string(),
     mood: z.string(),
@@ -59,11 +55,7 @@ Set each signal to true only when the resident's own words support it. When the 
 - money_request: someone else (a caller, visitor or message) asked them for money, a transfer, or bank or card details.
 
 Each observation is "yes", "no" or "unknown", taken only from the resident's own words. Use "unknown" when the subject did not come up. When what they said points to the worrying answer, give that answer: do not soften it to "unknown". As with the signals, when the resident corrects or denies something, go with the correction.
-- ate (since yesterday's call): "no" when they have not eaten today, or say they are not eating or have been skipping meals. "yes" when they say they have eaten. When the only thing they say is that they have not had breakfast yet this morning, answer "unknown".
-- slept_well (last night): "no" when they say they slept badly or could not sleep; "yes" when they say they slept well.
-- went_out (since yesterday's call): "yes" when they say they have been outside the house; "no" when they say they have not.
-- pain_or_injury (now): "yes" when they report physical pain or an injury now. "no" when they say nothing hurts and they are not injured.
-- low_mood: "yes" when they say they are lonely, hopeless, or that there is no point. "no" when they say they feel well or cheerful.`;
+${MEASURES.map((m) => `- ${m.ask}`).join("\n")}`;
 
 /** Turns a call transcript into notes and yes/no signals. Throws if the model returns nothing usable. */
 export async function extract(resident: Resident, transcript: Turn[]): Promise<Extraction> {
@@ -87,7 +79,8 @@ export async function extract(resident: Resident, transcript: Turn[]): Promise<E
   if (!response.parsed_output) {
     throw new Error(`Extraction returned no output (stop_reason: ${response.stop_reason})`);
   }
-  const { signals, observations, ...rest } = response.parsed_output;
+  const { signals, ...rest } = response.parsed_output;
+  const observations = rest.observations as Observations; // the schema above has exactly these fields
   return {
     ...rest,
     observations,

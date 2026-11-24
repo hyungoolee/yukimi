@@ -9,7 +9,8 @@ import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
-import { getCall, getResident, listResidents, resetDemoData, saveCall, updateResident } from "@/lib/store";
+import { translateToEnglish } from "@/lib/translate";
+import { getResident, listResidents, resetDemoData, updateCall, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -25,31 +26,34 @@ export async function callNow(formData: FormData) {
       return missed(resident.id, 1);
     });
   }
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // the list and the resident's own page
 }
 
 export async function markHandled(formData: FormData) {
   await requireAccess();
-  const call = await getCall(String(formData.get("call_id")));
-  if (call) await saveCall({ ...call, handled: true });
-  revalidatePath("/");
+  await updateCall(String(formData.get("call_id")), () => ({ handled: true }));
+  revalidatePath("/", "layout");
 }
 
 /** Saves the number the check-in call goes to. Kept on the server's disk, never in the repo. */
-export async function savePhone(formData: FormData) {
+export type PhoneResult = { status: "saved" | "invalid"; typed: string };
+
+export async function savePhone(_previous: PhoneResult | undefined, formData: FormData): Promise<PhoneResult> {
   await requireAccess();
   const resident = await getResident(String(formData.get("resident_id")));
   // Accept 090-1234-5678, 011-…, +81 90…, and the common +81 090… slip; store +81….
   // Not 010…: that is no Japanese number (it is a Korean mobile prefix), so it needs its + country code.
-  const phone = String(formData.get("phone"))
+  const typed = String(formData.get("phone"));
+  const phone = typed
     .normalize("NFKC")
     .replace(/[\s-]/g, "")
     .replace(/^(\+81)?0(?!10)/, "+81");
   // International format only, e.g. +819012345678.
-  if (resident && (phone === "" || /^\+\d{8,15}$/.test(phone))) {
-    await updateResident(resident.id, (fresh) => ({ ...fresh, phone }));
-  }
-  revalidatePath(`/residents/${resident?.id}`);
+  // The typed text goes back, so the form keeps it on screen to be corrected.
+  if (!resident || !(phone === "" || /^\+\d{8,15}$/.test(phone))) return { status: "invalid", typed };
+  await updateResident(resident.id, (fresh) => ({ ...fresh, phone }));
+  revalidatePath("/", "layout"); // the list's call button depends on it too
+  return { status: "saved", typed: phone };
 }
 
 /** Places a resident's home pin, or their snow volunteer's pin, from the click-to-place map. */
@@ -112,6 +116,15 @@ export async function deleteFollowUp(formData: FormData) {
   const residentId = String(formData.get("resident_id"));
   await updateResident(residentId, (r) => removeFollowUp(r, String(formData.get("follow_up_id"))));
   revalidatePath(`/residents/${residentId}`);
+}
+
+/** English for one line of a live call, shown as a caption. Empty if the translation fails. */
+export async function translateCaption(text: string) {
+  await requireAccess();
+  return translateToEnglish(text.slice(0, 1000)).catch((e) => {
+    console.error("Caption translation failed", e);
+    return "";
+  });
 }
 
 // The helper's edits to what Yukimi remembers. The rules for each live in lib/memory.ts.

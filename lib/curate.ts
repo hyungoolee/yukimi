@@ -20,13 +20,13 @@ You get today's date, the facts remembered about the resident and the follow-ups
 
 # Follow-ups
 
-resolved: the ids of open follow-ups that this call settled. The resident answered it and nothing remains to ask (the pain is gone, the exam result is in, the heater was fixed). If it was asked but is still going on (the hip still hurts), leave it open.
+resolved: the ids of open follow-ups that this call settled. Close one only when the resident said plainly that it is over: the pain is gone, the exam result is in, the heater was fixed. "Better", "a little easier" or a brush-off such as 「大丈夫」 is not over: older people often play pain down, so leave it open. If it was not discussed, leave it open.
 
 new_follow_ups: up to three things from this call worth asking about on a later day. Good follow-ups are specific to this person and have a natural end:
-- a health problem that should be checked again (a fall, pain, a cough, not eating);
+- a health problem that should be checked again (a fall, pain, a cough, a wound);
 - something that was arranged or promised (a volunteer is coming to clear snow, they will see the doctor on Thursday);
 - an event they are waiting on (a grandchild's exam result, a visit from family).
-Do not add the questions asked on every call (meals, sleep, heating, going out), and do not repeat something that is already open. Return an empty list when nothing qualifies, which is common.
+Do not add the questions asked on every call (meals, sleep, heating, going out): those are tracked separately. Do not add anything about money, bank accounts or cards, even if it came up. Do not repeat something that is already open. Return an empty list when nothing qualifies, which is common.
 
 Write each text in Japanese as a short note of what to ask, for example 「腰の痛みはその後どうか」 or 「健太さんの受験の結果（金曜に発表）」. days is how many days from today it stays worth asking, from 1 to 14: a few days for something that should pass quickly, longer for a dated event.
 
