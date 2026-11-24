@@ -603,3 +603,25 @@ describe("live captions", () => {
     expect(await translateCaption("暖房はついていますか。")).toBe("");
   });
 });
+
+describe("one writer at a time", () => {
+  it("keeps both of two overlapping changes to the same resident", async () => {
+    const before = (await store.getResident("sato"))!;
+    await Promise.all([
+      store.updateResident("sato", (r) => ({ ...r, phone: "+819011110000" })),
+      store.updateResident("sato", (r) => ({ ...r, facts: [...r.facts, "同時に書かれた事実"] })),
+      store.updateResident("sato", (r) => ({ ...r, location: { lat: 43.2, lng: 141.77 } })),
+    ]);
+    const after = (await store.getResident("sato"))!;
+    expect(after.phone).toBe("+819011110000");
+    expect(after.facts).toContain("同時に書かれた事実");
+    expect(after.location).toEqual({ lat: 43.2, lng: 141.77 });
+    await store.saveResident(before);
+  });
+
+  it("carries on after a change that throws, and returns null for an unknown resident", async () => {
+    await expect(store.updateResident("sato", () => { throw new Error("bad change"); })).rejects.toThrow("bad change");
+    expect(await store.updateResident("sato", (r) => r)).toMatchObject({ id: "sato" });
+    expect(await store.updateResident("nobody", (r) => r)).toBeNull();
+  });
+});
