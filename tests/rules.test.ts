@@ -18,7 +18,10 @@ describe("escalation rules", () => {
   it("alerts helper and family for an emergency", () => {
     const out = rules({ emergency: true });
     expect(out.risk).toBe("red");
-    expect(out.actions).toEqual([{ type: "alert", to: ["helper", "second_contact"] }]);
+    expect(out.actions).toEqual([{
+      type: "alert", to: ["helper", "second_contact"],
+      reasonsByRole: { helper: out.reasons, second_contact: out.reasons },
+    }]);
   });
 
   it("treats being unable to move as an emergency", () => {
@@ -26,7 +29,9 @@ describe("escalation rules", () => {
   });
 
   it("alerts only the helper for self-harm words", () => {
-    expect(rules({ self_harm: true }).actions).toEqual([{ type: "alert", to: ["helper"] }]);
+    expect(rules({ self_harm: true }).actions).toEqual([{
+      type: "alert", to: ["helper"], reasonsByRole: { helper: ["死にたい気持ちの訴え"] },
+    }]);
   });
 
   it("makes a fall red with pain and yellow without", () => {
@@ -72,7 +77,7 @@ describe("escalation rules", () => {
     expect(out.risk).toBe("red");
     expect(out.reasons).toEqual(["転倒・痛みあり", "雪で玄関から出られない"]);
     expect(out.actions).toEqual([
-      { type: "alert", to: ["helper", "second_contact"] },
+      { type: "alert", to: ["helper", "second_contact"], reasonsByRole: { helper: out.reasons, second_contact: out.reasons } },
       { type: "snow_request", to: ["snow_volunteer"] },
     ]);
   });

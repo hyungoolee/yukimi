@@ -14,6 +14,8 @@ import { japanTime, RiskBadge, riskEdge } from "../../ui";
 import { LocationPicker } from "./location-picker";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
+import { WeekGrid } from "./week-grid";
+import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
 
 // English view: the model's English copy when the record has one (older records don't).
 function notesFor(e: Extraction, lang: Lang) {
@@ -113,6 +115,13 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </details>
         )}
       </section>
+
+      <h2 className="mt-8 font-medium">{t.week}</h2>
+      <WeekGrid
+        week={lastWeek(dailyObservations(calls.filter((c) => c.kind === "call").map((c) => ({ at: c.at, observations: c.extraction?.observations }))), japanDate())}
+        t={t}
+        lang={lang}
+      />
 
       <h2 className="mt-8 font-medium">{t.callLog}</h2>
       {calls.length === 0 && <p className="mt-2 text-sm text-zinc-500">{t.noCalls}</p>}
