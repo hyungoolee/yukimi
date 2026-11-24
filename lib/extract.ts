@@ -26,13 +26,20 @@ const ExtractionSchema = z.object({
     low_mood: z.boolean(),
   }),
   new_facts: z.array(z.string()),
+  english: z.object({
+    summary: z.string(),
+    mood: z.string(),
+    health: z.string(),
+    winter: z.string(),
+    needs: z.array(z.string()),
+  }),
 });
 
 const SYSTEM = `You read the transcript of a daily check-in phone call between an AI caller ("agent") and an older person living alone in Hokkaido ("user"), and report what the resident said. A welfare volunteer reads your notes to decide whom to visit, and fixed rules turn your signals into alerts, so a missed signal means nobody goes to help.
 
 Set answered_by_person to false when the "user" side is a voicemail or answering-machine greeting (留守番電話), a recorded announcement, or someone other than the resident who says the resident is not there. Otherwise set it to true.
 
-Write summary, notes and new_facts in Japanese. summary is one or two sentences the caller can refer to tomorrow. new_facts are lasting personal details not already in the known facts (family, hobbies, health conditions, routines); leave it empty if there are none.
+Write summary, notes and new_facts in Japanese. In english, give a faithful English translation of the summary and of each note, adding nothing. summary is one or two sentences the caller can refer to tomorrow. new_facts are lasting personal details not already in the known facts (family, hobbies, health conditions, routines); leave it empty if there are none.
 
 Set each signal to true only when the resident's own words support it. When the resident corrects or denies something, go with the correction.
 - emergency: describes something needing an ambulance now, such as chest pain, trouble breathing, or signs of a stroke.

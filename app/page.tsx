@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { mapData, rankedRows, snowRequest, type Row } from "@/lib/dashboard";
+import { DEMO_MODE } from "@/lib/env";
 import type { Lang, Strings } from "@/lib/i18n";
 import { listCalls, listResidents } from "@/lib/store";
 import type { CallRecord } from "@/lib/types";
 import { getWeather } from "@/lib/weather";
+import { resetDemo } from "./actions";
 import { getStrings } from "./lang";
 import { MapView } from "./map-view";
 import { Refresh } from "./refresh";
@@ -58,6 +60,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </ul>
       ) : (
         <MapPanel rows={rows} calls={calls} selected={selected} listHref={href("list")} lang={lang} t={t} />
+      )}
+      {DEMO_MODE && (
+        <form action={resetDemo} className="mt-6 text-right">
+          <button className="rounded border border-zinc-300 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50">
+            {t.resetDemo}
+          </button>
+        </form>
       )}
     </main>
   );

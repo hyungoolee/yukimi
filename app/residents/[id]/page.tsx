@@ -2,12 +2,30 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls } from "@/lib/store";
 import { DEMO_MODE } from "@/lib/env";
-import { reasonText } from "@/lib/i18n";
+import { reasonText, type Lang, type Strings } from "@/lib/i18n";
+import type { Extraction } from "@/lib/types";
 import { savePhone, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { japanTime, RiskBadge } from "../../ui";
 import { LocationPicker } from "./location-picker";
+
+// English view: the model's English copy when the record has one (older records don't).
+function notesFor(e: Extraction, lang: Lang) {
+  return lang === "en" && e.english ? e.english : { summary: e.summary, ...e.notes };
+}
+
+function Notes({ notes, t }: { notes: ReturnType<typeof notesFor>; t: Strings }) {
+  return (
+    <dl className="mt-2 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-sm">
+      <dt className="text-zinc-500">{t.summary}</dt><dd>{notes.summary}</dd>
+      <dt className="text-zinc-500">{t.mood}</dt><dd>{notes.mood}</dd>
+      <dt className="text-zinc-500">{t.health}</dt><dd>{notes.health}</dd>
+      <dt className="text-zinc-500">{t.winter}</dt><dd>{notes.winter}</dd>
+      <dt className="text-zinc-500">{t.needs}</dt><dd>{notes.needs.join(t.separator) || t.none}</dd>
+    </dl>
+  );
+}
 
 export default async function ResidentPage({ params }: PageProps<"/residents/[id]">) {
   const { id } = await params;
@@ -73,15 +91,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             <span className="text-sm text-zinc-500">{japanTime(call.at, lang)}</span>
           </div>
           {call.reasons.length > 0 && <p className="mt-2 text-sm font-medium">{call.reasons.map((r) => reasonText(lang, r)).join(t.separator)}</p>}
-          {call.extraction && (
-            <dl className="mt-2 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-sm">
-              <dt className="text-zinc-500">{t.summary}</dt><dd>{call.extraction.summary}</dd>
-              <dt className="text-zinc-500">{t.mood}</dt><dd>{call.extraction.notes.mood}</dd>
-              <dt className="text-zinc-500">{t.health}</dt><dd>{call.extraction.notes.health}</dd>
-              <dt className="text-zinc-500">{t.winter}</dt><dd>{call.extraction.notes.winter}</dd>
-              <dt className="text-zinc-500">{t.needs}</dt><dd>{call.extraction.notes.needs.join("、") || t.none}</dd>
-            </dl>
-          )}
+          {call.extraction && <Notes notes={notesFor(call.extraction, lang)} t={t} />}
           {call.transcript && (
             <details className="mt-3 text-sm">
               <summary className="cursor-pointer text-zinc-500">{t.showTranscript}</summary>
