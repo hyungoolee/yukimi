@@ -631,13 +631,13 @@ describe("one writer at a time", () => {
 describe("trends across days", () => {
   const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
   const notEaten = { ...extraction, observations: { ...blank, ate: "no" as const }, signals: { ...extraction.signals, fall_recent: false, pain: false, snowed_in: false, not_eating: true } };
-  const earlier = (id: string, daysAgo: number) =>
+  const earlier = (id: string, daysAgo: number, residentId = "suzuki") =>
     store.saveCall({
-      id, resident_id: "suzuki", at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), kind: "call",
+      id, resident_id: residentId, at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), kind: "call",
       risk: "yellow", reasons: ["食事をとれていない"], actions: [], handled: true, extraction: notEaten,
     });
-  const callToday = (id: string) =>
-    elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', '"resident_id": "suzuki"')));
+  const callToday = (id: string, residentId = "suzuki") =>
+    elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
 
   it("alerts helper and family on the third day of not eating, once", async () => {
     await earlier("conv_t1", 1);
@@ -647,30 +647,63 @@ describe("trends across days", () => {
     expect(pushes()).toEqual([]);
 
     await earlier("conv_t0", 2);
-    extract.mockResolvedValueOnce(notEaten);
-    await callToday("conv_t3");
-    expect(await store.getCall("conv_t3")).toMatchObject({
-      risk: "red", reasons: ["食事をとれていない", "3日続けて食事をとれていない"],
-    });
+    extract.mockResolvedValueOnce(notEaten).mockResolvedValueOnce(notEaten);
+    await Promise.all([callToday("conv_t3"), callToday("conv_t3b")]);
+    const calls = await Promise.all([store.getCall("conv_t3"), store.getCall("conv_t3b")]);
+    expect(calls.map((call) => call?.risk)).toEqual(["red", "red"]);
+    expect(calls.flatMap((call) => call?.reasons ?? [])).toContain("3日続けて食事をとれていない（継続中）");
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+    expect((await store.listTasks()).filter((task) => task.kind === "alert_recheck")).toHaveLength(1);
 
-    // A second call the same day: still red, but family is not alerted twice.
+    // A later call can inherit today's observation even when meals did not come up.
     lineCalls.length = 0;
-    extract.mockResolvedValueOnce(notEaten);
-    await callToday("conv_t3b");
-    expect(await store.getCall("conv_t3b")).toMatchObject({
-      risk: "red", reasons: ["食事をとれていない", "3日続けて食事をとれていない（継続中）"],
+    extract.mockResolvedValueOnce({ ...notEaten, observations: blank, signals: { ...notEaten.signals, not_eating: false } });
+    await callToday("conv_t3c");
+    expect(await store.getCall("conv_t3c")).toMatchObject({
+      risk: "red", reasons: ["3日続けて食事をとれていない（継続中）"],
     });
     expect(pushes()).toEqual([]);
   });
 
-  it("ignores an earlier record with an unreadable time", async () => {
-    await store.saveCall({
-      id: "conv_bad", resident_id: "takahashi", at: "not a date", kind: "call", risk: "green", reasons: [], actions: [],
-      extraction: notEaten,
-    });
+  it("keeps a helper-only reason out of the family's initial alert and resend", async () => {
+    await earlier("conv_private1", 1, "sato");
+    await earlier("conv_private2", 2, "sato");
+    extract.mockResolvedValueOnce({ ...notEaten, signals: { ...notEaten.signals, self_harm: true } });
+    await callToday("conv_private3", "sato");
+
+    const helper = () => pushes().find((p) => p.to === "U_helper")?.messages[0].text;
+    const family = () => pushes().find((p) => p.to === "U_family")?.messages[0].text;
+    expect(helper()).toContain("死にたい気持ちの訴え");
+    expect(family()).toContain("3日続けて食事をとれていない");
+    expect(family()).not.toContain("死にたい気持ちの訴え");
+
+    lineCalls.length = 0;
+    await after(31);
+    expect(helper()).toContain("死にたい気持ちの訴え");
+    expect(family()).toContain("3日続けて食事をとれていない");
+    expect(family()).not.toContain("死にたい気持ちの訴え");
+  });
+
+  it("still records and alerts the acute finding when trend history fails", async () => {
+    using history = vi.spyOn(store, "listCalls").mockRejectedValueOnce(new Error("history unavailable"));
     extract.mockResolvedValueOnce({ ...extraction, observations: { ...blank, pain_or_injury: "yes" } });
-    await elevenlabs(signedElevenLabs(fixture.replace("conv_slip", "conv_after_bad").replace('"resident_id": "sato"', '"resident_id": "takahashi"')));
+    await callToday("conv_after_bad", "takahashi");
+    expect(history).toHaveBeenCalledWith("takahashi");
     expect(await store.getCall("conv_after_bad")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
+    expect(pushes().map((p) => p.to)).toContain("U_helper");
+  });
+
+  it("allows another call to fire a trend if the first call couldn't schedule its alert", async () => {
+    await earlier("conv_retry_trend1", 1, "takahashi");
+    await earlier("conv_retry_trend2", 2, "takahashi");
+    using schedule = vi.spyOn(store, "schedule").mockRejectedValueOnce(new Error("task storage unavailable"));
+    extract.mockResolvedValueOnce(notEaten).mockResolvedValueOnce(notEaten);
+    await callToday("conv_retry_trend_fail", "takahashi");
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(pushes().map((p) => p.to)).not.toContain("U_family");
+
+    lineCalls.length = 0;
+    await callToday("conv_retry_trend_ok", "takahashi");
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
   });
 });

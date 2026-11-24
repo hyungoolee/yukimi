@@ -1,6 +1,6 @@
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { CallRecord, Resident, Role, Weather } from "./types";
+import type { AlertReasons, CallRecord, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
 const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "seed");
@@ -107,6 +107,21 @@ export async function listCalls(residentId?: string) {
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
+const TREND_FIRINGS = "trend-firings";
+
+/** Claim a firing on disk before dispatch so overlapping calls cannot send it twice. */
+export async function claimTrendFiring(residentId: string, trendId: string, date: string) {
+  const marker = file(TREND_FIRINGS, `${residentId}--${trendId}--${date}`);
+  await mkdir(path.dirname(marker), { recursive: true });
+  try {
+    await writeFile(marker, "", { flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return null;
+    throw error;
+  }
+  return () => rm(marker, { force: true });
+}
+
 // A call we placed and are waiting to hear back about, keyed by ElevenLabs conversation ID.
 export type Pending = { resident_id: string; attempt: number };
 export const savePending = (conversationId: string, p: Pending) => write("pending", conversationId, p);
@@ -125,7 +140,7 @@ export const clearLadder = (residentId: string) => rm(file("ladder", residentId)
  */
 export async function resetDemoData() {
   await ensureSeeded();
-  await Promise.all(["calls", "ladder", "pending", "tasks"].map((dir) => rm(path.join(/* turbopackIgnore: true */ DATA_DIR, dir), { recursive: true, force: true })));
+  await Promise.all(["calls", "ladder", "pending", "tasks", TREND_FIRINGS].map((dir) => rm(path.join(/* turbopackIgnore: true */ DATA_DIR, dir), { recursive: true, force: true })));
   for (const current of await readAll<Resident>("residents")) {
     const seed = JSON.parse(
       await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
@@ -142,7 +157,8 @@ export type Task = {
   resident_id: string;
   call_id?: string;
   round?: number;
-  to?: Role[]; // for alert_recheck: who to send to again, kept here so it works even if the call record is missing
+  reasonsByRole?: AlertReasons; // for alert_recheck, even if the call record is missing
+  to?: Role[]; // legacy alert_recheck tasks used the same reasons for every recipient
   reasons?: string[];
   ladder_at?: number; // which ladder this step belongs to, so a step from an old ladder can't act on a new one
 };

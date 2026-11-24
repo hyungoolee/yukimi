@@ -66,7 +66,10 @@ export type Extraction = {
 };
 
 export type Risk = "green" | "yellow" | "red";
-export type Action = { type: "alert" | "snow_request"; to: Role[] };
+export type AlertReasons = Partial<Record<Role, string[]>>;
+export type Action =
+  | { type: "alert"; to: Role[]; reasonsByRole?: AlertReasons }
+  | { type: "snow_request"; to: Role[] };
 export type RulesOutput = { risk: Risk; reasons: string[]; actions: Action[] };
 
 export type Turn = { role: string; message: string };
