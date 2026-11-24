@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceKm, mapData, rankedRows, snowRequest } from "@/lib/dashboard";
+import { distanceKm, mapData, rankedRows, snowRequest, volunteerKey } from "@/lib/dashboard";
 import type { CallRecord, Resident } from "@/lib/types";
 
 const volunteer = { id: "p_v", name: "山本", line_id: "U_v", location: { lat: 43.1975, lng: 141.779 } };
@@ -68,7 +68,7 @@ describe("mapData", () => {
   });
 
   it("draws a volunteer shared by several residents once", () => {
-    expect(mapData(rankedRows(people, []), []).volunteers).toEqual([{ id: volunteer.id, name: "山本", location: volunteer.location }]);
+    expect(mapData(rankedRows(people, []), []).volunteers).toEqual([{ key: volunteerKey(volunteer), id: volunteer.id, name: "山本", location: volunteer.location }]);
   });
 });
 

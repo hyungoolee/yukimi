@@ -64,8 +64,8 @@ export type MapData = {
   pins: { id: string; risk: Risk | null; handled: boolean; location: LatLng }[];
   /** Residents with no location yet, so they are not silently missing from the map. */
   unplaced: number;
-  /** id: their person record, when they have one, so the pin can open their page. */
-  volunteers: { id?: string; name: string; location: LatLng }[];
+  /** key: volunteerKey, to select the pin. id: their person record, when they have one. */
+  volunteers: { key: string; id?: string; name: string; location: LatLng }[];
   requests: SnowRequest[];
 };
 
@@ -74,7 +74,7 @@ export function mapData(rows: Row[], calls: CallRecord[]): MapData {
   for (const { resident } of rows) {
     const v = resident.snow_volunteer;
     // The same volunteer sits in several residents' profiles: one pin each.
-    if (v.location) volunteers.set(volunteerKey(v), { id: v.id, name: v.name, location: v.location });
+    if (v.location) volunteers.set(volunteerKey(v), { key: volunteerKey(v), id: v.id, name: v.name, location: v.location });
   }
   return {
     pins: rows.flatMap(({ resident, call }) =>

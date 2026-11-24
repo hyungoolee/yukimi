@@ -11,10 +11,13 @@ import { DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, RISK_COLOR, VOLUNTEER_
 export function MapView({
   data,
   selected,
+  volunteer,
   volunteerLabel,
 }: {
   data: MapData;
   selected?: string;
+  /** The selected volunteer's key, when a volunteer pin is chosen instead of a resident. */
+  volunteer?: string;
   /** The volunteer pin's hover text, with "{name}" where their name goes. */
   volunteerLabel: string;
 }) {
@@ -72,12 +75,12 @@ export function MapView({
         }).addTo(group);
       }
       for (const v of data.volunteers) {
-        const pin = L.marker([v.location.lat, v.location.lng], {
-          icon: icon(pinHtml(VOLUNTEER_COLOR, "diamond")),
+        L.marker([v.location.lat, v.location.lng], {
+          icon: icon(pinHtml(VOLUNTEER_COLOR, "diamond", v.key === volunteer)),
           title: volunteerLabel.replace("{name}", v.name),
-        });
-        if (v.id) pin.on("click", () => router.push(`/people/${encodeURIComponent(v.id!)}`));
-        pin.addTo(group);
+        })
+          .on("click", () => router.replace(`/?view=map&volunteer=${encodeURIComponent(v.key)}`, { scroll: false }))
+          .addTo(group);
       }
       for (const p of data.pins) {
         L.marker([p.location.lat, p.location.lng], {
@@ -101,7 +104,7 @@ export function MapView({
     return () => {
       stale = true;
     };
-  }, [ready, data, selected, router, volunteerLabel]);
+  }, [ready, data, selected, volunteer, router, volunteerLabel]);
 
   // Bring the selected resident into view.
   const selectedPin = data.pins.find((p) => p.id === selected);

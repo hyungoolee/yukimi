@@ -103,6 +103,7 @@ const ja = {
   mapEmptyDemo: "デモ用の位置を入れるには、下の「デモをリセット」を押してください。",
   noLocation: "この方の位置はまだ登録されていません。",
   placeHome: "自宅を地図で登録",
+  openPerson: "詳しく見る",
   requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted") =>
     `${volunteer}さんへ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
@@ -245,6 +246,7 @@ const en: typeof ja = {
   mapEmptyDemo: "To fill in the demo locations, press \"Reset demo\" below.",
   noLocation: "This resident has no location yet.",
   placeHome: "Place their home",
+  openPerson: "Open their page",
   requestStatus: (_volunteer, status) =>
     `Snow volunteer: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
