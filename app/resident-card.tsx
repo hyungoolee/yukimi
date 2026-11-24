@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { coverage } from "@/lib/coverage";
 import type { Row } from "@/lib/dashboard";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { CallRecord, Resident } from "@/lib/types";
@@ -12,8 +13,9 @@ export function ResidentCard({
   call,
   lang,
   t,
+  flagGaps,
   children,
-}: Row & { lang: Lang; t: Strings; children?: React.ReactNode }) {
+}: Row & { lang: Lang; t: Strings; flagGaps: boolean; children?: React.ReactNode }) {
   return (
     <div className={call?.handled ? "opacity-60" : ""}>
       <div className="flex items-center gap-3">
@@ -26,6 +28,7 @@ export function ResidentCard({
         </span>
       </div>
       <CallStatus resident={resident} call={call} lang={lang} t={t} />
+      {flagGaps && <CoverageLine resident={resident} t={t} />}
       <div className="mt-3 flex flex-wrap gap-2">
         <CallNowButton resident={resident} t={t} />
         {!resident.phone && (
@@ -60,6 +63,18 @@ export function CallStatus({ resident, call, lang, t }: Row & { lang: Lang; t: S
         </p>
       )}
     </>
+  );
+}
+
+/** Shown when some alert for this resident would reach nobody. */
+function CoverageLine({ resident, t }: { resident: Resident; t: Strings }) {
+  if (coverage(resident).level !== "critical") return null;
+  return (
+    <p className="mt-1 text-sm font-medium text-red-700">
+      <Link href="/people" className="hover:underline">
+        {t.cardNoReach} →
+      </Link>
+    </p>
   );
 }
 
