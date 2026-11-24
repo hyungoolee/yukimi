@@ -814,6 +814,27 @@ describe("follow-ups after a call", () => {
     expect(curate).not.toHaveBeenCalled();
   });
 
+  it("flags a call that ended before the winter checks only when this call's agent was told to run them", async () => {
+    const quiet = Object.fromEntries(Object.keys(extraction.signals).map((k) => [k, false])) as Extraction["signals"];
+    const cutShort = { ...extraction, signals: quiet, winter_covered: { heating: true, exit: false, supplies: false } };
+    const post = (id: string, winter_check: string) =>
+      elevenlabs(signedElevenLabs(JSON.stringify({
+        type: "post_call_transcription",
+        data: { conversation_id: id, conversation_initiation_client_data: { dynamic_variables: { resident_id: "takahashi", winter_check } },
+          transcript: [{ role: "user", message: "はい、もう切りますね。" }] },
+      })));
+
+    extract.mockResolvedValueOnce(cutShort);
+    await post("conv_cut1", "不要。天気の話は軽くふれる程度でよい。");
+    expect(await store.getCall("conv_cut1")).toMatchObject({ risk: "green", reasons: [] });
+    expect(pushes()).toEqual([]);
+
+    extract.mockResolvedValueOnce(cutShort);
+    await post("conv_cut2", "必要。暖房が動いているか、玄関から出られるか、食料と薬が足りているかを必ず確認する。");
+    expect(await store.getCall("conv_cut2")).toMatchObject({ risk: "yellow", reasons: ["冬の確認が終わる前に通話が終了"] });
+    expect(pushes().map((p) => p.to)).toEqual(["U_helper"]);
+  });
+
   it("does not curate a call whose extraction worked but whose rules could not run", async () => {
     // The saved weather file goes missing, so the rules can't run even though extraction did.
     const { rename } = await import("node:fs/promises");

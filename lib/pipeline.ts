@@ -20,8 +20,16 @@ export const needsReview = (reason: string): RulesOutput => ({
 /**
  * After a finished call: extract, apply the rules, send alerts and requests, update memory.
  * `attempt` is which phone attempt this was, or null for a browser call (which has no ladder).
+ * `winterChecks` is whether the agent was told to run the winter checks on this call. It comes from
+ * the call itself, not from the weather now, which may have changed or fallen back to saved data.
  */
-export async function processCall(residentId: string, callId: string, transcript: Turn[], attempt: number | null = 1) {
+export async function processCall(
+  residentId: string,
+  callId: string,
+  transcript: Turn[],
+  attempt: number | null = 1,
+  winterChecks = false,
+) {
   const resident = await getResident(residentId);
   if (!resident) throw new Error(`Unknown resident ${residentId}`);
 
@@ -30,7 +38,7 @@ export async function processCall(residentId: string, callId: string, transcript
   let judged = false; // true only when the rules ran on a real extraction
   try {
     extraction = await extract(resident, transcript);
-    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), extraction.winter_covered);
+    rules = applyRules(extraction.signals, await getWeather(resident.amedas_station), winterChecks ? extraction.winter_covered : undefined);
     judged = true;
   } catch (e) {
     console.error("Extraction failed", e);

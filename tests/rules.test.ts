@@ -21,10 +21,15 @@ describe("a call that ends before the winter checks", () => {
     });
   });
 
-  it("is left alone when every check was answered, on a mild day, or on older records", () => {
+  it("is left alone when every check was answered, or when the agent was not asked to run them", () => {
     expect(applyRules(none, cold, all).risk).toBe("green");
-    expect(applyRules(none, { ...mild, snowfall_24h_cm: 0 }, { heating: false, exit: false, supplies: false }).risk).toBe("green");
     expect(applyRules(none, cold).risk).toBe("green");
+  });
+
+  it("puts the helper's alert before a snow request", () => {
+    const out = applyRules({ ...none, snowed_in: true }, cold, { ...all, supplies: false });
+    expect(out.actions.map((a) => a.type)).toEqual(["alert", "snow_request"]);
+    expect(out.actions[0]).toMatchObject({ to: ["helper"], reasonsByRole: { helper: ["雪で玄関から出られない", reason] } });
   });
 
   it("adds nothing to a call that is already red", () => {

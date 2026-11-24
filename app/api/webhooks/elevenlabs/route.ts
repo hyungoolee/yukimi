@@ -46,7 +46,9 @@ export async function POST(request: Request) {
         if (!transcript.some((t) => t.role === "user")) {
           if (byPhone) await missed(residentId, attempt);
         } else {
-          await processCall(residentId, data.conversation_id, transcript, byPhone ? attempt : null);
+          // What this call's agent was told (lib/weather.ts describeWeather starts it with 必要 or 不要).
+          const winterChecks = String(variables?.winter_check ?? "").startsWith("必要");
+          await processCall(residentId, data.conversation_id, transcript, byPhone ? attempt : null, winterChecks);
         }
       }
     } catch (e) {
