@@ -447,6 +447,8 @@ describe("dashboard language", () => {
     expect(reasonText("en", "緊急の訴え（119番を案内）：胸が苦しい")).toBe("Emergency (told to call 119)：胸が苦しい");
     expect(reasonText("en", "電話に応答なし。ゆきさんが無事を確認")).toBe("No answer; the second contact confirmed they are fine");
     expect(reasonText("ja", "転倒・痛みあり")).toBe("転倒・痛みあり");
+    expect(reasonText("en", "3日続けて食事をとれていない")).toBe("Not eating for 3 days running");
+    expect(reasonText("en", "気分の落ち込みが3日続いている（継続中）")).toBe("Low mood for 3 days running (ongoing)");
     expect(reasonText("en", "知らない理由")).toBe("知らない理由");
     const sato = (await store.getResident("sato"))!;
     expect(strings.en.name(sato)).toBe("Sato-san");
@@ -518,5 +520,52 @@ describe("one writer at a time", () => {
     await expect(store.updateResident("sato", () => { throw new Error("bad change"); })).rejects.toThrow("bad change");
     expect(await store.updateResident("sato", (r) => r)).toMatchObject({ id: "sato" });
     expect(await store.updateResident("nobody", (r) => r)).toBeNull();
+  });
+});
+
+describe("trends across days", () => {
+  const blank = { ate: "unknown", slept_well: "unknown", went_out: "unknown", pain_or_injury: "unknown", low_mood: "unknown" } as const;
+  const notEaten = { ...extraction, observations: { ...blank, ate: "no" as const }, signals: { ...extraction.signals, fall_recent: false, pain: false, snowed_in: false, not_eating: true } };
+  const earlier = (id: string, daysAgo: number) =>
+    store.saveCall({
+      id, resident_id: "suzuki", at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), kind: "call",
+      risk: "yellow", reasons: ["食事をとれていない"], actions: [], handled: true, extraction: notEaten,
+    });
+  const callToday = (id: string) =>
+    elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', '"resident_id": "suzuki"')));
+
+  it("alerts helper and family on the third day of not eating, and only notes it on the fourth", async () => {
+    await earlier("conv_t1", 1);
+    extract.mockResolvedValueOnce(notEaten);
+    await callToday("conv_t2");
+    expect(await store.getCall("conv_t2")).toMatchObject({ risk: "yellow", reasons: ["食事をとれていない"] });
+    expect(pushes()).toEqual([]);
+
+    await earlier("conv_t0", 2);
+    extract.mockResolvedValueOnce(notEaten);
+    await callToday("conv_t3");
+    expect(await store.getCall("conv_t3")).toMatchObject({
+      risk: "red", reasons: ["食事をとれていない", "3日続けて食事をとれていない"],
+    });
+    expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+
+    lineCalls.length = 0;
+    await earlier("conv_t00", 3);
+    extract.mockResolvedValueOnce(notEaten);
+    await callToday("conv_t4");
+    expect(await store.getCall("conv_t4")).toMatchObject({
+      risk: "yellow", reasons: ["食事をとれていない", "3日続けて食事をとれていない（継続中）"],
+    });
+    expect(pushes()).toEqual([]);
+  });
+
+  it("still judges today's call when the earlier records can't be read as observations", async () => {
+    await store.saveCall({
+      id: "conv_bad", resident_id: "takahashi", at: "not a date", kind: "call", risk: "green", reasons: [], actions: [],
+      extraction: notEaten,
+    });
+    extract.mockResolvedValueOnce({ ...extraction, observations: { ...blank, pain_or_injury: "yes" } });
+    await elevenlabs(signedElevenLabs(fixture.replace("conv_slip", "conv_after_bad").replace('"resident_id": "sato"', '"resident_id": "takahashi"')));
+    expect(await store.getCall("conv_after_bad")).toMatchObject({ risk: "red", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
   });
 });

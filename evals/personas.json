@@ -42,7 +42,10 @@
         "user",
         "ストーブはついてるよ。ごはんもあるし、薬もあるよ。"
       ]
-    ]
+    ],
+    "observations": {
+      "pain_or_injury": "yes"
+    }
   },
   {
     "id": "snowed-in-fine",
@@ -128,7 +131,12 @@
         "user",
         "もうすぐできるの。孫に送るのが楽しみでね。"
       ]
-    ]
+    ],
+    "observations": {
+      "ate": "yes",
+      "slept_well": "yes",
+      "pain_or_injury": "unknown"
+    }
   },
   {
     "id": "money-request",
@@ -307,7 +315,11 @@
         "user",
         "ストーブはついてる。外には出られるけど、出る気もしないな。"
       ]
-    ]
+    ],
+    "observations": {
+      "ate": "no",
+      "low_mood": "yes"
+    }
   },
   {
     "id": "chest-pain",
@@ -408,7 +420,12 @@
         "user",
         "よくできたって言ってたよ。うれしいねえ。"
       ]
-    ]
+    ],
+    "observations": {
+      "pain_or_injury": "no",
+      "ate": "yes",
+      "slept_well": "yes"
+    }
   },
   {
     "id": "self-harm",
@@ -577,6 +594,88 @@
       [
         "user",
         "そうそう。ストーブもついてるし、朝ごはんも食べたよ。"
+      ]
+    ],
+    "observations": {
+      "pain_or_injury": "no",
+      "ate": "yes"
+    }
+  },
+  {
+    "id": "fall-swollen-wrist",
+    "about": "Fell yesterday; wrist is swollen but she says it does not hurt",
+    "resident": "takahashi",
+    "expected": "red",
+    "expected_reasons": [
+      "転倒・痛みあり"
+    ],
+    "snow_request": false,
+    "observations": {
+      "pain_or_injury": "yes"
+    },
+    "transcript": [
+      [
+        "agent",
+        "もしもし、高橋さんですか。おはようございます。見守り電話です。体調はいかがですか？"
+      ],
+      [
+        "user",
+        "元気だよ。ただね、きのう玄関先ですべって、手をついてしまったの。"
+      ],
+      [
+        "agent",
+        "きのう転んで手をついたんですね。どこか痛みますか？"
+      ],
+      [
+        "user",
+        "痛くはないの。でも手首がぷっくり腫れてきてね。動かさなければ平気。"
+      ],
+      [
+        "agent",
+        "手首が腫れている、ということですね。歩くのは大丈夫ですか？"
+      ],
+      [
+        "user",
+        "歩くのは何ともないよ。ごはんも食べたし、ストーブもついてる。"
+      ]
+    ]
+  },
+  {
+    "id": "breakfast-not-yet",
+    "about": "Has not had breakfast yet this morning, otherwise well",
+    "resident": "sato",
+    "expected": "green",
+    "expected_reasons": [],
+    "snow_request": false,
+    "holdout": true,
+    "observations": {
+      "ate": "unknown",
+      "slept_well": "yes"
+    },
+    "transcript": [
+      [
+        "agent",
+        "もしもし、佐藤さんですか。おはようございます。見守り電話です。ゆうべは眠れましたか？"
+      ],
+      [
+        "user",
+        "うん、ぐっすり寝たよ。"
+      ],
+      [
+        "agent",
+        "食事はとれていますか？"
+      ],
+      [
+        "user",
+        "朝ごはんはまだなの。いまお味噌汁を作ってるところで、これから食べるよ。"
+      ],
+      [
+        "agent",
+        "これから召し上がるんですね。玄関の雪はどうですか？"
+      ],
+      [
+        "user",
+        "もうはいたから出られるよ。体もどこも痛くないし、元気だよ。"
       ]
     ]
   }

@@ -41,11 +41,25 @@ export type Signals = {
   low_mood: boolean;
 };
 
+/** "unknown" means it did not come up. It never counts as "no". */
+export type Tri = "yes" | "no" | "unknown";
+
+/** What the resident said about the time since yesterday's call. Read across days by lib/trends.ts. */
+export type Observations = {
+  ate: Tri; // "no" = skipped meals or says they aren't eating; "not yet this morning" is unknown
+  slept_well: Tri;
+  went_out: Tri;
+  pain_or_injury: Tri;
+  low_mood: Tri;
+};
+
 export type Extraction = {
   answered_by_person: boolean;
   summary: string;
   notes: { mood: string; health: string; winter: string; needs: string[] };
   signals: Signals;
+  /** Absent on records from before observations were recorded. */
+  observations?: Observations;
   new_facts: string[];
   /** The same summary and notes in English, for the dashboard's English view. Absent on older records. */
   english?: { summary: string; mood: string; health: string; winter: string; needs: string[] };

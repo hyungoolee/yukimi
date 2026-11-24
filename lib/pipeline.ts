@@ -2,11 +2,12 @@ import { runActions } from "./actions";
 import { extract } from "./extract";
 import { missed } from "./ladder";
 import { applyRules } from "./rules";
-import { clearLadder, getResident, saveCall, updateResident } from "./store";
+import { clearLadder, getResident, listCalls, saveCall, updateResident } from "./store";
+import { dailyObservations, findTrends, japanDate, withTrends } from "./trends";
 import type { Extraction, RulesOutput, Turn } from "./types";
 import { getWeather } from "./weather";
 
-export const japanDate = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+export { japanDate };
 
 /** A call we could not judge automatically: a person must read it, so the helper is told. */
 export const needsReview = (reason: string): RulesOutput => ({
@@ -31,6 +32,21 @@ export async function processCall(residentId: string, callId: string, transcript
   } catch (e) {
     console.error("Extraction failed", e);
     rules = needsReview("自動判定に失敗。通話メモを確認してください");
+  }
+
+  // Patterns across days. Kept apart from the step above: if this fails, today's call is still judged on its own.
+  if (extraction?.observations && extraction.answered_by_person) {
+    try {
+      const now = new Date();
+      const earlier = (await listCalls(residentId)).filter((c) => c.kind === "call" && c.id !== callId);
+      const days = dailyObservations([
+        { at: now.toISOString(), observations: extraction.observations },
+        ...earlier.map((c) => ({ at: c.at, observations: c.extraction?.observations })),
+      ]);
+      rules = withTrends(rules, findTrends(days, japanDate(now)));
+    } catch (e) {
+      console.error("Trend rules failed; using today's call alone", e);
+    }
   }
 
   // Voicemail or someone else picked up: the resident has not been reached.

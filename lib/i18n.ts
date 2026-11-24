@@ -41,6 +41,9 @@ const ja = {
   none: "なし",
   showTranscript: "会話を見る",
   history: "これまでのまとめ",
+  week: "この7日間",
+  weekRows: { ate: "食事", slept_well: "睡眠", went_out: "外出", pain_or_injury: "痛み・けが", low_mood: "気分" },
+  weekKey: "○ 問題なし　× 気になる　– 話題なし",
   separator: "、",
   list: "リスト",
   map: "地図",
@@ -100,6 +103,9 @@ const en: typeof ja = {
   none: "None",
   showTranscript: "Show conversation",
   history: "Earlier summaries",
+  week: "Last 7 days",
+  weekRows: { ate: "Meals", slept_well: "Sleep", went_out: "Went out", pain_or_injury: "Pain or injury", low_mood: "Mood" },
+  weekKey: "○ fine   × a concern   – not discussed",
   separator: "; ",
   list: "List",
   map: "Map",
@@ -136,6 +142,9 @@ const REASONS_EN: [string, string][] = [
   ["雪で玄関から出られない", "Snowed in"],
   ["食事をとれていない", "Not eating"],
   ["混乱した様子", "Seems confused"],
+  ["3日続けて食事をとれていない", "Not eating for 3 days running"],
+  ["気分の落ち込みが3日続いている", "Low mood for 3 days running"],
+  ["3日続けて眠れていない", "Sleeping badly for 3 nights running"],
   ["気分の落ち込み", "Low mood"],
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],
   ["電話に2回応答なし。第二連絡先も確認できず", "No answer twice; the second contact can't confirm"],
@@ -148,5 +157,5 @@ export function reasonText(lang: Lang, reason: string) {
   // "電話に応答なし。<name>さんが無事を確認": the name is the second contact's, in Japanese.
   if (reason.startsWith("電話に応答なし。")) return "No answer; the second contact confirmed they are fine";
   const match = REASONS_EN.find(([japanese]) => reason.startsWith(japanese));
-  return match ? match[1] + reason.slice(match[0].length) : reason;
+  return match ? match[1] + reason.slice(match[0].length).replace("（継続中）", " (ongoing)") : reason;
 }
