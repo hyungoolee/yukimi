@@ -4,6 +4,7 @@
 import { readFileSync } from "node:fs";
 import { curate } from "../lib/curate.ts";
 import { extract } from "../lib/extract.ts";
+import { unanswered } from "../lib/measures.ts";
 import { normalizeResident } from "../lib/resident.ts";
 import { applyRules } from "../lib/rules.ts";
 import { dailyObservations, daysBefore, findTrends, japanDate, withTrends } from "../lib/trends.ts";
@@ -17,6 +18,9 @@ type Persona = {
   snow_request: boolean;
   observations?: Partial<Observations>; // the ones this script must get right
   holdout?: boolean;
+  // Only on scripts written as whole calls: the older scripts are abbreviated and skip some required
+  // questions, so the unanswered-question rule is applied to these alone.
+  whole_call?: boolean;
   transcript: [string, string][];
 };
 
@@ -27,7 +31,7 @@ const weather: Weather = json("../data/seed/weather.json");
 async function run(p: Persona) {
   const resident: Resident = json(`../data/seed/residents/${p.resident}.json`);
   const extraction = await extract(resident, p.transcript.map(([role, message]) => ({ role, message })));
-  const rules = applyRules(extraction.signals, weather);
+  const rules = applyRules(extraction.signals, weather, p.whole_call ? unanswered(extraction.observations ?? {}, true) : []);
   const answered = extraction.answered_by_person;
   const got = answered ? rules.risk : "missed";
   const snow = answered && rules.actions.some((a) => a.type === "snow_request");

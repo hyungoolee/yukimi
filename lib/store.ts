@@ -200,7 +200,7 @@ export async function claimTrendFiring(residentId: string, trendId: string, date
 }
 
 // A call we placed and are waiting to hear back about, keyed by ElevenLabs conversation ID.
-export type Pending = { resident_id: string; attempt: number; at?: number };
+export type Pending = { resident_id: string; attempt: number; winter_checks?: boolean; at?: number };
 export const savePending = (conversationId: string, p: Pending) => write("pending", conversationId, { ...p, at: Date.now() });
 /** Calls placed and not yet reported back. One that never reports stops counting after 15 minutes. */
 export const callsInProgress = async (now = Date.now(), residentId?: string) =>

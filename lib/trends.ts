@@ -30,7 +30,7 @@ export function dailyObservations(calls: { at: string; observations?: Observatio
       byDate.set(date, { ...call.observations });
       continue;
     }
-    for (const { field } of MEASURES) if (day[field] === "unknown") day[field] = call.observations[field];
+    for (const { field } of MEASURES) if ((day[field] ?? "unknown") === "unknown") day[field] = call.observations[field] ?? "unknown";
   }
   return [...byDate].map(([date, observations]) => ({ date, observations })).sort((a, b) => b.date.localeCompare(a.date));
 }
