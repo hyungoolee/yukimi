@@ -2,6 +2,8 @@ import { MEASURES, type MeasureField } from "./measures.ts";
 import { REQUESTS } from "./requests.ts";
 import type { Action, Risk, Role, RulesOutput, Signals, Weather } from "./types";
 
+/** The reason on an alert where the resident was told to phone an ambulance. */
+export const EMERGENCY = "緊急の訴え（119番を案内）";
 export const SHORT_OF_SUPPLIES = "食料・薬・灯油が足りない";
 
 /** Followed by the labels of the questions that went unanswered. */
@@ -21,7 +23,7 @@ export function applyRules(s: Signals, weather: Weather, unanswered: MeasureFiel
     for (const role of to) alerts.set(role, [...(alerts.get(role) ?? []), reason]);
   };
 
-  if (s.emergency || s.cant_move) redAlert("緊急の訴え（119番を案内）", everyone);
+  if (s.emergency || s.cant_move) redAlert(EMERGENCY, everyone);
   if (s.self_harm) redAlert("死にたい気持ちの訴え", ["helper"]);
   if (s.fall_recent) {
     if (s.pain) redAlert("転倒・痛みあり", everyone);
