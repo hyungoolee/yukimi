@@ -75,6 +75,21 @@ export const getLadder = (residentId: string) => read<LadderState>("ladder", res
 export const saveLadder = (residentId: string, s: LadderState) => write("ladder", residentId, s);
 export const clearLadder = (residentId: string) => rm(file("ladder", residentId), { force: true });
 
+/**
+ * Back to a clean demo: no calls or ladders, and each resident's memory as seeded.
+ * Phone numbers and LINE registrations are kept, so nobody has to set up again.
+ */
+export async function resetDemoData() {
+  await ensureSeeded();
+  await Promise.all(["calls", "ladder", "pending"].map((dir) => rm(path.join(DATA_DIR, dir), { recursive: true, force: true })));
+  for (const current of await readAll<Resident>("residents")) {
+    const seed = JSON.parse(
+      await readFile(path.join(SEED_DIR, "residents", `${current.id}.json`), "utf8").catch(() => "null"),
+    ) as Resident | null;
+    if (seed) await saveResident({ ...current, facts: seed.facts, recent_calls: seed.recent_calls });
+  }
+}
+
 export async function getSavedWeather(): Promise<Weather> {
   await ensureSeeded();
   return JSON.parse(await readFile(path.join(DATA_DIR, "weather.json"), "utf8"));

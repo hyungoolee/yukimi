@@ -5,7 +5,7 @@ import { cookies, headers } from "next/headers";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
-import { getCall, getResident, saveCall, saveResident } from "@/lib/store";
+import { getCall, getResident, resetDemoData, saveCall, saveResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -67,5 +67,12 @@ export async function simulateNoAnswer(formData: FormData) {
 export async function setLanguage(formData: FormData) {
   const lang = formData.get("lang") === "en" ? "en" : "ja";
   (await cookies()).set("lang", lang, { maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+  revalidatePath("/", "layout");
+}
+
+/** Demo only: clear calls and ladders and restore the residents' seeded memory, for a clean rehearsal. */
+export async function resetDemo() {
+  await requireAccess();
+  if (DEMO_MODE) await resetDemoData();
   revalidatePath("/", "layout");
 }
