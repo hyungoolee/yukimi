@@ -1,6 +1,6 @@
 import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { CallRecord, Resident, Weather } from "./types";
+import type { CallRecord, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
 const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "seed");
@@ -55,6 +55,25 @@ export async function listResidents() {
 
 export const getCall = (id: string) => read<CallRecord>("calls", id);
 export const saveCall = (c: CallRecord) => write("calls", c.id, c);
+// Several things change the same call record (an acknowledgement, a re-send count, "handled",
+// a volunteer accepting). Each change re-reads the record and waits its turn, so none overwrites another.
+const callQueue = new Map<string, Promise<unknown>>();
+export function updateCall(id: string, change: (call: CallRecord) => Partial<CallRecord> | null) {
+  const run = (callQueue.get(id) ?? Promise.resolve())
+    .catch(() => {})
+    .then(async () => {
+      const call = await getCall(id);
+      const patch = call && change(call);
+      if (!call || !patch) return null;
+      const next = { ...call, ...patch };
+      await saveCall(next);
+      return next;
+    });
+  callQueue.set(id, run);
+  run.finally(() => callQueue.get(id) === run && callQueue.delete(id)).catch(() => {});
+  return run;
+}
+
 /** Newest first. */
 export async function listCalls(residentId?: string) {
   const calls = await readAll<CallRecord>("calls");
@@ -98,6 +117,8 @@ export type Task = {
   resident_id: string;
   call_id?: string;
   round?: number;
+  to?: Role[]; // for alert_recheck: who to send to again, kept here so it works even if the call record is missing
+  reasons?: string[];
   ladder_at?: number; // which ladder this step belongs to, so a step from an old ladder can't act on a new one
 };
 export async function schedule(task: Omit<Task, "id">) {

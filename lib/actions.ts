@@ -1,6 +1,6 @@
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
-import { getCall, getResident, saveCall, schedule } from "./store";
+import { getCall, getResident, schedule, updateCall, type Task } from "./store";
 import type { Action, Resident, Risk, Role } from "./types";
 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
@@ -31,23 +31,26 @@ export async function sendAlert(
 /** A red alert: sent now, and again later unless someone acknowledges it or marks the call handled. */
 export async function sendRedAlert(resident: Resident, callId: string, to: Role[], reasons: string[]) {
   const sent = await sendAlert(resident, to, reasons, { callId });
-  await schedule({ kind: "alert_recheck", resident_id: resident.id, call_id: callId, round: 1, due: Date.now() + ACK_MS });
+  await scheduleRecheck(resident.id, callId, 1, to, reasons);
   return sent;
 }
 
-/** Scheduled step: has anyone seen the red alert? If not, send it again to the same people. */
-export async function recheckAlert(callId: string, round: number) {
+const scheduleRecheck = (residentId: string, callId: string, round: number, to: Role[], reasons: string[]) =>
+  schedule({ kind: "alert_recheck", resident_id: residentId, call_id: callId, round, to, reasons, due: Date.now() + ACK_MS });
+
+/**
+ * Scheduled step: has anyone seen the red alert? If not, send it again to the same people.
+ * Everything needed is on the task, so a call record that failed to save can't stop the re-sends.
+ */
+export async function recheckAlert({ resident_id, call_id: callId = "", round = 1, to, reasons }: Task) {
   const call = await getCall(callId);
-  if (!call || call.handled || call.acknowledged_by) return;
-  const resident = await getResident(call.resident_id);
-  const to = call.actions.find((a) => a.type === "alert")?.to;
-  if (!resident || !to) return;
-  await sendAlert(resident, to, call.reasons, { callId, resend: round });
-  // Re-read before saving: an acknowledgement may have landed while LINE was being called.
-  await saveCall({ ...((await getCall(callId)) ?? call), alert_rounds: round });
-  if (round < MAX_RESENDS) {
-    await schedule({ kind: "alert_recheck", resident_id: resident.id, call_id: callId, round: round + 1, due: Date.now() + ACK_MS });
-  }
+  if (call?.handled || call?.acknowledged_by) return;
+  const resident = await getResident(resident_id);
+  if (!resident || !to || !reasons) return;
+  // Book the next round first, so a failure below can't end the chain.
+  if (round < MAX_RESENDS) await scheduleRecheck(resident_id, callId, round + 1, to, reasons);
+  await sendAlert(resident, to, reasons, { callId, resend: round });
+  await updateCall(callId, () => ({ alert_rounds: round }));
 }
 
 async function sendSnowRequest(resident: Resident, callId: string) {

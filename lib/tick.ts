@@ -5,7 +5,7 @@ import { deleteTask, listTasks, type Task } from "./store";
 const run = (task: Task) => {
   if (task.kind === "ladder_retry") return retryStep(task.resident_id, task.ladder_at);
   if (task.kind === "ladder_confirm") return confirmStep(task.resident_id, task.ladder_at);
-  return recheckAlert(task.call_id ?? "", task.round ?? 1);
+  return recheckAlert(task);
 };
 
 let running = false;

@@ -20,6 +20,7 @@ async function callVariables(resident: Resident, attempt: number) {
 /** Ask ElevenLabs to phone the resident. attempt 2 is the missed-call retry. */
 export async function placeCall(resident: Resident, attempt = 1) {
   const res = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
+    signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: { "xi-api-key": env("ELEVENLABS_API_KEY"), "content-type": "application/json" },
     body: JSON.stringify({
