@@ -498,3 +498,15 @@ describe("demo script", () => {
     }
   });
 });
+
+describe("live captions", () => {
+  it("returns the translation, or an empty caption when translating fails", async () => {
+    const translateToEnglish = vi.fn(async () => "Is your heater on?");
+    vi.doMock("@/lib/translate", () => ({ translateToEnglish }));
+    vi.resetModules();
+    const { translateCaption } = await import("@/app/actions");
+    expect(await translateCaption("暖房はついていますか。")).toBe("Is your heater on?");
+    translateToEnglish.mockRejectedValueOnce(new Error("model unavailable"));
+    expect(await translateCaption("暖房はついていますか。")).toBe("");
+  });
+});
