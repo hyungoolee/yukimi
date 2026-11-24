@@ -162,6 +162,28 @@ describe("facts proposed by the model", () => {
     expect(r.memory_log).toHaveLength(100);
     expect(ops(r).every((op) => op === "add" || op === "refuse")).toBe(true);
   });
+
+  it("notes a refused fact once, however many calls propose it", () => {
+    const full = Array.from({ length: MAX_FACTS }, (_, i) => fact(`f${i}`, `事実${i}`));
+    let r: Resident = withFacts(full);
+    for (let i = 0; i < 5; i++) r = propose(r, { add: ["三十一番目"] });
+    expect(ops(r)).toEqual(["refuse"]);
+  });
+
+  it("can't bring back a fact the helper took out", () => {
+    const retired = retireFact(withFacts([fact("h", "夫と二人暮らし")]), "h", TODAY);
+    expect(factTexts(propose(retired, { add: ["夫と二人暮らし", "猫を飼っている"] }))).toEqual(["猫を飼っている"]);
+  });
+
+  it("keeps at most fifty retired facts", () => {
+    let r: Resident = withFacts([]);
+    for (let i = 0; i < 60; i++) {
+      r = propose(r, { add: [`事実${i}`] });
+      r = propose(r, { retire: [{ id: r.facts[0].id, reason: "x" }] });
+    }
+    expect(r.retired_facts).toHaveLength(50);
+    expect(r.retired_facts![0].text).toBe("事実10");
+  });
 });
 
 describe("facts edited by the helper", () => {
@@ -196,6 +218,14 @@ describe("facts edited by the helper", () => {
     expect(JSON.stringify(gone)).not.toContain("健太");
     expect((gone.memory_log ?? []).map((e) => e.op)).toEqual(["retire", "delete"]);
     expect(deleteFact(base, "k")).toBe(base); // only a retired fact can be deleted for good
+
+    // A wording that was once refused, then added, edited and deleted leaves nothing either.
+    const full = { ...resident([]), facts: Array.from({ length: MAX_FACTS }, (_, i) => fact(`f${i}`, `事実${i}`)) };
+    let r = applyCuration(full, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, add: ["書道を習っている"] } }, TODAY);
+    r = addFact(retireFact(r, "f0", TODAY), "書道を習っている", TODAY);
+    const id = r.facts.at(-1)!.id;
+    r = deleteFact(retireFact(editFact(r, id, "書道を30年習っている"), id, TODAY), id);
+    expect(JSON.stringify(r)).not.toContain("書道");
   });
 
   it("saves care notes, trimmed and capped, and gives the agent a value either way", () => {
@@ -205,6 +235,7 @@ describe("facts edited by the helper", () => {
     expect(careNotesLine(noted)).toBe("夫の話は こちらからしない");
     expect(setCareNotes(base, "あ".repeat(500)).care_notes).toHaveLength(300);
     expect(setCareNotes(noted, "夫の話は こちらからしない")).toBe(noted);
+    expect(JSON.stringify(setCareNotes(noted, "").memory_log)).not.toContain("夫");
   });
 
   it("gives the agent the facts as one line, or なし", () => {
@@ -221,6 +252,8 @@ describe("resident files from before facts were objects", () => {
       { id: expect.stringMatching(/^[0-9a-f]{8}$/), text: "庭でバラを育てている", since: "", source: "intake", locked: true },
       { id: expect.stringMatching(/^[0-9a-f]{8}$/), text: "ひざが少し悪い", since: "", source: "intake", locked: true },
     ]);
+    const twins = normalizeResident({ ...old, facts: ["同じ", "同じ"] } as unknown as Resident);
+    expect(twins.facts[0].id).not.toBe(twins.facts[1].id);
     expect(normalizeResident(old)).toEqual(once);
     expect(normalizeResident(once)).toEqual(once);
   });

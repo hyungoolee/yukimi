@@ -161,12 +161,17 @@ describe("the 7-day grid", () => {
 });
 
 describe("the measures table", () => {
-  it("drives the extraction: one schema field and one prompt line per measure", async () => {
-    const { readFileSync } = await import("node:fs");
-    const source = readFileSync("lib/extract.ts", "utf8");
-    expect(source).toContain("MEASURES.map((m) => [m.field, tri])");
-    expect(source).toContain("MEASURES.map((m) => `- ${m.ask}`)");
-    for (const m of MEASURES) expect(m.ask.startsWith(m.field)).toBe(true);
+  it("drives the extraction: the schema requires exactly one tri-state field per measure", async () => {
+    const { ExtractionSchema } = await import("@/lib/extract");
+    const observations = ExtractionSchema.shape.observations;
+    const all = Object.fromEntries(MEASURES.map((m) => [m.field, "unknown"]));
+    expect(observations.parse(all)).toEqual(all);
+    for (const m of MEASURES) {
+      const missingOne = Object.fromEntries(Object.entries(all).filter(([field]) => field !== m.field));
+      expect(observations.safeParse(missingOne).success).toBe(false);
+      expect(observations.safeParse({ ...all, [m.field]: "maybe" }).success).toBe(false);
+      expect(m.ask.startsWith(m.field)).toBe(true);
+    }
   });
 
   it("gives every trend an English reason, and every measure both labels", async () => {

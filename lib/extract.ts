@@ -6,7 +6,7 @@ import type { Extraction, Resident, Turn } from "./types";
 
 const tri = z.enum(["yes", "no", "unknown"]);
 
-const ExtractionSchema = z.object({
+export const ExtractionSchema = z.object({
   answered_by_person: z.boolean(),
   summary: z.string(),
   notes: z.object({
