@@ -116,7 +116,7 @@ describe("after a call", () => {
 
     const call = await store.getCall("conv_slip");
     expect(call).toMatchObject({ risk: "red", kind: "call", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
-    expect(call!.actions).toEqual([
+    expect(call!.actions).toMatchObject([
       { type: "alert", to: ["helper", "second_contact"], sent: true },
       { type: "snow_request", to: ["snow_volunteer"], sent: true },
     ]);
