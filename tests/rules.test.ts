@@ -10,6 +10,35 @@ const cold: Weather = { station: "15356", date: "2026-11-26", snowfall_24h_cm: 3
 const mild: Weather = { ...cold, low_c: 3 };
 const rules = (s: Partial<Signals>, w = cold) => applyRules({ ...none, ...s }, w);
 
+describe("a call that ends before the winter checks", () => {
+  const all = { heating: true, exit: true, supplies: true };
+  const reason = "冬の確認が終わる前に通話が終了";
+
+  it("is yellow and tells the helper when a check was never answered", () => {
+    expect(applyRules(none, cold, { ...all, supplies: false })).toEqual({
+      risk: "yellow", reasons: [reason],
+      actions: [{ type: "alert", to: ["helper"], reasonsByRole: { helper: [reason] } }],
+    });
+  });
+
+  it("is left alone when every check was answered, on a mild day, or on older records", () => {
+    expect(applyRules(none, cold, all).risk).toBe("green");
+    expect(applyRules(none, { ...mild, snowfall_24h_cm: 0 }, { heating: false, exit: false, supplies: false }).risk).toBe("green");
+    expect(applyRules(none, cold).risk).toBe("green");
+  });
+
+  it("adds nothing to a call that is already red", () => {
+    const out = applyRules({ ...none, emergency: true }, cold, { heating: false, exit: false, supplies: false });
+    expect(out.reasons).not.toContain(reason);
+    expect(out.actions).toHaveLength(1);
+  });
+
+  it("gives the helper the other yellow reasons too", () => {
+    const out = applyRules({ ...none, not_eating: true }, cold, { ...all, exit: false });
+    expect(out.actions).toEqual([{ type: "alert", to: ["helper"], reasonsByRole: { helper: ["食事をとれていない", reason] } }]);
+  });
+});
+
 describe("escalation rules", () => {
   it("is green with no actions when nothing is wrong", () => {
     expect(rules({})).toEqual({ risk: "green", reasons: [], actions: [] });
