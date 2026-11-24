@@ -53,4 +53,10 @@ export const DEMO_SCRIPT: DemoLine[] = [
     romaji: "Iie, daijōbu desu. Arigatō gozaimashita.",
     meaning: "No, I'm fine. Thank you.",
   },
+  {
+    when: { ja: "2回目の電話：だれがいつ来るか言われたら", en: "Second call: says who is coming, and when" },
+    say: "まあ、助かります。ありがとうございます。",
+    romaji: "Mā, tasukarimasu. Arigatō gozaimasu.",
+    meaning: "Oh, that's a great help. Thank you.",
+  },
 ];

@@ -2,12 +2,15 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "./env";
 import { briefingLine } from "./briefing";
 import { careNotesLine, factsLine, followUpsLine } from "./memory";
+import { helpLine } from "./requests";
 import { listCalls, savePending } from "./store";
 import type { Resident } from "./types";
 import { describeWeather, getWeather } from "./weather";
 
 /** What the agent is told about this call: who it is, what we remember, and this morning's weather. */
 async function callVariables(resident: Resident, attempt: number) {
+  // If the history can't be read, the call still goes out, just without what it would have added.
+  const calls = await listCalls(resident.id).catch(() => null);
   return {
     resident_id: resident.id,
     attempt: String(attempt),
@@ -17,8 +20,8 @@ async function callVariables(resident: Resident, attempt: number) {
     care_notes: careNotesLine(resident),
     recent_calls: resident.recent_calls.map((c) => `${c.date}：${c.summary}`).join(" / ") || "なし",
     follow_ups: followUpsLine(resident),
-    // If the history can't be read, the call still goes out, just without the brief.
-    briefing: await listCalls(resident.id).then(briefingLine).catch(() => "なし"),
+    briefing: calls ? briefingLine(calls) : "なし",
+    help_status: calls ? helpLine(resident, calls) : "なし",
     ...describeWeather(await getWeather(resident.amedas_station)),
   };
 }

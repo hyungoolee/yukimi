@@ -1,7 +1,8 @@
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
+import { REQUESTS, slotChoices, slotLabel, type RequestKind } from "./requests";
 import { getCall, getResident, schedule, updateCall, type Task } from "./store";
-import type { Action, AlertReasons, Delivery, Resident, Risk, Role } from "./types";
+import type { Action, AlertReasons, Delivery, Resident, Risk, Role, Slot } from "./types";
 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
 const ACK_MS = DEMO_MODE ? 30_000 : 10 * 60_000;
@@ -11,7 +12,6 @@ const link = (resident: Resident) =>
   process.env.APP_URL ? `\n${process.env.APP_URL}/residents/${resident.id}` : "";
 
 const ACK_BUTTON = "確認しました";
-const ACCEPT_BUTTON = "引き受けます";
 
 /** Sends one person's message and records exactly what went out and whether LINE took it. */
 async function deliver(resident: Resident, role: Role, sentText: string, messages: object[], extra: Partial<Delivery>): Promise<Delivery> {
@@ -76,10 +76,27 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
   await updateCall(callId, () => ({ alert_rounds: round }));
 }
 
-async function sendSnowRequest(resident: Resident, callId: string): Promise<Delivery[]> {
-  const body = `【除雪のお願い】${resident.name}さん宅の玄関前。雪で外に出られません。`;
-  const message = buttons(body, [{ label: ACCEPT_BUTTON, data: `snow_accept:${callId}` }]);
-  return [await deliver(resident, "snow_volunteer", body, [message], { button: ACCEPT_BUTTON })];
+/** Asks the person for this kind of help, with a button for each half-day they could come. */
+async function sendRequest(resident: Resident, callId: string, kind: RequestKind): Promise<Delivery[]> {
+  const body = REQUESTS[kind].message(resident.name);
+  const choices = slotChoices().map((slot) => ({ label: slotLabel(slot), data: `accept:${callId}:${kind}:${slot.date}:${slot.part}` }));
+  const button = choices.map((c) => c.label).join(" / ");
+  return [await deliver(resident, REQUESTS[kind].role, body, [buttons(body, choices)], { button })];
+}
+
+/**
+ * Records who took a request and when they will come. The first to answer has it: `mine` is false
+ * for anyone after, and `request` then shows who does.
+ */
+export async function acceptRequest(callId: string, kind: RequestKind, name: string, slot?: Slot) {
+  const isIt = (a: { type: string; kind?: string }) => a.type === "request" && a.kind === kind;
+  const saved = await updateCall(callId, (call) =>
+    call.actions.some((a) => isIt(a) && a.accepted_by === undefined)
+      ? { actions: call.actions.map((a) => (isIt(a) ? { ...a, accepted_by: name, slot } : a)) }
+      : null,
+  );
+  const request = (saved ?? (await getCall(callId)))?.actions.find(isIt);
+  return { mine: !!saved, request };
 }
 
 /** Carries out the rules' actions and reports, per recipient, what was sent and whether it went out. */
@@ -89,8 +106,8 @@ export async function runActions(resident: Resident, callId: string, risk: Risk,
   return Promise.all(
     actions.map(async (a) => {
       const deliveries =
-        a.type === "alert" ? await alert(a.reasonsByRole ?? sharedReasons(a.to, reasons)) : await sendSnowRequest(resident, callId);
-      return { type: a.type, to: a.to, sent: anySent(deliveries), deliveries };
+        a.type === "alert" ? await alert(a.reasonsByRole ?? sharedReasons(a.to, reasons)) : await sendRequest(resident, callId, a.kind);
+      return { ...a, sent: anySent(deliveries), deliveries };
     }),
   );
 }

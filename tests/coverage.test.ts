@@ -80,7 +80,7 @@ describe("coverage agrees with what the alert code sends", () => {
   it("matches for the snow helper", async () => {
     for (const snow of [on("s"), off("s")]) {
       const r = resident("a", { snow_volunteer: snow });
-      expect((await sent(r, { snowed_in: true })).snow_request).toBe(!coverage(r).gaps.includes("snow_unreachable"));
+      expect((await sent(r, { snowed_in: true })).request).toBe(!coverage(r).gaps.includes("snow_unreachable"));
     }
   });
 });

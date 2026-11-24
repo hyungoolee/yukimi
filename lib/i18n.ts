@@ -1,5 +1,6 @@
 import { MEASURES } from "./measures";
-import { UNCONFIRMED } from "./rules";
+import { REQUESTS, slotLabel, type OpenRequest } from "./requests";
+import { SHORT_OF_SUPPLIES, UNCONFIRMED } from "./rules";
 import type { Resident, Weather } from "./types";
 
 export type Lang = "ja" | "en";
@@ -13,9 +14,11 @@ const ja = {
   last: (time: string) => `最終 ${time}`,
   daily: (time: string) => `毎日 ${time}`,
   badge: { red: "すぐ確認", yellow: "訪問リスト", green: "問題なし", none: "通話なし" },
-  snowRequest: "除雪のお願い：",
-  snowAccepted: (r: Resident) => `${r.snow_volunteer.name}さんが引き受けました`,
-  snowWaiting: "返事待ち",
+  request: (r: OpenRequest) =>
+    `${REQUESTS[r.kind].label.ja}：${
+      r.status === "not_sent" ? "送信できていません" : r.status === "sent" ? "返事待ち" : `${r.who}さんが引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
+    }`,
+  acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
   messageUnregistered: "未送信：この方のLINEが未登録です",
@@ -24,7 +27,7 @@ const ja = {
   messageNotRecorded: "この通話では、送った文面と宛先ごとの結果を記録していません。",
   messageResent: (n: number) => `未確認のため、このあと${n}回再送しました。`,
   alertGloss: (reasons: string) => `要確認：${reasons}`,
-  snowGloss: "玄関前の除雪のお願い",
+  requestGloss: { snow: "玄関前の除雪のお願い", supplies: "足りないものを届けてほしいというお願い" },
   callNow: "今すぐ電話",
   calling: "発信中…",
   addPhone: "電話番号を登録",
@@ -153,9 +156,11 @@ const en: typeof ja = {
   last: (time) => `Last call ${time}`,
   daily: (time) => `Daily at ${time}`,
   badge: { red: "Check now", yellow: "Visit list", green: "All fine", none: "No calls" },
-  snowRequest: "Snow-clearing request: ",
-  snowAccepted: () => "accepted by the volunteer",
-  snowWaiting: "waiting for a reply",
+  request: (r) =>
+    `${REQUESTS[r.kind].label.en}: ${
+      r.status === "not_sent" ? "request could not be sent" : r.status === "sent" ? "asked, waiting for a reply" : `accepted${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
+    }`,
+  acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
   messageUnregistered: "not sent: this person has no LINE registered",
@@ -164,7 +169,7 @@ const en: typeof ja = {
   messageNotRecorded: "The wording and per-recipient results were not recorded for this call.",
   messageResent: (n) => `Not acknowledged, so it was sent again ${n} time${n === 1 ? "" : "s"} after this.`,
   alertGloss: (reasons) => `Please check: ${reasons}`,
-  snowGloss: "Request to clear the snow at the front door",
+  requestGloss: { snow: "Request to clear the snow at the front door", supplies: "Request to bring what she is short of" },
   callNow: "Call now",
   calling: "Calling…",
   addPhone: "Add a phone number",
@@ -302,6 +307,7 @@ const REASONS_EN: [string, string][] = [
   ["雪で外に出られない・暖房も使えない", "Snowed in with no heating"],
   ["雪で玄関から出られない", "Snowed in"],
   ["食事をとれていない", "Not eating"],
+  [SHORT_OF_SUPPLIES, "Short of food, medicine or kerosene"],
   ["混乱した様子", "Seems confused"],
   ["気分の落ち込み", "Low mood"],
   ["電話に2回応答なし。第二連絡先からも返事なし", "No answer twice; no reply from the second contact"],

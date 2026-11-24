@@ -155,7 +155,25 @@ export async function listResidents() {
   return (await Promise.all(stored.map(withPeople))).sort((a, b) => a.call_time.localeCompare(b.call_time));
 }
 
-export const getCall = (id: string) => read<CallRecord>("calls", id);
+// Records from before help requests had kinds: a snow request with its own "accepted" flag.
+type OldCall = { snow_accepted?: boolean; actions: { type: string }[] };
+function normalizeCall(raw: CallRecord): CallRecord {
+  const { snow_accepted, ...call } = raw as CallRecord & OldCall;
+  if (!(call.actions as OldCall["actions"]).some((a) => a.type === "snow_request")) return call;
+  return {
+    ...call,
+    actions: call.actions.map((a) =>
+      (a.type as string) === "snow_request"
+        ? { ...a, type: "request", kind: "snow", ...(snow_accepted ? { accepted_by: "" } : {}) }
+        : a,
+    ),
+  };
+}
+
+export const getCall = async (id: string) => {
+  const call = await read<CallRecord>("calls", id);
+  return call && normalizeCall(call);
+};
 export const saveCall = (c: CallRecord) => write("calls", c.id, c);
 // Several things change the same call record (an acknowledgement, a re-send count, "handled",
 // a volunteer accepting). Each change re-reads the record and waits its turn, so none overwrites another.
@@ -180,6 +198,7 @@ export function updateCall(id: string, change: (call: CallRecord) => Partial<Cal
 export async function listCalls(residentId?: string) {
   const calls = await readAll<CallRecord>("calls");
   return calls
+    .map(normalizeCall)
     .filter((c) => !residentId || c.resident_id === residentId)
     .sort((a, b) => b.at.localeCompare(a.at));
 }
