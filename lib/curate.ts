@@ -26,6 +26,8 @@ new_follow_ups: up to three things from this call worth asking about on a later 
 - a health problem that should be checked again (a fall, pain, a cough, a wound);
 - something that was arranged or promised (a volunteer is coming to clear snow, they will see the doctor on Thursday);
 - an event they are waiting on (a grandchild's exam result, a visit from family).
+- a topic the resident raised that the agent said it would like to hear about again ("また今度、聞かせてください"): give it 3 days, so one missed call does not lose it.
+When more than three qualify, health problems come first.
 Do not add the questions asked on every call (meals, sleep, heating, going out): those are tracked separately. Do not add anything about money, bank accounts or cards, even if it came up. Do not repeat something that is already open. Return an empty list when nothing qualifies, which is common.
 
 Write each text in Japanese as a short note of what to ask, for example 「腰の痛みはその後どうか」 or 「健太さんの受験の結果（金曜に発表）」. days is how many days from today it stays worth asking, from 1 to 14: a few days for something that should pass quickly, longer for a dated event.
