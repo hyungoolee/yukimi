@@ -24,7 +24,7 @@ const toolConfig = {
   type: "webhook",
   name: "report_emergency",
   description:
-    "Call at once when the resident describes a medical emergency or talks about wanting to die. Alerts their family and welfare volunteer, and returns the exact wording to read out.",
+    "Call at once when the resident describes a medical emergency or talks about wanting to die. Alerts their family and welfare volunteer, and returns the exact wording to read out. Never call it to report how the call went, to pass on a message, or when the resident is well: it tells them to phone an ambulance.",
   api_schema: {
     url: `${need("APP_URL")}/api/tools/emergency`,
     method: "POST",
@@ -42,13 +42,18 @@ const toolConfig = {
   },
 };
 
-const toolId = process.env.ELEVENLABS_TOOL_ID;
+// SCRATCH=1 makes or updates a throwaway copy of the agent, for trying new instructions with
+// `SIM_AGENT_ID=<id> pnpm simulate`. It leaves the live agent and the shared tool as they are.
+// Pass SCRATCH_AGENT_ID=<id> to update the copy made last time instead of making another.
+const scratch = !!process.env.SCRATCH; // any value: a typo must never fall through to the live agent
+// The copy gets a tool of its own (SCRATCH_TOOL_ID to reuse one), so a new description can be tried too.
+const toolId = scratch ? process.env.SCRATCH_TOOL_ID : process.env.ELEVENLABS_TOOL_ID;
 const tool = toolId
   ? await call("PATCH", `/tools/${toolId}`, { tool_config: toolConfig })
   : await call("POST", "/tools", { tool_config: toolConfig });
 
 const agentConfig = {
-  name: "Yukimi check-in",
+  name: scratch ? "Yukimi check-in (scratch)" : "Yukimi check-in",
   conversation_config: {
     agent: {
       language: "ja",
@@ -103,10 +108,12 @@ const agentConfig = {
   },
 };
 
-const agentId = process.env.ELEVENLABS_AGENT_ID;
+const agentId = scratch ? process.env.SCRATCH_AGENT_ID : process.env.ELEVENLABS_AGENT_ID;
 const agent = agentId
   ? await call("PATCH", `/agents/${agentId}`, agentConfig)
   : await call("POST", "/agents/create", agentConfig);
 
-console.log(`ELEVENLABS_TOOL_ID=${tool.id}`);
-console.log(`ELEVENLABS_AGENT_ID=${agent.agent_id}`);
+// A copy's ids are printed under their own names, so they are never pasted into .env as the live ones.
+const prefix = scratch ? "SCRATCH" : "ELEVENLABS";
+console.log(`${prefix}_TOOL_ID=${tool.id}`);
+console.log(`${prefix}_AGENT_ID=${agent.agent_id}`);
