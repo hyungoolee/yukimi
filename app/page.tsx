@@ -44,7 +44,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <h1 className="text-2xl font-semibold">{t.title}</h1>
-      {weather && <WeatherCard weather={weather} lang={lang} t={t} />}
+      {/* With a red alert open, the weather shrinks to a line so the alert is on the first screen. */}
+      {weather && <WeatherCard weather={weather} lang={lang} t={t} compact={open("red") > 0} />}
       <p className="mt-3 flex flex-wrap gap-2 text-sm">
         {counts.map(({ label, n, className }) => (
           <span key={label} className={`rounded px-2 py-0.5 ${n > 0 ? `font-medium ${className}` : "bg-zinc-100 text-zinc-400"}`}>
@@ -52,11 +53,16 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </span>
         ))}
       </p>
-      {(!LINE_READY || unreached > 0) && (
-        // An alert that would reach nobody is the failure this product exists to prevent: say so up front.
-        <Link href="/people" className="mt-3 block rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800 hover:bg-red-100">
-          {LINE_READY ? t.coverageBanner(unreached) : t.lineNotReady} →
-        </Link>
+      {/* An alert that would reach nobody is the failure this product exists to prevent: say so up front. */}
+      {!LINE_READY ? (
+        // Fixed in the server's settings, not on any page here: no link.
+        <p className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800">{t.lineNotReady}</p>
+      ) : (
+        unreached > 0 && (
+          <Link href="/people" className="mt-3 block rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800 hover:bg-red-100">
+            {t.coverageBanner(unreached)} →
+          </Link>
+        )
       )}
       <div className="mt-4 flex items-center gap-4">
         <nav className="inline-flex overflow-hidden rounded border border-zinc-300 text-sm">
