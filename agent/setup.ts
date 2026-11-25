@@ -57,7 +57,7 @@ const agentConfig = {
   conversation_config: {
     agent: {
       language: "ja",
-      first_message: "もしもし、{{name}}さんですか。おはようございます。{{introducer}}からご紹介いただいた、見守り電話です。",
+      first_message: "もしもし、{{name}}さんですか。{{greeting}}。{{introducer}}からご紹介いただいた、見守り電話です。",
       // Stand-in values for ElevenLabs' own test call, which doesn't go through our app.
       // A real call always sends its own (lib/elevenlabs.ts). The ID matches no resident on purpose,
       // so a test call can't write to a resident's history, start their ladder, or alert their family.
@@ -69,12 +69,14 @@ const agentConfig = {
           introducer: "娘のゆきさん",
           facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
           follow_ups: "なし",
+          threads: "健太さんの模試の結果",
           care_notes: "なし",
           briefing: "なし",
           weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
           winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
           help_status: "なし",
           call_length: "ふつう",
+          greeting: "おはようございます",
         },
       },
       prompt: {

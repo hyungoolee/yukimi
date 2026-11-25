@@ -117,6 +117,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           <ul className="mt-2 space-y-1 text-sm">
             {openFollowUps(resident, japanDate()).map((f) => (
               <li key={f.id} className="flex items-center gap-3">
+                {f.kind === "thread" && <span className="rounded bg-zinc-100 px-1.5 text-xs text-zinc-600">{t.followUpThread}</span>}
                 <span>{f.text}</span>
                 <span className="text-zinc-500">{t.followUpUntil(f.expires)}</span>
                 <form action={deleteFollowUp}>

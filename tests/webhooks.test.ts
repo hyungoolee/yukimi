@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEASURES } from "@/lib/measures";
+import { daysBefore, japanDate } from "@/lib/trends";
 import type { Extraction, Observations } from "@/lib/types";
 
 // The model call is replaced; everything else (routes, rules, store, LINE requests) is real.
@@ -464,8 +465,19 @@ describe("calls without a phone line", () => {
     const { token, variables } = started;
     expect(token).toBe("tok_test");
     expect(variables).toMatchObject({ resident_id: "sato", attempt: "1", name: "佐藤", introducer: "娘のゆきさん", channel: "browser" });
+    // The seeded thread is open from the first seeding.
+    expect(variables).toMatchObject({ follow_ups: "なし", threads: "・健太さんの模試の結果" });
+    expect(variables.greeting).toMatch(/^(おはようございます|こんにちは|こんばんは)$/);
     expect(variables.weather).toContain("-12℃");
     expect(variables.winter_check).toMatch(/^必要/);
+  });
+
+  it("greets by the time of day in Japan", async () => {
+    const { greeting } = await import("@/lib/elevenlabs");
+    const at = (iso: string) => greeting(new Date(iso));
+    expect([at("2026-11-25T10:59:00+09:00"), at("2026-11-25T11:00:00+09:00")]).toEqual(["おはようございます", "こんにちは"]);
+    expect([at("2026-11-25T08:59:00Z"), at("2026-11-25T09:00:00Z")]).toEqual(["こんにちは", "こんばんは"]); // 17:59 and 18:00 in Japan
+    expect(at("2026-11-24T21:00:00Z")).toBe("おはようございます"); // 06:00 the next day in Japan
   });
 
   it("tells the page why a browser call could not start, since a thrown error loses its message in production", async () => {
@@ -915,9 +927,13 @@ describe("trends across days", () => {
 describe("follow-ups after a call", () => {
   const call = (id: string, residentId: string) =>
     elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', `"resident_id": "${residentId}"`)));
+  // Each seeded resident starts with a thread; these tests start from none.
+  beforeEach(async () => {
+    for (const id of ["sato", "suzuki", "takahashi"]) await store.updateResident(id, (r) => ({ ...r, follow_ups: [] }));
+  });
 
   it("saves what the model proposes, hands it to the next call, and lets the helper remove it", async () => {
-    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3 }] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "腰の痛みはその後どうか", days: 3, kind: "check" }] });
     await call("conv_fu1", "takahashi");
     const saved = (await store.getResident("takahashi"))!.follow_ups!;
     expect(saved.map((f) => f.text)).toEqual(["腰の痛みはその後どうか"]);
@@ -1030,7 +1046,7 @@ describe("follow-ups after a call", () => {
   const deferred = () => {
     let finish!: (c: import("@/lib/curate").Curation) => void;
     curate.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
-    return (text: string) => finish({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text, days: 3 }] });
+    return (text: string) => finish({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text, days: 3, kind: "check" }] });
   };
 
   it("drops a slow curation when the demo was reset in the meantime", async () => {
@@ -1041,7 +1057,7 @@ describe("follow-ups after a call", () => {
     await resetDemo();
     finish("腰の痛みはその後どうか");
     await pending;
-    expect((await store.getResident("takahashi"))!.follow_ups).toEqual([]);
+    expect((await store.getResident("takahashi"))!.follow_ups!.map((f) => f.text)).toEqual(["孫のマフラーは完成したか"]);
   });
 
   it("drops a slow curation from an older call once a newer call has been processed", async () => {
@@ -1049,20 +1065,23 @@ describe("follow-ups after a call", () => {
     const older = call("conv_fu9", "takahashi");
     await vi.waitFor(() => expect(curate).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 5)); // the newer call's record gets a later time
-    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "新しい通話からの確認", days: 3 }] });
+    curate.mockResolvedValueOnce({ fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "新しい通話からの確認", days: 3, kind: "check" }] });
     await call("conv_fu10", "takahashi");
     finishOlder("古い通話からの確認");
     await older;
     expect((await store.getResident("takahashi"))!.follow_ups!.map((f) => f.text)).toEqual(["新しい通話からの確認"]);
   });
 
-  it("clears follow-ups on a demo reset", async () => {
+  it("puts back the seeded thread on a demo reset, open from today", async () => {
     await store.updateResident("sato", (r) => ({
       ...r, follow_ups: [{ id: "x", text: "腰", created: "2026-11-01", expires: "2099-01-01" }],
     }));
     const { resetDemo } = await import("@/app/actions");
     await resetDemo();
-    expect((await store.getResident("sato"))!.follow_ups).toEqual([]);
+    const today = japanDate();
+    expect((await store.getResident("sato"))!.follow_ups).toEqual([
+      { id: "seed0", text: "健太さんの模試の結果", kind: "thread", created: daysBefore(today, 1), expires: daysBefore(today, -3) },
+    ]);
   });
 });
 
