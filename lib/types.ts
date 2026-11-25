@@ -73,7 +73,12 @@ export type Weather = {
   snowfall_24h_cm: number;
   snow_depth_cm: number;
   low_c: number;
+  temp_c?: number; // the latest reading; live data only
+  observed_at?: string; // ISO time of the latest reading; live data only
 };
+
+/** live: JMA. demo: WEATHER_SOURCE=saved. fallback: the live fetch failed, so the saved data stands in. */
+export type WeatherReading = Weather & { source: "live" | "demo" | "fallback" };
 
 export type Signals = {
   emergency: boolean;
