@@ -556,7 +556,7 @@ describe("demo reset", () => {
     await store.saveResident({ ...(await store.getResident("takahashi"))!, location: { lat: 43.3, lng: 141.9 } });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
     await store.updateResident("sato", (r) => ({
-      ...r, care_notes: "夫の話はしない", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
+      ...r, care_notes: "夫の話はしない", care_notes_en: "Don't bring up her husband", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
     }));
 
     await resetDemo();
@@ -565,7 +565,7 @@ describe("demo reset", () => {
     expect(await store.getLadder("sato")).toBeNull();
     const sato = (await store.getResident("sato"))!;
     expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
-    expect([sato.care_notes, sato.retired_facts, sato.memory_log]).toEqual(["", [], []]);
+    expect([sato.care_notes, sato.care_notes_en, sato.retired_facts, sato.memory_log]).toEqual(["", "", [], []]);
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
