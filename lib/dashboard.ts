@@ -54,7 +54,11 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   const from = resident.location;
   // Whoever took it, or else whoever the request has got to in the line.
   const line = helpers(resident, "snow");
-  const who = request.status === "accepted" ? line.find((c) => c.name === request.who) : line[request.asked];
+  // Found by who they are: the line may have been reordered during their turn. The place only for an old record.
+  const who =
+    request.status === "accepted" ? line.find((c) => c.name === request.who)
+    : request.askedId ? line.find((c) => c.id === request.askedId)
+    : line[request.asked];
   // No line is drawn once everyone has been tried: nobody is on their way or being waited on.
   const to = who?.location;
   return {

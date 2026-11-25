@@ -4,7 +4,7 @@ import type { Action } from "@/lib/types";
 
 // More than one person in line for snow clearing: volunteers and businesses, asked in order.
 // LINE is replaced; the store, the request steps, the scheduler and the LINE webhook are real.
-const { checkRequest, runActions } = await import("@/lib/actions");
+const { checkRequest, handOff, runActions } = await import("@/lib/actions");
 const { askedHelpers, helpLine, openRequests } = await import("@/lib/requests");
 const { coverage } = await import("@/lib/coverage");
 const { mapData, rankedRows, snowRequest } = await import("@/lib/dashboard");
@@ -415,6 +415,17 @@ describe("the line changes while someone has the request", () => {
     expect((await open()).escalated).toBe(false);
   });
 
+  it("draws the map line to the person who has it, after the line is reordered", async () => {
+    await store.updatePerson(second, (p) => ({ ...p, location: { lat: 43.3, lng: 141.9 } }));
+    await store.updatePerson(third, (p) => ({ ...p, location: { lat: 43.1, lng: 141.6 } }));
+    await store.assign("sato", { snow_next: [second, third] });
+    await raise();
+    await after(25); // the second has it
+    await store.assign("sato", { snow_next: [third, second] }); // swapped during their turn
+    const sato = (await store.getResident("sato"))!;
+    expect(snowRequest(sato, await store.listCalls("sato"))).toMatchObject({ volunteer: "佐々木", to: { lat: 43.3, lng: 141.9 } });
+  });
+
   it("does not ask anyone twice on the same run when the line is reordered", async () => {
     await store.assign("sato", { snow_next: [second, third] });
     await raise();
@@ -496,9 +507,26 @@ describe("a helper who can't come", () => {
     expect(to().filter((t) => t === "U_family")).toHaveLength(1);
   });
 
+  it("asks the next person even if the app stops between ending a turn and asking them", async () => {
+    await raise();
+    // A turn ended (a can't-come tap, or its time ran out), and the app stopped before anyone else was asked.
+    const ok = await handOff(await open());
+    expect(ok).toBe(true);
+    expect(to()).toEqual(["U_volunteer"]);
+    expect((await open()).stepDue).toBe(-1);
+    // On restart the scheduler finds the booked step and carries on: the next person is asked, once.
+    await after(1);
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+    await after(5);
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+  });
+
   it("moves it on once when the tap and the timeout come together", async () => {
     await raise();
     await Promise.all([tap(cant(pushed[0]), "U_volunteer"), after(25)]);
+    // If the tap lands while a pass is running, the next person is asked on the following pass.
+    await after(1);
+    await after(2);
     expect(to().filter((t) => t === "U_second")).toHaveLength(1);
   });
 });
