@@ -4,7 +4,7 @@ import type { Action } from "@/lib/types";
 
 // More than one person in line for snow clearing: volunteers and businesses, asked in order.
 // LINE is replaced; the store, the request steps, the scheduler and the LINE webhook are real.
-const { runActions } = await import("@/lib/actions");
+const { checkRequest, runActions } = await import("@/lib/actions");
 const { askedHelpers, helpLine, openRequests } = await import("@/lib/requests");
 const { coverage } = await import("@/lib/coverage");
 const { mapData, rankedRows, snowRequest } = await import("@/lib/dashboard");
@@ -19,6 +19,9 @@ const snow: Extract<Action, { type: "request" }> = { type: "request", kind: "sno
 let second = "";
 let business = "";
 let n = 0;
+/** LINE accounts whose messages LINE refuses, and one whose next message hangs until released. */
+const refused = new Set<string>();
+let held: { to: string; release: Promise<void> } | undefined;
 
 /** A call that found her snowed in, saved and sent the way the pipeline does it. */
 async function raise(requestId?: string) {
@@ -28,7 +31,7 @@ async function raise(requestId?: string) {
   const at = new Date(Date.now() + n).toISOString();
   await store.saveCall({ id, resident_id: "sato", at, kind: "call", risk: "yellow", reasons: [], actions: [{ ...action, sent: false }] });
   const results = await runActions((await store.getResident("sato"))!, id, "yellow", [], [action]);
-  await store.updateCall(id, (c) => ({ actions: c.actions.map((a, i) => ({ ...a, sent: results[i].sent, deliveries: results[i].deliveries })) }));
+  await store.updateCall(id, (c) => ({ actions: c.actions.map((a, i) => ({ ...a, sent: results[i].sent, deliveries: a.deliveries?.length ? a.deliveries : results[i].deliveries })) }));
   return id;
 }
 const open = async () => openRequests((await store.getResident("sato"))!, await store.listCalls("sato"))[0];
@@ -53,11 +56,22 @@ beforeAll(async () => {
 beforeEach(async () => {
   pushed.length = 0;
   replies.length = 0;
+  refused.clear();
+  held = undefined;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body));
     const [message] = body.messages;
     if (url.endsWith("/reply")) replies.push(message.text);
-    else pushed.push({ to: body.to, text: message.text ?? message.template.text, data: (message.template?.actions ?? []).map((a: { data: string }) => a.data) });
+    else if (refused.has(body.to)) return new Response("{}", { status: 500 });
+    else {
+      // Only the first message to them hangs; later ones go straight through.
+      const waiting = held?.to === body.to ? held : undefined;
+      if (waiting) {
+        held = undefined;
+        await waiting.release;
+      }
+      pushed.push({ to: body.to, text: message.text ?? message.template.text, data: (message.template?.actions ?? []).map((a: { data: string }) => a.data) });
+    }
     return new Response("{}");
   }));
   for (const task of await store.listTasks()) await store.deleteTask(task.id);
@@ -188,10 +202,64 @@ describe("a business in line", () => {
     }
   });
 
+  it("can take the request the moment its message arrives, before the family has been told", async () => {
+    await store.assign("sato", { snow_volunteer: business, snow_next: [] });
+    let release = () => {};
+    held = { to: "U_family", release: new Promise((done) => (release = done)) };
+    const raising = raise();
+    await vi.waitFor(() => expect(to()).toEqual(["U_business"]));
+    await tap(pushed[0].data[0], "U_business"); // the family's message is still on its way
+    expect(await open()).toMatchObject({ status: "accepted", who: "北野除雪" });
+    release();
+    await raising;
+    expect(await open()).toMatchObject({ status: "accepted", who: "北野除雪" });
+  });
+
   it("shows on the map, marked as a business", async () => {
     const sato = (await store.getResident("sato"))!;
     const { volunteers } = mapData(rankedRows([sato], []), []);
     expect(volunteers.find((v) => v.id === business)).toMatchObject({ name: "北野除雪", business: true });
+  });
+});
+
+describe("someone already in a line who is then marked as a business", () => {
+  beforeEach(async () => {
+    await store.assign("sato", { snow_next: [second] });
+    await store.updatePerson(second, (p) => ({ ...p, kind: "business" })); // ticked on their own page; no resident's line saved
+  });
+  const undo = () => store.updatePerson(second, (p) => ({ ...p, kind: undefined }));
+
+  it("is not asked as paid help until that resident's line is saved again", async () => {
+    try {
+      const sato = (await store.getResident("sato"))!;
+      expect(coverage(sato).gaps).toContain("paid_unconfirmed");
+      await raise();
+      await after(25);
+      expect(to()).toEqual(["U_volunteer", "U_coordinator"]); // passed over: no request, and no bill for the family
+      expect(to()).not.toContain("U_family");
+
+      // Saving the line with them in it, shown as paid, is the agreement.
+      await store.assign("sato", { snow_next: [second] });
+      expect(coverage((await store.getResident("sato"))!).gaps).not.toContain("paid_unconfirmed");
+      for (const call of await store.listCalls()) await store.updateCall(call.id, () => ({ handled: true }));
+      pushed.length = 0;
+      await raise();
+      await after(25);
+      expect(to()).toEqual(["U_volunteer", "U_second", "U_family"]);
+    } finally {
+      await undo();
+    }
+  });
+
+  it("is not agreed for one resident by saving another's line", async () => {
+    try {
+      await store.assign("suzuki", { snow_next: [second] });
+      expect(coverage((await store.getResident("suzuki"))!).gaps).not.toContain("paid_unconfirmed");
+      expect(coverage((await store.getResident("sato"))!).gaps).toContain("paid_unconfirmed");
+    } finally {
+      await store.assign("suzuki", { snow_next: [] });
+      await undo();
+    }
   });
 });
 
@@ -250,13 +318,53 @@ describe("a later call that raises the same request", () => {
     expect(to()).toEqual(["U_volunteer", "U_business", "U_family", "U_business"]);
   });
 
-  it("starts from the top again once the line has run out", async () => {
+  it("starts from the top again once the line has run out, and keeps moving, without telling the coordinators twice", async () => {
     const id = await raise();
     await after(25);
     await after(50);
+    expect(to().at(-1)).toBe("U_coordinator");
     pushed.length = 0;
     await raise(id);
     expect(to()).toEqual(["U_volunteer"]);
+    await after(25);
+    expect(to()).toEqual(["U_volunteer", "U_second"]); // the second gets a turn on this run too
+    await after(50);
+    await after(500);
+    expect(to()).toEqual(["U_volunteer", "U_second"]); // the coordinators already have it
+    expect(await open()).toMatchObject({ exhausted: true, escalated: true });
+  });
+
+  it("does not let a coordinator retry from an earlier run speak during a fresh turn", async () => {
+    const id = await raise();
+    await after(25);
+    refused.add("U_coordinator");
+    await after(50); // the line runs out; LINE refuses the coordinator, so another try is booked
+    expect((await open()).escalated).toBe(false);
+    const retry = (await store.listTasks()).filter((t) => t.kind === "request_check" && (t.round ?? 1) > 1);
+    expect(retry).toHaveLength(1);
+    refused.clear();
+
+    pushed.length = 0;
+    await raise(id); // a later call starts the line again
+    expect(to()).toEqual(["U_volunteer"]);
+    await checkRequest(retry[0]); // the old try comes due during the first helper's turn
+    expect(to()).toEqual(["U_volunteer"]);
+    expect((await open()).escalated).toBe(false);
+  });
+
+  it("treats someone put in the waiting person's place as not yet asked", async () => {
+    const id = await raise();
+    await after(25);
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+    const before = await open();
+    await store.assign("sato", { snow_next: [business] }); // the second volunteer is replaced by a business
+
+    await new Promise((r) => setTimeout(r, 5));
+    await raise(id);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_business", "U_family"]); // a first request, and the family told
+    const now = await open();
+    expect(now).toMatchObject({ asked: 1, askedId: business, who: "北野除雪" });
+    expect(now.stepDue).toBeGreaterThan(before.stepDue!); // its own time, not what the volunteer had left
   });
 });
 

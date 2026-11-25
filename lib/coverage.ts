@@ -1,3 +1,4 @@
+import { canAsk } from "./requests";
 import type { Contact, Person, Resident, Role } from "./types";
 
 // Who would be told if something went wrong with a resident, and whether each of them can be reached.
@@ -22,7 +23,8 @@ export type Gap =
   // Some alerts go to the helper alone: self-harm, and a call the app could not judge (needsReview).
   | "helper_unreachable"
   | "family_unreachable" // the missed-call check has nobody to ask; the ladder waits, then alerts
-  | "snow_unreachable"; // a snow-clearing request would reach nobody
+  | "snow_unreachable" // a snow-clearing request would reach nobody
+  | "paid_unconfirmed"; // someone in the snow line was marked as a business after the line was saved: not asked until it is saved again
 
 const CRITICAL: Gap[] = ["red_reaches_nobody", "helper_unreachable"];
 
@@ -40,7 +42,8 @@ export function coverage(resident: Resident) {
   else if (!can("helper")) gaps.push("helper_unreachable");
   else if (!can("second_contact")) gaps.push("family_unreachable");
   // Anyone in the line for snow clearing will do.
-  if (!snowLine(resident).some((c) => reach(c) === "registered")) gaps.push("snow_unreachable");
+  if (!snowLine(resident).some((c) => reach(c) === "registered" && canAsk(resident, c))) gaps.push("snow_unreachable");
+  if (snowLine(resident).some((c) => c.name && !canAsk(resident, c))) gaps.push("paid_unconfirmed");
 
   const level = gaps.some((g) => CRITICAL.includes(g)) ? "critical" : gaps.length ? "warning" : "ok";
   return { redAlertReaches, gaps, level } as const;

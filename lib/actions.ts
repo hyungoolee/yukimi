@@ -1,9 +1,9 @@
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
 import { EMERGENCY } from "./rules";
-import { helpers, openRequests, REQUESTS, slotChoices, slotLabel, stageKey, tellsFamily, type OpenRequest, type RequestKind } from "./requests";
+import { canAsk, helpers, openRequests, REQUESTS, slotChoices, slotLabel, stageKey, tellsFamily, type OpenRequest, type RequestKind } from "./requests";
 import { getCall, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
-import type { Action, AlertReasons, Contact, Delivery, Resident, Risk, Role, Slot } from "./types";
+import type { Action, AlertReasons, Contact, Delivery, RequestState, Resident, Risk, Role, Slot } from "./types";
 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
 const ACK_MS = DEMO_MODE ? 30_000 : 10 * 60_000;
@@ -113,7 +113,6 @@ async function tellCoordinators(resident: Resident, callId: string, alreadySent:
 }
 
 type RequestAction = Extract<Action, { type: "request" }>;
-type Stage = { asked: number };
 const isRequest = (kind: RequestKind) => (a: { type: string; kind?: string }) => a.type === "request" && a.kind === kind;
 
 /** Asks one person for this kind of help, with a button for each half-day they could come. */
@@ -139,60 +138,64 @@ function tellFamily(resident: Resident, kind: RequestKind, business: Contact): P
   return deliver(resident, "second_contact", body, [text(body)], {});
 }
 
-/**
- * Asks the person at `from` in the line, or the first after them who can be reached. When that is a
- * business, the family is told. `asked` past the end of the line means everyone has been tried.
- * `deliveries` is every message tried, the family's included; `reached` is whether a helper got one.
- */
-async function askFrom(resident: Resident, callId: string, request: RequestAction, from: number) {
-  const line = helpers(resident, request.kind);
-  const deliveries: Delivery[] = [];
-  for (let i = from; i < line.length; i++) {
-    const asked = await sendRequest(resident, callId, request, line[i], i === 0);
-    deliveries.push(asked);
-    if (!asked.sent) continue;
-    if (tellsFamily(request.kind, line[i])) deliveries.push(await tellFamily(resident, request.kind, line[i]));
-    return { deliveries, reached: true, stage: { asked: i } satisfies Stage };
-  }
-  return { deliveries, reached: false, stage: { asked: line.length } satisfies Stage };
-}
-
 /** How long whoever was just asked has before the request moves on. One person in line: as it always was. */
 const waitFor = (resident: Resident, kind: RequestKind) => (helpers(resident, kind).length > 1 ? STEP_WAIT_MS : REQUEST_WAIT_MS);
 
-/** Writes where a request now stands on its record, with any messages that went out getting it there. */
-const saveStage = (callId: string, kind: RequestKind, stage: Stage, step_due: number | undefined, sent?: { deliveries: Delivery[]; reached: boolean }) =>
+/** Adds to a request's record: where it now stands, and any messages that went out. */
+const record = (callId: string, kind: RequestKind, patch: Partial<RequestState>, sent: Delivery[] = [], reached = false) =>
   updateCall(callId, (c) => ({
     actions: c.actions.map((a) =>
-      isRequest(kind)(a)
-        ? { ...a, asked: stage.asked, step_due, ...(sent ? { sent: a.sent || sent.reached, deliveries: [...(a.deliveries ?? []), ...sent.deliveries] } : {}) }
-        : a,
+      isRequest(kind)(a) ? { ...a, ...patch, sent: a.sent || reached, deliveries: sent.length ? [...(a.deliveries ?? []), ...sent] : a.deliveries } : a,
     ),
   }));
 
 /**
- * Moves an open request on to the next person who can be asked, and books the check on them.
- * False when the line has run out: the coordinators are the ones to tell.
+ * Asks the person at `from` in the line, or the first after them who can be asked and reached, and
+ * books the check on them. A business that was not agreed for this resident is passed over (canAsk).
+ * The moment someone has the request it is on the record, before anything else is sent: their
+ * buttons work as soon as the message arrives. Then, when they are a business, the family is told.
+ * `deliveries` is every message tried, the family's included; `reached` is whether a helper got one.
+ * Not reached: the line has run out, the record says so, and the coordinators are the ones to tell.
  */
+async function askFrom(resident: Resident, callId: string, request: RequestAction, from: number) {
+  const { kind } = request;
+  const line = helpers(resident, kind);
+  const deliveries: Delivery[] = [];
+  for (let i = from; i < line.length; i++) {
+    if (!canAsk(resident, line[i])) continue;
+    const asked = await sendRequest(resident, callId, request, line[i], i === 0);
+    deliveries.push(asked);
+    if (!asked.sent) continue;
+    const due = Date.now() + waitFor(resident, kind);
+    const stage = { asked: i, asked_id: line[i].id, step_due: due };
+    await record(callId, kind, stage, deliveries, true);
+    await scheduleCheck(resident.id, request.request_id ?? callId, kind, due, callId, stageKey(stage));
+    if (tellsFamily(kind, line[i])) {
+      const told = await tellFamily(resident, kind, line[i]);
+      deliveries.push(told);
+      await record(callId, kind, {}, [told]);
+    }
+    return { deliveries, reached: true };
+  }
+  await record(callId, kind, { asked: line.length, asked_id: undefined, step_due: undefined }, deliveries);
+  return { deliveries, reached: false };
+}
+
+/** Moves an open request on to the next person who can be asked. False when the line has run out. */
 async function advance(resident: Resident, callId: string, kind: RequestKind, from: number) {
   const request = (await getCall(callId))?.actions.find(isRequest(kind)) as RequestAction | undefined;
-  if (!request) return false;
-  const result = await askFrom(resident, callId, request, from);
-  const due = result.reached ? Date.now() + waitFor(resident, kind) : undefined;
-  await saveStage(callId, kind, result.stage, due, result);
-  if (due) await scheduleCheck(resident.id, request.request_id ?? callId, kind, due, callId, stageKey(result.stage));
-  return result.reached;
+  return !!request && (await askFrom(resident, callId, request, from)).reached;
 }
 
 /**
- * A later call raised a request that is still with someone: that person keeps their turn and the
- * time they have left. Undefined when there is no turn to keep (nobody was asked, the line ran out,
- * the coordinators have it, or a visit was promised and missed), and the request starts again from the top.
+ * A later call raised a request that is still with someone: where it stood on the earlier record.
+ * Undefined when there is no turn to keep (nobody was asked, the line ran out, or a visit was
+ * promised and missed), and the request starts again from the top.
  */
 async function inFlight(resident: Resident, callId: string, kind: RequestKind, requestId: string) {
   const earlier = (await listCalls(resident.id)).filter((c) => c.id !== callId);
   const open = openRequests(resident, earlier).find((r) => r.kind === kind && r.requestId === requestId);
-  if (!open || open.status !== "sent" || open.exhausted || open.escalated || open.stepDue === undefined) return undefined;
+  if (!open || open.status !== "sent" || open.exhausted || open.stepDue === undefined) return undefined;
   return open as OpenRequest & { stepDue: number };
 }
 
@@ -236,17 +239,21 @@ const scheduleCheck = (residentId: string, requestId: string, kind: RequestKind,
  * nobody left the coordinators hear about it, once. Being told is what stops a second message, so
  * this is safe to run again: after a reminder, a restart, or a retry.
  */
-export async function checkRequest({ resident_id, call_id: requestId = "", request_kind: kind, round = 1, record, stage }: Pick<Task, "resident_id" | "call_id" | "request_kind" | "round" | "record" | "stage">) {
+export async function checkRequest({ resident_id, call_id: requestId = "", request_kind: kind, round = 1, record: booked, stage }: Pick<Task, "resident_id" | "call_id" | "request_kind" | "round" | "record" | "stage">) {
   const resident = await getResident(resident_id);
   if (!resident || !kind) return;
   // Closed, handled or gone stale: no longer open, so nothing to pass on.
   const open = openRequests(resident, await listCalls(resident_id)).find((r) => r.kind === kind && r.requestId === requestId);
-  if (!open || open.status === "accepted" || open.escalated) return;
+  if (!open || open.status === "accepted") return;
   // Booked for an earlier state of the request: a later call asked again, or it has already moved on.
   // Whatever moved it booked a check of its own.
-  if ((record && record !== open.callId) || (stage && stage !== open.stage)) return;
-  // The person asked has had their time: on to whoever is next.
+  if ((booked && booked !== open.callId) || (stage && stage !== open.stage)) return;
+  // The person asked has had their time: on to whoever is next. This holds whether or not the
+  // coordinators were told on an earlier run of the line: a line started again keeps moving.
   if (round === 1 && !open.exhausted && (await advance(resident, open.callId, kind, open.asked + 1))) return;
+  // From here the coordinators are told, once per request, and only about a line that has run out:
+  // a try left over from an earlier run must not speak during someone's turn.
+  if (open.escalated || (round > 1 && !open.exhausted)) return;
   const label = REQUESTS[kind].label.ja;
   // No name: the person in that role now may not be the one the request went to.
   const body =
@@ -263,7 +270,8 @@ export async function checkRequest({ resident_id, call_id: requestId = "", reque
     }));
   } else if (coordinators.length && round < MAX_RESENDS) {
     // LINE took none of them: try again shortly, a few times.
-    await scheduleCheck(resident_id, requestId, kind, Date.now() + ACK_MS, undefined, undefined, round + 1);
+    // Tied to this run of the line: if a later call starts it again, this try says nothing.
+    await scheduleCheck(resident_id, requestId, kind, Date.now() + ACK_MS, open.callId, String(helpers(resident, kind).length), round + 1);
   }
 }
 
@@ -281,22 +289,20 @@ export async function runActions(resident: Resident, callId: string, risk: Risk,
       // A reminder while the request is still with someone: it stays with them, and so does their deadline.
       const current = requestId === callId ? undefined : await inFlight(resident, callId, a.kind, requestId);
       const who = current && helpers(resident, a.kind)[current.asked];
-      if (current && who) {
-        // The helper whose turn it is hears again. The family was told when a business was first asked: not twice.
-        const deliveries = [await sendRequest(resident, callId, a, who, current.asked === 0)];
-        await saveStage(callId, a.kind, current, current.stepDue);
+      if (current && who && who.id === current.askedId && canAsk(resident, who)) {
+        // The same person hears again. The family was told when a business was first asked: not twice.
+        const again = await sendRequest(resident, callId, a, who, current.asked === 0);
+        // sent: it reached them on the earlier call
+        await record(callId, a.kind, { asked: current.asked, asked_id: current.askedId, step_due: current.stepDue }, [again], true);
         await scheduleCheck(resident.id, requestId, a.kind, current.stepDue, callId, current.stage);
-        return { ...a, sent: true, deliveries }; // sent: it reached them on the earlier call
+        return { ...a, sent: true, deliveries: [again] };
       }
-      const { deliveries, reached, stage } = await askFrom(resident, callId, a, 0);
-      // Someone was asked: if they don't take it in time it moves down the line, and at the end of
-      // the line the coordinators hear. Reached nobody: they hear now.
-      // A reminder once the line has run out does the same; the check says nothing once they have been told.
-      const due = reached ? Date.now() + waitFor(resident, a.kind) : undefined;
-      // Where the request stands is kept on the record; the caller adds what was sent.
-      await saveStage(callId, a.kind, stage, due);
-      if (due) await scheduleCheck(resident.id, requestId, a.kind, due, callId, stageKey(stage));
-      else await checkRequest({ resident_id: resident.id, call_id: requestId, request_kind: a.kind });
+      // Someone else is at that place now: they have not been asked. A fresh request to them, with
+      // their own time and, for a business, the family told. Otherwise from the top of the line.
+      // Someone asked: if they don't take it in time it moves down the line, and at the end of the
+      // line the coordinators hear. Reached nobody: they hear now.
+      const { deliveries, reached } = await askFrom(resident, callId, a, current && who ? current.asked : 0);
+      if (!reached) await checkRequest({ resident_id: resident.id, call_id: requestId, request_kind: a.kind });
       return { ...a, sent: reached, deliveries };
     }),
   );

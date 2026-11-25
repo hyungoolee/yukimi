@@ -149,7 +149,15 @@ export function updateResident(id: string, change: (resident: Resident) => Resid
 export function assign(residentId: string, roles: Partial<Record<Role, string>> & { snow_next?: string[] }) {
   return queued(`residents/${residentId}`, async () => {
     const stored = await read<Stored>("residents", residentId);
-    if (stored) await write("residents", residentId, { ...stored, ...roles });
+    if (!stored) return;
+    const next = { ...stored, ...roles };
+    // Saving who is in line for snow clearing is the agreement to any business in it, as it is marked now.
+    if (roles.snow_volunteer !== undefined || roles.snow_next !== undefined) {
+      const line = [next.snow_volunteer, ...(next.snow_next ?? [])].filter(Boolean);
+      const people = await Promise.all(line.map(getPerson));
+      next.paid_ok = people.flatMap((p) => (p?.kind === "business" ? [p.id] : []));
+    }
+    await write("residents", residentId, next);
   });
 }
 export async function listResidents() {

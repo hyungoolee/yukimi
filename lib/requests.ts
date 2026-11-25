@@ -53,6 +53,14 @@ export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
 ];
 
 /**
+ * Whether this person may be sent a request for this resident. A business may only when it was
+ * already marked as one the last time the resident's line was saved: ticking 事業者（有料） on someone
+ * who is in a line already must not turn them into paid help for that resident on its own.
+ */
+export const canAsk = (resident: Resident, who: Contact) =>
+  who.kind !== "business" || (!!who.id && (resident.paid_ok ?? []).includes(who.id));
+
+/**
  * A business charges, so the family is told when one is asked. Not for the family's own job
  * (bringing supplies): they would be telling themselves.
  */
@@ -127,6 +135,8 @@ export type OpenRequest = {
   business: boolean;
   /** How far down the line the request has got (0: the first person). */
   asked: number;
+  /** The person who was at that place when they were asked: whoever is there now may be someone else. */
+  askedId?: string;
   /** Everyone in line has had their turn (or could not be asked) and nobody took it. `who` is then empty. */
   exhausted: boolean;
   /** When whoever is being asked now runs out of time (epoch ms). Absent on requests from before this was kept. */
@@ -165,6 +175,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         requestId,
         callId: call.id,
         asked,
+        askedId: action.asked_id,
         exhausted: action.accepted_by === undefined && !current,
         stage: stageKey(action),
         stepDue: action.step_due,
