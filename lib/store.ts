@@ -159,16 +159,16 @@ export function updateResident(id: string, change: (resident: Resident) => Resid
   });
 }
 /** Puts a person in a role for a resident; an empty id leaves the post vacant. */
-export function assign(residentId: string, roles: Partial<Record<Role, string>> & { snow_next?: string[] }) {
+export function assign(residentId: string, roles: Partial<Record<Role, string>> & { snow_next?: string[] }, chosen?: string[]) {
   return queued(`residents/${residentId}`, async () => {
     const stored = await read<Stored>("residents", residentId);
     if (!stored) return;
     const next = { ...stored, ...roles };
-    // Saving who is in line for snow clearing is the agreement to a business in it, as it is marked
-    // now. Only the places this save set count: a form that shows the first place alone agrees
-    // nothing about the people after it, who keep whatever was agreed before.
+    // Choosing someone for the snow line is the agreement to them as a business, as they are marked
+    // now. Only the people this save chose count (`chosen`, else everyone it set): a save of one place
+    // agrees nothing about the others, who keep whatever was agreed before.
     if (roles.snow_volunteer !== undefined || roles.snow_next !== undefined) {
-      const saved = new Set([...(roles.snow_volunteer ? [roles.snow_volunteer] : []), ...(roles.snow_next ?? [])]);
+      const saved = new Set(chosen ?? [...(roles.snow_volunteer ? [roles.snow_volunteer] : []), ...(roles.snow_next ?? [])]);
       const was = new Set(stored.paid_ok ?? []);
       const line = [next.snow_volunteer, ...(next.snow_next ?? [])].filter(Boolean);
       const people = await Promise.all(line.map(getPerson));

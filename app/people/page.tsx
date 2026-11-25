@@ -6,6 +6,7 @@ import { listPeople, listResidents } from "@/lib/store";
 import type { Person } from "@/lib/types";
 import { getStrings } from "../lang";
 import { SubmitButton } from "../submit-button";
+import { SaveOnChange } from "../save-on-change";
 import { assignRoles, createPerson } from "./actions";
 import { AddFamily } from "./add-family";
 import { TestMessage } from "./test-message";
@@ -96,11 +97,12 @@ export default async function PeoplePage() {
                 </span>
               )}
             </div>
-            {/* Keyed on who holds the roles, so the menus show a saved change instead of what they held before. */}
-            <form
-              key={[...ROLES.map((role) => resident[role].id), ...(resident.snow_next ?? []).map((c) => c.id)].join()}
+            {/* Each menu is keyed on who holds the role, so a change made elsewhere (adding family) shows. */}
+            <SaveOnChange
               action={assignRoles}
+              labels={{ saving: t.saving, saved: t.saved, failed: t.saveFailed }}
               className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 text-sm"
+              footer={{ className: "py-1" }}
             >
               <input type="hidden" name="resident_id" value={resident.id} />
               {ROLES.map((role) => {
@@ -111,15 +113,14 @@ export default async function PeoplePage() {
                       <span className={`mr-1.5 inline-block size-2 rounded-full ${DOT[state]}`} />
                       {t.role[role]}（{t.reach[state]}）
                     </span>
-                    <select name={role} defaultValue={resident[role].id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
+                    <select key={resident[role].id ?? ""} name={role} defaultValue={resident[role].id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
                       <option value="">{t.vacant}</option>
                       {everyone.filter((person) => eligible(person, role, resident)).map(option)}
                     </select>
                   </label>
                 );
               })}
-              {/* Who is asked to clear snow when the first person doesn't take it, in order. */}
-              <input type="hidden" name="snow_line" value="1" />
+              {/* Who is asked to clear snow when the first person doesn't take it, in order. Each place saves on its own. */}
               {Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => {
                 const current = resident.snow_next?.[i];
                 return (
@@ -128,15 +129,15 @@ export default async function PeoplePage() {
                       {current && <span className={`mr-1.5 inline-block size-2 rounded-full ${DOT[reach(current)]}`} />}
                       {t.snowNext(i + 2)}{current ? `（${t.reach[reach(current)]}）` : ""}
                     </span>
-                    <select name="snow_next" defaultValue={current?.id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
+                    <select key={current?.id ?? ""} name={`snow_next_${i}`} defaultValue={current?.id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
                       <option value="">{t.vacant}</option>
-                      {everyone.filter((person) => eligible(person, "snow_volunteer", resident)).map(option)}
+                      {/* Not whoever is first in line already: they would be asked twice. */}
+                      {everyone.filter((person) => person.id !== resident.snow_volunteer.id && eligible(person, "snow_volunteer", resident)).map(option)}
                     </select>
                   </label>
                 );
               })}
-              <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
-            </form>
+            </SaveOnChange>
             <AddFamily residentId={resident.id} t={t} />
             {gaps.length > 0 && (
               <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
