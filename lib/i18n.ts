@@ -51,6 +51,7 @@ const ja = {
       r.status === "not_sent" ? "送信できていません" : r.exhausted ? "順番の全員に頼みましたが、引き受け手がいません" : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
     }${r.status === "accepted" ? told(r, "ja") : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
+  restartLine: (r: OpenRequest) => `${REQUESTS[r.kind].label.ja}を、今の順番で最初から頼み直す`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
   messageUnregistered: "未送信：この方のLINEが未登録です",
@@ -163,7 +164,7 @@ const ja = {
   snowNext: (n: number) => `除雪（${n}番目に頼む）`,
   business: "事業者（有料）",
   businessMark: "（有料）",
-  snowLineHelp: "除雪は上から順にお願いします。引き受け手がないと次の人へ。事業者（有料）は、ご家族の了承を得てから順番に入れてください。お願いしたときは、家族にLINEで知らせます。",
+  snowLineHelp: "除雪は上から順にお願いします。引き受け手がないと次の人へ。順番を変えても、お願い中の件はそのままです（利用者のページで頼み直せます）。事業者（有料）は、ご家族の了承を得てから順番に入れてください。お願いしたときは、家族にLINEで知らせます。",
   reach: { none: "未定", unregistered: "LINE未登録", registered: "LINE登録済み" },
   coordinator: "コーディネーター（引き受け手のないお願いの連絡先）",
   coordinatorShort: "コーディネーター",
@@ -220,6 +221,7 @@ const en: typeof ja = {
       r.status === "not_sent" ? "request could not be sent" : r.exhausted ? "everyone in line was asked and nobody took it" : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
     }${r.status === "accepted" ? told(r, "en") : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
+  restartLine: (r) => `${REQUESTS[r.kind].label.en}: ask again from the top, in today’s order`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
   messageUnregistered: "not sent: this person has no LINE registered",
@@ -332,7 +334,7 @@ const en: typeof ja = {
   snowNext: (n) => `Snow helper (asked ${n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`})`,
   business: "Business (charges)",
   businessMark: " (paid)",
-  snowLineHelp: "Snow helpers are asked in order; if nobody takes the request it moves to the next. Put a business (paid) in line only once the family has agreed; when it is asked, the family is told on LINE.",
+  snowLineHelp: "Snow helpers are asked in order; if nobody takes the request it moves to the next. A change here applies to the next request; a request under way can be restarted from the resident’s page. Put a business (paid) in line only once the family has agreed; when it is asked, the family is told on LINE.",
   reach: { none: "Nobody assigned", unregistered: "Not on LINE", registered: "On LINE" },
   coordinator: "Coordinator (told when a help request has nobody on it)",
   coordinatorShort: "Coordinators",

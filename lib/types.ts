@@ -137,6 +137,20 @@ export type Action =
     };
 /** Half a day someone has said they will come. `date` is a Japan date. */
 export type Slot = { date: string; part: "am" | "pm" };
+/** One pass down a request's line of helpers. See RequestState.run. */
+export type RequestRun = {
+  /** New for every run, so a button or a scheduled check from an earlier run does nothing in this one. */
+  id: string;
+  /** Who is asked, in order, as the line stood when the run began. Name and kind are for display. */
+  line: { id: string; name: string; business?: boolean }[];
+  /** Whose turn it is: a place in `line`. At or past the end, the run has run out. */
+  at: number;
+  /** When the person whose turn it is runs out of time (epoch ms). */
+  due?: number;
+  /** Their turn has been ended (a timeout or 行けません) and the step that asks the next person is booked. */
+  ending?: boolean;
+};
+
 /** How a help request stands. Kept on the action it was raised by (lib/requests.ts). */
 export type RequestState = {
   accepted_by?: string;
@@ -145,16 +159,13 @@ export type RequestState = {
   done?: boolean;
   /** When the coordinators were told that nobody had taken it. */
   escalated_at?: string;
-  /** How far down the line of people who could do it the request has got (lib/requests.ts helpers). Absent: the first. */
-  asked?: number;
-  /** The person at that place when they were asked. Someone else there now has not been asked. */
-  asked_id?: string;
-  /** When whoever is being asked now runs out of time. Epoch ms. */
-  step_due?: number;
-  /** Everyone sent this request on this run of the line, by person id, in order. Not asked again on it. */
-  tried?: string[];
-  /** Everyone in line has had their turn on this run, or could not be asked: the line has run out. */
-  ended?: boolean;
+  /**
+   * One pass down the line of people who could do it (lib/actions.ts). The line is fixed when the run
+   * starts, so editing who is in line on the 連絡体制 page changes the next run, not this one; a
+   * coordinator who needs it now restarts the run. Kept on the record the run started on: a reminder
+   * on a later call points back to it rather than copying it.
+   */
+  run?: RequestRun;
   /** The one who took it is a business, so the agent names it without さん. */
   accepted_business?: boolean;
   /** How the news that someone is coming reached the resident (lib/actions.ts newsStep). */

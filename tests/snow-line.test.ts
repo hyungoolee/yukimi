@@ -91,7 +91,7 @@ describe("a second volunteer in line", () => {
 
     await after(25);
     expect(to()).toEqual(["U_volunteer", "U_second"]);
-    expect(await open()).toMatchObject({ asked: 1, who: "佐々木", escalated: false });
+    expect(await open()).toMatchObject({ askedId: second, run: { at: 1 }, who: "佐々木", escalated: false });
     const sato = (await store.getResident("sato"))!;
     expect(askedHelpers(sato, await store.listCalls("sato"), "snow", id).map((c) => c.name)).toEqual(["山本", "佐々木"]);
 
@@ -124,7 +124,7 @@ describe("a second volunteer in line", () => {
     await after(25);
     const [request] = (await store.getCall(id))!.actions;
     expect(request.deliveries).toMatchObject([{ role: "snow_volunteer", sent: true }, { role: "snow_volunteer", person: second, name: "佐々木", sent: true }]);
-    expect(request.deliveries![0].name).toBeUndefined();
+    expect(request.deliveries![0]).toMatchObject({ person: "p_yamamoto", name: "山本" });
   });
 
   it("skips someone who can't be reached", async () => {
@@ -132,7 +132,7 @@ describe("a second volunteer in line", () => {
     try {
       await raise();
       expect(to()).toEqual(["U_second"]);
-      expect(await open()).toMatchObject({ asked: 1, status: "sent" });
+      expect(await open()).toMatchObject({ askedId: second, status: "sent" });
       expect(coverage((await store.getResident("sato"))!).gaps).not.toContain("snow_unreachable");
     } finally {
       await store.updatePerson("p_yamamoto", (p) => ({ ...p, line_id: "U_volunteer" }));
@@ -151,7 +151,7 @@ describe("a business in line", () => {
     expect(to()).toEqual(["U_volunteer", "U_business", "U_family"]);
     expect(notice().text).toBe("【有料の除雪のお願い】佐藤さんの件で、北野除雪（有料）にお願いしました。費用は先方と直接ご相談ください。");
     expect(notice().data).toEqual([]); // nothing to press: it does not wait on them
-    expect(await open()).toMatchObject({ asked: 1, who: "北野除雪", business: true, status: "sent" });
+    expect(await open()).toMatchObject({ askedId: business, who: "北野除雪", business: true, status: "sent" });
     const [request] = (await store.getCall(id))!.actions;
     expect(request.deliveries).toMatchObject([
       { role: "snow_volunteer", sent: true },
@@ -188,7 +188,7 @@ describe("a business in line", () => {
     await store.assign("sato", { snow_volunteer: business, snow_next: ["p_yamamoto"] });
     await raise();
     expect(to()).toEqual(["U_business", "U_family"]);
-    expect(await open()).toMatchObject({ asked: 0, who: "北野除雪", business: true });
+    expect(await open()).toMatchObject({ askedId: business, who: "北野除雪", business: true });
     await after(25);
     expect(to()).toEqual(["U_business", "U_family", "U_volunteer"]); // the volunteer behind it is next
   });
@@ -300,12 +300,14 @@ describe("a later call that raises the same request", () => {
     await raise(id); // she says it again on a second call
     expect(to()).toEqual(["U_volunteer", "U_second", "U_second"]); // the second hears again; the first is not asked afresh
     const now = await open();
-    expect(now).toMatchObject({ requestId: id, asked: 1, who: "佐々木", stepDue: before.stepDue });
+    // The run stays on the record it started on, with the second's time unchanged; the reminder points back to it.
+    expect(now).toMatchObject({ requestId: id, askedId: second, who: "佐々木", runCallId: id, run: { due: before.run!.due } });
     expect(now.callId).not.toBe(id);
 
     // The time the second was given runs out when it always would have.
-    const due = (await store.listTasks()).filter((t) => t.kind === "request_check" && t.record === now.callId);
-    expect(due).toMatchObject([{ due: before.stepDue }]);
+    // (An earlier hand-off's booked step may still be queued; it does nothing once the run has moved on.)
+    const due = (await store.listTasks()).filter((t) => t.kind === "request_check" && t.record === id && t.stage === before.stage);
+    expect(due).toMatchObject([{ due: before.run!.due }]);
     await after(50);
     expect(to().at(-1)).toBe("U_coordinator");
     expect(to().filter((t) => t === "U_volunteer")).toHaveLength(1);
@@ -354,19 +356,23 @@ describe("a later call that raises the same request", () => {
     expect((await open()).escalated).toBe(false);
   });
 
-  it("treats someone put in the waiting person's place as not yet asked", async () => {
+  it("keeps the line it started with: someone put in the waiting person's place is asked on the next run", async () => {
     const id = await raise();
     await after(25);
     expect(to()).toEqual(["U_volunteer", "U_second"]);
-    const before = await open();
     await store.assign("sato", { snow_next: [business] }); // the second volunteer is replaced by a business
 
-    await new Promise((r) => setTimeout(r, 5));
-    await raise(id);
-    expect(to()).toEqual(["U_volunteer", "U_second", "U_business", "U_family"]); // a first request, and the family told
-    const now = await open();
-    expect(now).toMatchObject({ asked: 1, askedId: business, who: "北野除雪" });
-    expect(now.stepDue).toBeGreaterThan(before.stepDue!); // its own time, not what the volunteer had left
+    await raise(id); // a reminder: the request is still with the second, in this run
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_second"]);
+    expect(await open()).toMatchObject({ askedId: second });
+    await after(50); // the second's turn ends; this run's line is over
+    expect(to().at(-1)).toBe("U_coordinator");
+    expect(to()).not.toContain("U_business");
+
+    pushed.length = 0;
+    await raise(id); // the next run uses the line as it is now
+    await after(25);
+    expect(to()).toEqual(["U_volunteer", "U_business", "U_family"]);
   });
 });
 
@@ -399,7 +405,7 @@ describe("the line changes while someone has the request", () => {
     expect(await open()).toMatchObject({ askedId: third, escalated: false });
   });
 
-  it("goes on to someone not yet asked when the line is cut short under the person waiting", async () => {
+  it("keeps the run's line when it is cut short under the person waiting, and a restart uses the new one", async () => {
     let fourth = "";
     fourth = (await store.addPerson("木村")).id;
     await store.updatePerson(fourth, (p) => ({ ...p, line_id: "U_fourth" }));
@@ -409,10 +415,18 @@ describe("the line changes while someone has the request", () => {
     await after(50);
     expect(to()).toEqual(["U_volunteer", "U_second", "U_third"]); // the third, last in line, has it
     await store.assign("sato", { snow_next: [fourth] }); // shorter: the third is gone, someone new is in
-    expect((await open()).exhausted).toBe(false);
+    // The third keeps their turn in this run, which still ends after them.
+    expect(await open()).toMatchObject({ askedId: third, exhausted: false });
     await after(75);
-    expect(to()).toEqual(["U_volunteer", "U_second", "U_third", "U_fourth"]);
-    expect((await open()).escalated).toBe(false);
+    expect(to().at(-1)).toBe("U_coordinator");
+    expect(to()).not.toContain("U_fourth");
+    // A coordinator restarts it, and the new line counts at once.
+    const { restartRequest } = await import("@/lib/actions");
+    pushed.length = 0;
+    expect(await restartRequest("sato", "snow")).toBe(true);
+    expect(to()).toEqual(["U_volunteer"]);
+    await after(25);
+    expect(to()).toEqual(["U_volunteer", "U_fourth"]);
   });
 
   it("draws the map line to the person who has it, after the line is reordered", async () => {
@@ -513,7 +527,7 @@ describe("a helper who can't come", () => {
     const ok = await handOff(await open());
     expect(ok).toBe(true);
     expect(to()).toEqual(["U_volunteer"]);
-    expect((await open()).stepDue).toBe(-1);
+    expect((await open()).run).toMatchObject({ ending: true });
     // On restart the scheduler finds the booked step and carries on: the next person is asked, once.
     await after(1);
     expect(to()).toEqual(["U_volunteer", "U_second"]);

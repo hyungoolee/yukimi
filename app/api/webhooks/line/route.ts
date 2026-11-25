@@ -3,8 +3,8 @@ import { secondContactAnswered } from "@/lib/ladder";
 import { acceptRequest, declineRequest } from "@/lib/actions";
 import { runDueTasksNow } from "@/lib/tick";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { askedHelpers, helpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
-import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
+import { askedHelpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
+import { getCall, getPerson, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
   const raw = await request.text();
@@ -55,15 +55,15 @@ export async function POST(request: Request) {
           }
         }
       } else if (kind === "decline" && isRequestKind(rest[0])) {
-        // "decline:<request>:<kind>:<turn>": the person asked can't come. Only theirs to say, and only for the turn
-        // the card was sent for.
+        // "decline:<request>:<kind>:<run>.<turn>": the person asked can't come. Only theirs to say, and only for
+        // the turn and run the card was sent for.
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
         if (resident && userId) {
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === rest[0] && r.requestId === id);
-          const current = open && !open.exhausted && open.askedId ? helpers(resident, open.kind).find((c) => c.id === open.askedId) : undefined;
+          const current = open && !open.exhausted && open.askedId ? await getPerson(open.askedId) : null;
           const theirs = !!current && current.line_id === userId;
-          const passed = theirs && open!.status === "sent" && (await declineRequest(open!, Number(rest[1])));
+          const passed = theirs && (await declineRequest(open!, String(rest[1] ?? "")));
           // Ask the next person now, rather than at the scheduler's next pass.
           if (passed) await runDueTasksNow();
           await reply(

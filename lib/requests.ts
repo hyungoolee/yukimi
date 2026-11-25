@@ -5,7 +5,7 @@
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
 import { daysBefore, japanDate } from "./trends.ts";
-import type { CallRecord, Contact, RequestState, Resident, Role, Slot, Told } from "./types";
+import type { CallRecord, Contact, RequestRun, Resident, Role, Slot, Told } from "./types";
 
 type RequestDef = {
   /** Who is asked. */
@@ -61,32 +61,28 @@ export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
  * Whether this person may be sent a request for this resident. A business may only when it was
  * already marked as one the last time the resident's line was saved: ticking 事業者（有料） on someone
  * who is in a line already must not turn them into paid help for that resident on its own.
+ * Checked when each person is asked, against today's settings, so withdrawn agreement counts at once.
  */
-export const canAsk = (resident: Resident, who: Contact) =>
+export const canAsk = (resident: Resident, who: Pick<Contact, "id" | "kind">) =>
   who.kind !== "business" || (!!who.id && (resident.paid_ok ?? []).includes(who.id));
 
 /**
  * A business charges, so the family is told when one is asked. Not for the family's own job
  * (bringing supplies): they would be telling themselves.
  */
-export const tellsFamily = (kind: RequestKind, who: Contact) => who.kind === "business" && REQUESTS[kind].role !== "second_contact";
+export const tellsFamily = (kind: RequestKind, who: Pick<Contact, "kind">) => who.kind === "business" && REQUESTS[kind].role !== "second_contact";
 
 /**
- * Place in line, as a value a booked check carries. A check booked for an earlier one is out of
- * date: the request has moved on since, and whatever moved it booked its own.
+ * Where a run stands, as one value a scheduled check carries. A check booked for another state is
+ * out of date: the run has moved on, or a new run has started, and whatever did that booked its own.
  */
-export const stageKey = (s: Pick<RequestState, "asked" | "asked_id" | "step_due">) => `${s.asked ?? 0}:${s.asked_id ?? ""}:${s.step_due ?? ""}`;
+export const stageKey = (run?: RequestRun) => (run ? `${run.id}:${run.at}:${run.ending ? "ending" : ""}` : "");
 
-/**
- * Where in the line to go on from when the person asked has had their turn (or said they can't come):
- * the start of the line as it is now. Everyone already sent the request on this run is skipped there
- * (lib/actions.ts askFrom), so the next person asked is the first one in today's order not yet asked,
- * however the line was edited meanwhile: someone added, removed or moved ahead is not missed.
- */
-export function nextFrom(request: Pick<OpenRequest, "asked" | "tried">) {
-  // A record from before people were tracked: nobody to skip by name, so on from the old place.
-  return request.tried?.length ? 0 : request.asked + 1;
-}
+/** A request a coordinator may start again from the top: not yet taken, and one that runs a line (snow clearing). */
+export const restartable = (r: OpenRequest) => r.status !== "accepted" && r.kind === "snow";
+
+/** What a 行けません button carries: the run and the turn it was sent for. A reminder keeps the turn. */
+export const turnToken = (run: RequestRun) => `${run.id}.${run.at}`;
 
 /**
  * The half-days a helper is offered. Snow means she can't get out now, so only what is left of today;
@@ -164,16 +160,13 @@ export type OpenRequest = {
   who: string;
   /** `who` is a business: named without さん. */
   business: boolean;
-  /** How far down the line the request has got (0: the first person). */
-  asked: number;
-  /** The person who was at that place when they were asked: whoever is there now may be someone else. */
+  /** The run under way, and the record it is kept on (a reminder points back to it). Absent on old records. */
+  run?: RequestRun;
+  runCallId: string;
+  /** The person whose turn it is, by id: who the 行けません button and the map follow. */
   askedId?: string;
-  /** Everyone in line has had their turn (or could not be asked) and nobody took it. `who` is then empty. */
+  /** Everyone in this run's line has had their turn (or could not be asked) and nobody took it. `who` is then empty. */
   exhausted: boolean;
-  /** When whoever is being asked now runs out of time (epoch ms). Absent on requests from before this was kept. */
-  stepDue?: number;
-  /** Everyone sent this request on this run of the line, by person id. */
-  tried?: string[];
   /** See stageKey. */
   stage: string;
   slot?: Slot;
@@ -203,31 +196,29 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       const records = calls.flatMap((c) =>
         c.actions.filter((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId).map((a) => ({ at: c.at, a })),
       );
-      const asked = action.asked ?? 0;
-      const line = helpers(resident, kind);
-      // Who has it: found by who they are, since the line may have been edited during their turn.
-      const current = action.asked_id ? line.find((c) => c.id === action.asked_id) : line[asked];
-      // The line has run out only when the record says so, not when an edit has left the old place
-      // empty: then the request goes on to whoever in today's line is not yet asked.
-      // (A record from before turns were tracked: run out when nobody holds the role.)
-      const tracked = action.asked !== undefined || action.asked_id !== undefined || action.ended !== undefined;
-      const exhausted = action.accepted_by === undefined && (tracked ? action.ended === true : !current);
+      // The run is kept on the newest record of this request that started one.
+      const runRecord = records.length ? calls.find((c) => c.actions.some((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId && a.run)) : undefined;
+      const runAction = runRecord?.actions.find((a) => a.type === "request" && a.kind === kind);
+      const run = runAction?.type === "request" ? runAction.run : undefined;
+      const turn = run && run.at < run.line.length ? run.line[run.at] : undefined;
+      // A record from before runs: the role holder had it, and nobody holding the role meant nobody to ask.
+      const legacy = run ? undefined : resident[REQUESTS[kind].role];
+      const exhausted = action.accepted_by === undefined && (run ? !turn : !legacy?.name);
       return [{
         residentId: resident.id,
         kind,
         requestId,
         callId: call.id,
-        asked,
-        askedId: action.asked_id,
+        run,
+        runCallId: runRecord?.id ?? call.id,
+        askedId: turn?.id,
         exhausted,
-        stage: stageKey(action),
-        stepDue: action.step_due,
-        tried: action.tried,
-        business: action.accepted_by !== undefined ? !!action.accepted_business : current?.kind === "business",
+        stage: stageKey(run),
+        business: action.accepted_by !== undefined ? !!action.accepted_business : run ? !!turn?.business : legacy?.kind === "business",
         since: records.at(-1)?.at ?? call.at,
         escalated: records.some((r) => r.a.escalated_at),
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
-        who: action.accepted_by || current?.name || "",
+        who: action.accepted_by || (run ? turn?.name : legacy?.name) || "",
         slot: action.slot,
         acceptedAt: action.accepted_at,
         told: action.told,
