@@ -160,7 +160,7 @@ describe("after a call", () => {
 
     const sato = await store.getResident("sato");
     expect(sato!.recent_calls[0].summary).toBe(extraction.summary);
-    expect(sato!.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
+    expect(sato!.facts.map((f) => f.text)).toEqual(["孫の健太がいる、高校3年生", "庭でバラを育てている", "ひざが少し悪い"]);
   });
 
   const snowOf = async (id: string) => (await store.getCall(id))!.actions.find((a) => a.type === "request" && a.kind === "snow")!;
@@ -576,7 +576,7 @@ describe("demo reset", () => {
     expect(await store.listCalls()).toEqual([]);
     expect(await store.getLadder("sato")).toBeNull();
     const sato = (await store.getResident("sato"))!;
-    expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
+    expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太がいる、高校3年生", "庭でバラを育てている", "ひざが少し悪い"]);
     expect([sato.care_notes, sato.care_notes_en, sato.retired_facts, sato.memory_log]).toEqual(["", "", [], []]);
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
