@@ -9,9 +9,30 @@
   "snow_volunteer": "p_yamamoto",
   "amedas_station": "15356",
   "facts": [
-    "孫の健太が大学受験中",
-    "庭でバラを育てている",
-    "ひざが少し悪い"
+    {
+      "id": "d355b4a7",
+      "text": "孫の健太が大学受験中",
+      "en": "Grandson Kenta is taking university entrance exams",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    },
+    {
+      "id": "3f5b16f0",
+      "text": "庭でバラを育てている",
+      "en": "Grows roses in the garden",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    },
+    {
+      "id": "810bd259",
+      "text": "ひざが少し悪い",
+      "en": "Has a slightly bad knee",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    }
   ],
   "recent_calls": [
     {
