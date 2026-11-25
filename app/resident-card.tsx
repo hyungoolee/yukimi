@@ -72,7 +72,7 @@ function CoverageLine({ resident, t }: { resident: Resident; t: Strings }) {
   if (coverage(resident).level !== "critical") return null;
   return (
     <p className="mt-1 text-sm font-medium text-red-700">
-      <Link href="/people" className="hover:underline">
+      <Link href={`/residents/${resident.id}#settings`} className="hover:underline">
         {t.cardNoReach} →
       </Link>
     </p>
