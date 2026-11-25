@@ -131,7 +131,7 @@ export async function acceptRequest(callId: string, kind: RequestKind, name: str
   const isIt = (a: { type: string; kind?: string }) => a.type === "request" && a.kind === kind;
   const saved = await updateCall(callId, (call) =>
     call.actions.some((a) => isIt(a) && a.accepted_by === undefined)
-      ? { actions: call.actions.map((a) => (isIt(a) ? { ...a, accepted_by: name, slot } : a)) }
+      ? { actions: call.actions.map((a) => (isIt(a) ? { ...a, accepted_by: name, slot, accepted_at: new Date().toISOString() } : a)) }
       : null,
   );
   const request = (saved ?? (await getCall(callId)))?.actions.find(isIt);
@@ -179,18 +179,26 @@ export const recordTold = (callId: string, kind: string, told: Told) =>
 export async function newsStep({ resident_id, call_id, request_kind: kind }: Pick<Task, "resident_id" | "call_id" | "request_kind">, now = new Date()) {
   const resident = await getResident(resident_id);
   if (!resident || resident.active === false || !call_id || !kind) return;
-  const request = openRequests(resident, await listCalls(resident_id), now).find((r) => r.kind === kind && r.callId === call_id);
+  const calls = await listCalls(resident_id);
+  const request = openRequests(resident, calls, now).find((r) => r.kind === kind && r.callId === call_id);
   if (!request || request.status !== "accepted" || request.told || (request.slot && passed(request.slot, now))) return;
+  // A check-in since the accept has told her already (help_status): calling again would repeat it.
+  const acceptedAt = request.acceptedAt;
+  if (acceptedAt && calls.some((c) => c.kind === "call" && c.at > acceptedAt)) return;
   const later = (due: number) => schedule({ kind: "news_call", resident_id, call_id, request_kind: kind, due });
   const hour = japanHour(now);
   if (hour < NEWS_FROM || hour >= NEWS_UNTIL) return later(nextMorning(now));
   // On the phone, or in the missed-call steps, whose retry must not find her line busy.
   if ((await callsInProgress(now.getTime(), resident_id)) > 0 || (await getLadder(resident_id))) return later(now.getTime() + WAIT_MS);
   if (!resident.phone) return recordTold(call_id, kind, { at: now.toISOString(), result: "no_phone" });
-  await placeNewsCall(resident, newsText(request, now), { call_id, request_kind: kind }).catch((e) => {
-    console.error(e);
-    return recordTold(call_id, kind, { at: now.toISOString(), result: "failed" });
-  });
+  // Noted as placed at once, so a lost webhook can't bring a second call; the webhook overwrites it.
+  await placeNewsCall(resident, newsText(request, now), { call_id, request_kind: kind }).then(
+    () => recordTold(call_id, kind, { at: now.toISOString(), result: "placed" }),
+    (e) => {
+      console.error(e);
+      return recordTold(call_id, kind, { at: now.toISOString(), result: "failed" });
+    },
+  );
 }
 
 const scheduleCheck = (residentId: string, requestId: string, kind: RequestKind, wait: number, round = 1) =>

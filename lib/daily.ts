@@ -1,5 +1,5 @@
 import { placeCall } from "./elevenlabs";
-import { callsInProgress, getLadder, listCalls, listResidents, saveCall, updateResident } from "./store";
+import { callsInProgress, getLadder, pendingCalls, listCalls, listResidents, saveCall, updateResident } from "./store";
 import { daysBefore, japanDate } from "./trends";
 import type { Resident } from "./types";
 
@@ -61,9 +61,11 @@ export async function placeDailyCalls(now = new Date()) {
     // Already being looked after today: on the phone now, in the missed-call steps, or spoken to earlier.
     const spoken = (await listCalls(id)).some((c) => c.kind === "call" && japanDate(new Date(c.at)) === today);
     if (spoken || (await getLadder(id))) continue;
-    // On another call (a news call, or one placed by hand): back in the queue, to be called once it ends.
-    if ((await callsInProgress(now.getTime(), id)) > 0) {
-      await updateResident(id, (fresh) => ({ ...fresh, call_queued: true }));
+    // On the phone now. A check-in placed by hand is today's call. A news call is not: back in the queue,
+    // to be called once it ends.
+    const busy = await pendingCalls(now.getTime(), id);
+    if (busy.length) {
+      if (busy.every((p) => p.news)) await updateResident(id, (fresh) => ({ ...fresh, call_queued: true }));
       continue;
     }
 

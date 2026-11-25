@@ -1276,6 +1276,24 @@ describe("help requests", () => {
       expect(placeNewsCall).not.toHaveBeenCalled();
       expect((await requestsOf("conv_n2"))[0].told).toMatchObject({ result: "no_phone" });
     });
+
+    it("calls nobody when a check-in since the accept has told her already", async () => {
+      const { slotChoices } = await import("@/lib/requests");
+      const { newsStep } = await import("@/lib/actions");
+      await closeRequests("suzuki");
+      await store.updateResident("suzuki", (r) => ({ ...r, phone: "+819000000001" }));
+      const [first] = slotChoices();
+      await heard("conv_n3", true, false);
+      await tap(`accept:conv_n3:snow:${first.date}:${first.part}`, "U_volunteer");
+      vi.setSystemTime(Date.now() + 60_000);
+      await store.saveCall({ id: "conv_n3_checkin", resident_id: "suzuki", at: new Date().toISOString(), kind: "call", risk: "green", reasons: [], actions: [] });
+      await newsStep({ resident_id: "suzuki", call_id: "conv_n3", request_kind: "snow" });
+      expect(placeNewsCall).not.toHaveBeenCalled();
+      for (const id of ["conv_n3", "conv_n3_checkin"]) {
+        const call = (await store.getCall(id))!;
+        await store.saveCall({ ...call, at: "2026-01-01T00:00:00Z" });
+      }
+    });
   });
 
   it("asks again when nobody took it, and the old message's button answers the new request", async () => {

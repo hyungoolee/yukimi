@@ -97,6 +97,16 @@ describe("daily calls", () => {
     await store.clearPending("conv_busy");
   });
 
+  it("does not phone someone a second time after a check-in placed by hand ends", async () => {
+    vi.useFakeTimers({ now: at("09:30") });
+    await store.savePending("conv_busy", { resident_id: "suzuki", attempt: 1 });
+    for (let i = 0; i < 3; i++) await placeDailyCalls(at("09:30"));
+    await store.clearPending("conv_busy"); // ended; its record is still being written
+    await placeDailyCalls(at("09:31"));
+    expect(called()).toEqual(["sato"]);
+    vi.useRealTimers();
+  });
+
   it("calls someone after the call that had her line ends, instead of dropping her for the day", async () => {
     vi.useFakeTimers({ now: at("09:30") });
     await store.savePending("conv_busy", { resident_id: "suzuki", attempt: 1, news: { call_id: "c", request_kind: "snow" } });

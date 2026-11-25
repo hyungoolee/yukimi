@@ -18,8 +18,8 @@ function told(r: OpenRequest, lang: "ja" | "en") {
   if (!r.told) return "";
   const time = new Date(r.told.at).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
   const text = {
-    ja: { answered: `${time}に電話でお伝えしました`, no_answer: "お知らせの電話に出ませんでした", no_phone: "電話番号がないためお知らせしていません", failed: "お知らせの電話をかけられませんでした" },
-    en: { answered: `told by phone ${time}`, no_answer: "news call not answered", no_phone: "not told: no phone number", failed: "news call could not be placed" },
+    ja: { placed: "お知らせの電話をかけています", answered: `${time}に電話でお伝えしました`, no_answer: "お知らせの電話に出ませんでした", no_phone: "電話番号がないためお知らせしていません", failed: "お知らせの電話をかけられませんでした" },
+    en: { placed: "calling with the news", answered: `told by phone ${time}`, no_answer: "news call not answered", no_phone: "not told: no phone number", failed: "news call could not be placed" },
   }[lang][r.told.result];
   return lang === "ja" ? `・${text}` : ` · ${text}`;
 }

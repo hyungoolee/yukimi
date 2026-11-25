@@ -123,6 +123,7 @@ export type Slot = { date: string; part: "am" | "pm" };
 /** How a help request stands. Kept on the action it was raised by (lib/requests.ts). */
 export type RequestState = {
   accepted_by?: string;
+  accepted_at?: string;
   slot?: Slot;
   done?: boolean;
   /** When the coordinators were told that nobody had taken it. */
@@ -130,7 +131,8 @@ export type RequestState = {
   /** How the news that someone is coming reached the resident (lib/actions.ts newsStep). */
   told?: Told;
 };
-export type Told = { at: string; result: "answered" | "no_answer" | "no_phone" | "failed"; transcript?: Turn[] };
+/** "placed": the call went out and has not reported back yet. */
+export type Told = { at: string; result: "placed" | "answered" | "no_answer" | "no_phone" | "failed"; transcript?: Turn[] };
 /** One message to one person, as it was sent: kept so the dashboard shows history, not a reconstruction. */
 export type Delivery = {
   role: Role;

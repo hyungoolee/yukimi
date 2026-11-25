@@ -223,8 +223,9 @@ export async function claimTrendFiring(residentId: string, trendId: string, date
 export type Pending = { resident_id: string; attempt: number; winter_checks?: boolean; at?: number; news?: { call_id: string; request_kind: string } };
 export const savePending = (conversationId: string, p: Pending) => write("pending", conversationId, { ...p, at: Date.now() });
 /** Calls placed and not yet reported back. One that never reports stops counting after 15 minutes. */
-export const callsInProgress = async (now = Date.now(), residentId?: string) =>
-  (await readAll<Pending>("pending")).filter((p) => (p.at ?? 0) > now - 15 * 60_000 && (!residentId || p.resident_id === residentId)).length;
+export const pendingCalls = async (now = Date.now(), residentId?: string) =>
+  (await readAll<Pending>("pending")).filter((p) => (p.at ?? 0) > now - 15 * 60_000 && (!residentId || p.resident_id === residentId));
+export const callsInProgress = async (now = Date.now(), residentId?: string) => (await pendingCalls(now, residentId)).length;
 export const getPending = (conversationId: string) => read<Pending>("pending", conversationId);
 export const clearPending = (conversationId: string) => rm(file("pending", conversationId), { force: true });
 

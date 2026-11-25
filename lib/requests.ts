@@ -92,6 +92,7 @@ export type OpenRequest = {
   /** Who took it, or else who was asked. */
   who: string;
   slot?: Slot;
+  acceptedAt?: string;
   told?: Told;
 };
 
@@ -126,6 +127,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
         who: action.accepted_by || resident[REQUESTS[kind].role].name,
         slot: action.slot,
+        acceptedAt: action.accepted_at,
         told: action.told,
       }];
     }
