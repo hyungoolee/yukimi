@@ -2,7 +2,7 @@ import { anySent, sendRedAlert } from "./actions";
 import { placeCall } from "./elevenlabs";
 import { DEMO_MODE } from "./env";
 import { buttons, push } from "./line";
-import { clearLadder, getLadder, getResident, saveCall, saveLadder, schedule } from "./store";
+import { callsInProgress, clearLadder, getLadder, getResident, saveCall, saveLadder, schedule } from "./store";
 import type { CallRecord, Resident } from "./types";
 
 // Demo mode runs the ladder in under a minute. Each later step is a task on disk (see lib/tick.ts),
@@ -62,6 +62,11 @@ export async function retryStep(residentId: string, ladderAt?: number) {
   if (!resident) return;
   // No number to retry: go straight to asking the second contact.
   if (!resident.phone) return missed(residentId, 2);
+  // Another call has her line (a news call): a busy line is not a missed call, so try a little later.
+  if ((await callsInProgress(Date.now(), residentId)) > 0) {
+    await schedule({ kind: "ladder_retry", resident_id: residentId, ladder_at: ladderAt, due: Date.now() + 2 * 60_000 });
+    return;
+  }
   await placeCall(resident, 2).catch(() => missed(residentId, 2));
 }
 

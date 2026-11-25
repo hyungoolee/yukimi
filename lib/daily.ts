@@ -1,5 +1,5 @@
 import { placeCall } from "./elevenlabs";
-import { callsInProgress, getLadder, listCalls, listResidents, saveCall, updateResident } from "./store";
+import { callsInProgress, getLadder, pendingCalls, listCalls, listResidents, saveCall, updateResident } from "./store";
 import { daysBefore, japanDate } from "./trends";
 import type { Resident } from "./types";
 
@@ -60,7 +60,14 @@ export async function placeDailyCalls(now = new Date()) {
     if (!resident || resident.active === false || !resident.phone) continue;
     // Already being looked after today: on the phone now, in the missed-call steps, or spoken to earlier.
     const spoken = (await listCalls(id)).some((c) => c.kind === "call" && japanDate(new Date(c.at)) === today);
-    if (spoken || (await getLadder(id)) || (await callsInProgress(now.getTime(), id)) > 0) continue;
+    if (spoken || (await getLadder(id))) continue;
+    // On the phone now. A check-in placed by hand is today's call. A news call is not: back in the queue,
+    // to be called once it ends.
+    const busy = await pendingCalls(now.getTime(), id);
+    if (busy.length) {
+      if (busy.every((p) => p.news)) await updateResident(id, (fresh) => ({ ...fresh, call_queued: true }));
+      continue;
+    }
 
     // If the phone service refuses, the family is not told "no answer": that would be false, and in an
     // outage it would go to every family in town. It is noted for the coordinator instead.
