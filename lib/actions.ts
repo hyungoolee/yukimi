@@ -75,10 +75,12 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
   // Book the next round first, so a failure below can't end the chain.
   if (round < MAX_RESENDS) await scheduleRecheck(resident_id, callId, round + 1, recipients);
   await sendAlert(resident, recipients, { callId, resend: round });
-  await updateCall(callId, () => ({ alert_rounds: round }));
+  // The record as it is now: someone may have tapped the button while the re-send was going out.
+  const now = await updateCall(callId, () => ({ alert_rounds: round }));
+  if (now?.handled || now?.acknowledged_by) return;
   // Once only: noted on the call when it reached someone, so a later round tries again only if it did not.
   // With no call record there is nowhere to note it, so that case gets the one round.
-  if (call ? round >= COORDINATORS_AT_RESEND && !call.coordinators_told_at : round === COORDINATORS_AT_RESEND) {
+  if (now ? round >= COORDINATORS_AT_RESEND && !now.coordinators_told_at : round === COORDINATORS_AT_RESEND) {
     await tellCoordinators(resident, callId, Object.keys(recipients) as Role[]);
   }
 }

@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEASURES } from "@/lib/measures";
 import type { Extraction, Observations } from "@/lib/types";
 
@@ -615,6 +615,9 @@ describe("red alerts must be acknowledged", () => {
       coordinatorId ??= (await store.addPerson("社協 鈴木")).id;
       await store.updatePerson(coordinatorId, (p) => ({ ...p, coordinator: true, line_id: "U_coordinator" }));
     });
+    afterEach(async () => {
+      for (const id of [coordinatorId, "p_tanaka"]) await store.updatePerson(id, (p) => ({ ...p, coordinator: undefined }));
+    });
 
     it("tells the coordinators at the second re-send, once, and keeps re-sending to the others", async () => {
       await start("conv_esc");
@@ -691,7 +694,6 @@ describe("red alerts must be acknowledged", () => {
       await after(31);
       await after(62);
       expect(pushes().filter((p) => p.messages[0].text.includes(UNSEEN))).toEqual([]);
-      await store.updatePerson("p_tanaka", (p) => ({ ...p, coordinator: undefined }));
     });
   });
 
