@@ -22,7 +22,7 @@ async function fetchLive(station: string): Promise<Weather> {
     snowfall_24h_cm: hourly?.snow24h?.[0] ?? 0,
     snow_depth_cm: hourly?.snow?.[0] ?? 0,
     low_c: low,
-    temp_c: typeof obs.temp?.[0] === "number" ? obs.temp[0] : undefined,
+    temp_c: obs.temp?.[0] ?? undefined,
     observed_at: latest,
   };
 }

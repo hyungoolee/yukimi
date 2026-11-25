@@ -35,7 +35,7 @@ export function WeatherCard({ weather: w, lang, t }: { weather: WeatherReading; 
   const snowy = w.snowfall_24h_cm > 0 || w.snow_depth_cm > 0;
   const source =
     w.source === "live"
-      ? s.live(w.station, w.observed_at ? japanTime(w.observed_at, lang) : w.date)
+      ? s.live(w.station, japanTime(w.observed_at!, lang))
       : w.source === "demo"
         ? s.demo(w.date)
         : s.fallback;
