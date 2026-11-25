@@ -18,7 +18,6 @@ async function callVariables(resident: Resident, attempt: number) {
     introducer: resident.introducer,
     facts: factsLine(resident),
     care_notes: careNotesLine(resident),
-    recent_calls: resident.recent_calls.map((c) => `${c.date}：${c.summary}`).join(" / ") || "なし",
     follow_ups: followUpsLine(resident),
     briefing: calls ? briefingLine(calls) : "なし",
     help_status: calls ? helpLine(resident, calls) : "なし",
