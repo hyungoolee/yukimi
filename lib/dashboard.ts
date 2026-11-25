@@ -38,10 +38,6 @@ export type SnowRequest = {
   /** Who took it, or else who the request has got to in the line. Empty once the line has run out. */
   volunteer: string;
   business: boolean;
-  /** The family is deciding whether `volunteer`, a business, may be asked: the message went to them, not to the business. */
-  awaitingConsent: boolean;
-  /** Who is deciding, when `awaitingConsent`. */
-  family: string;
   /** Everyone in line has had their turn and nobody took it. */
   exhausted: boolean;
   /** The coordinators have been told that nobody has taken it. */
@@ -66,8 +62,6 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
     status: request.status,
     volunteer: request.who,
     business: request.business,
-    awaitingConsent: request.awaitingConsent,
-    family: resident.second_contact.name,
     exhausted: request.exhausted,
     escalated: request.escalated,
     from,

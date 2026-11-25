@@ -25,7 +25,7 @@ const ja = {
   badge: { red: "すぐ確認", yellow: "訪問リスト", green: "問題なし", none: "通話なし" },
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
-      r.status === "not_sent" ? "送信できていません" : r.exhausted ? "順番の全員に頼みましたが、引き受け手がいません" : r.awaitingConsent ? `${r.who}（有料）に頼んでよいか、家族に確認中` : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
+      r.status === "not_sent" ? "送信できていません" : r.exhausted ? "順番の全員に頼みましたが、引き受け手がいません" : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
     }${r.status === "accepted" ? "" : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
@@ -115,9 +115,7 @@ const ja = {
       ? "除雪のお願い：送信できていません"
       : r.exhausted
         ? `除雪のお願い：順番の全員に頼みましたが、引き受け手がいません（${r.escalated ? "コーディネーターに連絡済み" : "コーディネーターには未連絡"}）`
-        : r.awaitingConsent
-          ? `${r.family}さん（家族）へ：${r.volunteer}（有料）に頼んでよいか確認中。${r.volunteer}にはまだ頼んでいません`
-          : `${r.volunteer}${r.business ? "" : "さん"}へ：${{ sent: "送信済み・返事待ち", accepted: "引き受け済み" }[r.status]}`,
+        : `${r.volunteer}${r.business ? "" : "さん"}へ：${{ sent: "送信済み・返事待ち", accepted: "引き受け済み" }[r.status]}`,
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
@@ -139,8 +137,7 @@ const ja = {
   snowNext: (n: number) => `除雪（${n}番目に頼む）`,
   business: "事業者（有料）",
   businessMark: "（有料）",
-  paidHelpOk: "有料の除雪は家族の了承済み（毎回は確認しない）",
-  snowLineHelp: "除雪は上から順にお願いします。引き受け手がないと次の人へ。事業者（有料）に頼む前には、家族にLINEで確認します。",
+  snowLineHelp: "除雪は上から順にお願いします。引き受け手がないと次の人へ。事業者（有料）は、ご家族の了承を得てから順番に入れてください。お願いしたときは、家族にLINEで知らせます。",
   reach: { none: "未定", unregistered: "LINE未登録", registered: "LINE登録済み" },
   coordinator: "コーディネーター（引き受け手のないお願いの連絡先）",
   coordinatorShort: "コーディネーター",
@@ -181,7 +178,7 @@ const en: typeof ja = {
   badge: { red: "Check now", yellow: "Visit list", green: "All fine", none: "No calls" },
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
-      r.status === "not_sent" ? "request could not be sent" : r.exhausted ? "everyone in line was asked and nobody took it" : r.awaitingConsent ? `asking the family before ${r.who} (paid) is asked` : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
+      r.status === "not_sent" ? "request could not be sent" : r.exhausted ? "everyone in line was asked and nobody took it" : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
     }${r.status === "accepted" ? "" : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
@@ -271,9 +268,7 @@ const en: typeof ja = {
       ? "Snow clearing: request could not be sent"
       : r.exhausted
         ? `Snow clearing: everyone in line was asked and nobody took it (${r.escalated ? "coordinator told" : "coordinator not told yet"})`
-        : r.awaitingConsent
-          ? `Family (${r.family}) asked whether ${r.volunteer} (paid) may be asked; ${r.volunteer} has not been asked yet`
-          : `${r.volunteer}: ${{ sent: "asked, waiting for a reply", accepted: "accepted" }[r.status]}`,
+        : `${r.volunteer}: ${{ sent: "asked, waiting for a reply", accepted: "accepted" }[r.status]}`,
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
   home: "Home",
   volunteer: () => "Snow volunteer",
@@ -295,8 +290,7 @@ const en: typeof ja = {
   snowNext: (n) => `Snow helper (asked ${n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`})`,
   business: "Business (charges)",
   businessMark: " (paid)",
-  paidHelpOk: "Family has agreed to paid snow clearing (don't ask each time)",
-  snowLineHelp: "Snow helpers are asked in order; if nobody takes the request it moves to the next. Before a business (paid) is asked, the family is asked on LINE.",
+  snowLineHelp: "Snow helpers are asked in order; if nobody takes the request it moves to the next. Put a business (paid) in line only once the family has agreed; when it is asked, the family is told on LINE.",
   reach: { none: "Nobody assigned", unregistered: "Not on LINE", registered: "On LINE" },
   coordinator: "Coordinator (told when a help request has nobody on it)",
   coordinatorShort: "Coordinators",

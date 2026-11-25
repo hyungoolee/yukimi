@@ -92,7 +92,7 @@ export default async function PeoplePage() {
             </div>
             {/* Keyed on who holds the roles, so the menus show a saved change instead of what they held before. */}
             <form
-              key={[...ROLES.map((role) => resident[role].id), ...(resident.snow_next ?? []).map((c) => c.id), resident.paid_help_ok].join()}
+              key={[...ROLES.map((role) => resident[role].id), ...(resident.snow_next ?? []).map((c) => c.id)].join()}
               action={assignRoles}
               className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 text-sm"
             >
@@ -128,10 +128,6 @@ export default async function PeoplePage() {
                   </label>
                 );
               })}
-              <label className="flex items-center gap-1.5 py-1">
-                <input type="checkbox" name="paid_help_ok" defaultChecked={resident.paid_help_ok} />
-                {t.paidHelpOk}
-              </label>
               <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
             </form>
             {gaps.length > 0 && (

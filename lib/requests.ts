@@ -53,18 +53,16 @@ export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
 ];
 
 /**
- * A business charges, so the family says yes before it is asked, unless they have agreed once and
- * for all. Never for the family's own job (bringing supplies): they would be asking themselves.
+ * A business charges, so the family is told when one is asked. Not for the family's own job
+ * (bringing supplies): they would be telling themselves.
  */
-export const needsConsent = (resident: Resident, kind: RequestKind, who: Contact) =>
-  who.kind === "business" && !resident.paid_help_ok && REQUESTS[kind].role !== "second_contact";
+export const tellsFamily = (kind: RequestKind, who: Contact) => who.kind === "business" && REQUESTS[kind].role !== "second_contact";
 
 /**
- * Place in line and where the family's answer stands, as one value. A check booked for an earlier
- * one is out of date: the request has moved on since, and whatever moved it booked its own.
+ * Place in line, as a value a booked check carries. A check booked for an earlier one is out of
+ * date: the request has moved on since, and whatever moved it booked its own.
  */
-export const stageKey = (s: Pick<RequestState, "asked" | "consent">) =>
-  `${s.asked ?? 0}:${s.consent ? `${s.consent.id}:${s.consent.answer ?? "asked"}` : ""}`;
+export const stageKey = (s: Pick<RequestState, "asked">) => String(s.asked ?? 0);
 
 /**
  * Who may answer a request's buttons: whoever holds the role, and anyone further down the line the
@@ -131,10 +129,6 @@ export type OpenRequest = {
   asked: number;
   /** Everyone in line has had their turn (or could not be asked) and nobody took it. `who` is then empty. */
   exhausted: boolean;
-  /** The family is deciding whether the business that is next may be asked. The business has not been asked. */
-  awaitingConsent: boolean;
-  /** The family's question about the business that is next, and their answer once given. */
-  consent?: RequestState["consent"];
   /** When whoever is being asked now runs out of time (epoch ms). Absent on requests from before this was kept. */
   stepDue?: number;
   /** See stageKey. */
@@ -173,9 +167,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         asked,
         exhausted: action.accepted_by === undefined && !current,
         stage: stageKey(action),
-        consent: action.consent,
         stepDue: action.step_due,
-        awaitingConsent: !!action.consent && !action.consent.answer && action.accepted_by === undefined,
         business: action.accepted_by !== undefined ? !!action.accepted_business : current?.kind === "business",
         since: records.at(-1)?.at ?? call.at,
         escalated: records.some((r) => r.a.escalated_at),
