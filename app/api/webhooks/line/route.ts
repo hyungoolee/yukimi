@@ -1,8 +1,8 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
-import { acceptRequest } from "@/lib/actions";
+import { acceptRequest, answerConsent } from "@/lib/actions";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { isRequestKind, openRequests, passed, REQUESTS, slotLabel } from "@/lib/requests";
+import { askedHelpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
 import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
@@ -28,11 +28,27 @@ export async function POST(request: Request) {
       // "accept:<request>:<kind>:<date>:<am|pm>", where <request> is the call that first asked.
       // "snow_accept:<call>" is the button from before there were time slots.
       const [requestKind, date, part] = kind === "snow_accept" ? ["snow"] : rest;
-      if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
+      if (kind === "consent" && isRequestKind(requestKind)) {
+        // "consent:<request>:<kind>:<yes|no>": the family's answer about asking a business, which charges.
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
-        const person = resident?.[REQUESTS[requestKind].role];
-        if (resident && userId && person?.line_id === userId) {
+        if (resident && userId && resident.second_contact.line_id === userId) {
+          const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind && r.requestId === id);
+          const yes = date === "yes";
+          const mine = open?.awaitingConsent && (await answerConsent(resident, open, yes));
+          await reply(
+            event.replyToken,
+            !mine ? "この件はもう済んでいます。ありがとうございます。" : yes ? `${open!.who}に依頼します。ありがとうございます。` : "承知しました。依頼しません。",
+          );
+        }
+      } else if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
+        const call = await getCall(id);
+        const resident = call && (await getResident(call.resident_id));
+        // Whoever holds the role, or someone further down the line the request has been sent to.
+        const person = resident && userId
+          ? askedHelpers(resident, await listCalls(resident.id), requestKind, id).find((c) => c.line_id === userId)
+          : undefined;
+        if (resident && userId && person) {
           const slot = /^\d{4}-\d\d-\d\d$/.test(date ?? "") && (part === "am" || part === "pm") ? { date, part } as const : undefined;
           // A later call may have sent a reminder: the answer goes on the newest record of this same request.
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind && r.requestId === id);
@@ -42,7 +58,7 @@ export async function POST(request: Request) {
             // The buttons were set when the message went out; that half-day is over now.
             await reply(event.replyToken, "その時間は過ぎています。ほかの時間を押してください。");
           } else {
-            const { mine, request } = await acceptRequest(open.callId, requestKind, person.name, slot);
+            const { mine, request } = await acceptRequest(open.callId, requestKind, person.name, slot, person.kind === "business");
             const when = request?.slot ? `${slotLabel(request.slot)}で` : "";
             await reply(
               event.replyToken,

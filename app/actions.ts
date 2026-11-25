@@ -7,11 +7,11 @@ import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
-import { isRequestKind, REQUESTS, slotChoices } from "@/lib/requests";
+import { helpers, isRequestKind, openRequests, REQUESTS, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
 import { translateToEnglish } from "@/lib/translate";
-import { clearLadder, getCall, getResident, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
+import { clearLadder, getCall, getResident, listCalls, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -57,7 +57,7 @@ export async function savePhone(_previous: PhoneResult | undefined, formData: Fo
   return { status: "saved", typed: phone };
 }
 
-/** Places a resident's home pin, or their snow volunteer's pin, from the click-to-place map. */
+/** Places a resident's home pin, or the pin of someone in their line for snow clearing, from the click-to-place map. */
 export async function saveLocation(formData: FormData) {
   await requireAccess();
   const resident = await getResident(String(formData.get("resident_id")));
@@ -66,9 +66,11 @@ export async function saveLocation(formData: FormData) {
   const inJapan = location.lat > 20 && location.lat < 46 && location.lng > 122 && location.lng < 154;
   if (!resident || !inJapan) return;
 
-  if (formData.get("who") === "snow_volunteer") {
+  const who = String(formData.get("who"));
+  if (who === "snow_volunteer" || who.startsWith("snow_next_")) {
     // The pin belongs to the person, so it moves for every resident they help.
-    if (resident.snow_volunteer.id) await updatePerson(resident.snow_volunteer.id, (p) => ({ ...p, location }));
+    const person = who === "snow_volunteer" ? resident.snow_volunteer : resident.snow_next?.[Number(who.slice("snow_next_".length))];
+    if (person?.id) await updatePerson(person.id, (p) => ({ ...p, location }));
   } else {
     await updateResident(resident.id, (fresh) => ({ ...fresh, location }));
   }
@@ -103,7 +105,10 @@ export async function acceptDemo(formData: FormData) {
   const call = await getCall(callId);
   const resident = call && (await getResident(call.resident_id));
   if (DEMO_MODE && resident && isRequestKind(kind)) {
-    await acceptRequest(callId, kind, resident[REQUESTS[kind].role].name, slotChoices()[0]);
+    // Whoever the request has got to in the line.
+    const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === kind && r.callId === callId);
+    const who = helpers(resident, kind)[open?.asked ?? 0] ?? resident[REQUESTS[kind].role];
+    await acceptRequest(callId, kind, who.name, slotChoices()[0], who.kind === "business");
   }
   revalidatePath("/", "layout");
 }

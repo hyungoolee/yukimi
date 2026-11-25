@@ -5,6 +5,14 @@ import type { Contact, Person, Resident, Role } from "./types";
 
 export const ROLES: Role[] = ["helper", "second_contact", "snow_volunteer"];
 
+/** How many people can be put in line for snow clearing after the first (the 連絡体制 page shows this many menus). */
+export const SNOW_NEXT_SLOTS = 2;
+/** Everyone who could be asked to clear snow, in order. */
+export const snowLine = (resident: Resident): Contact[] => [resident.snow_volunteer, ...(resident.snow_next ?? [])];
+/** Whether this person holds any post for the resident, a place further down the snow line included. */
+export const serves = (resident: Resident, personId: string) =>
+  ROLES.some((role) => resident[role].id === personId) || (resident.snow_next ?? []).some((c) => c.id === personId);
+
 /** none: nobody on file. unregistered: a name, but no way to message them. registered: on LINE. */
 export type Reach = "none" | "unregistered" | "registered";
 export const reach = (c: Contact): Reach => (c.line_id ? "registered" : c.name ? "unregistered" : "none");
@@ -31,7 +39,8 @@ export function coverage(resident: Resident) {
   if (redAlertReaches === 0) gaps.push("red_reaches_nobody");
   else if (!can("helper")) gaps.push("helper_unreachable");
   else if (!can("second_contact")) gaps.push("family_unreachable");
-  if (!can("snow_volunteer")) gaps.push("snow_unreachable");
+  // Anyone in the line for snow clearing will do.
+  if (!snowLine(resident).some((c) => reach(c) === "registered")) gaps.push("snow_unreachable");
 
   const level = gaps.some((g) => CRITICAL.includes(g)) ? "critical" : gaps.length ? "warning" : "ok";
   return { redAlertReaches, gaps, level } as const;
@@ -43,6 +52,8 @@ export const criticalCount = (residents: Resident[]) =>
 
 /** Each person with the roles they hold and everyone they serve. */
 export function served(person: Person, residents: Resident[]) {
-  const roles = ROLES.filter((role) => residents.some((r) => r[role].id === person.id));
-  return { roles, residents: residents.filter((r) => ROLES.some((role) => r[role].id === person.id)) };
+  const roles = ROLES.filter((role) =>
+    residents.some((r) => r[role].id === person.id || (role === "snow_volunteer" && (r.snow_next ?? []).some((c) => c.id === person.id))),
+  );
+  return { roles, residents: residents.filter((r) => serves(r, person.id)) };
 }
