@@ -47,7 +47,11 @@ export type MemoryChange = {
 };
 
 /** Something worth asking about on a later call, until `expires` (Japan dates). */
-export type FollowUp = { id: string; text: string; created: string; expires: string };
+/**
+ * Something to bring up on a later call. A check must be asked before the call ends (health, safety);
+ * a thread is a light topic the caller may pick up, often to open the call. Absent kind: a check.
+ */
+export type FollowUp = { id: string; text: string; created: string; expires: string; kind?: "check" | "thread" };
 
 export type Resident = {
   id: string;

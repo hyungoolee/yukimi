@@ -3,7 +3,8 @@ import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/pro
 import path from "node:path";
 import { ROLES } from "./coverage";
 import { normalizeResident } from "./resident";
-import type { AlertReasons, CallRecord, Contact, Person, RequestKind, Resident, Role, Weather } from "./types";
+import { daysBefore, japanDate } from "./trends";
+import type { AlertReasons, CallRecord, Contact, FollowUp, Person, RequestKind, Resident, Role, Weather } from "./types";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(/* turbopackIgnore: true */ process.cwd(), ".data");
 const SEED_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "seed");
@@ -23,11 +24,30 @@ function ensureSeeded() {
   seeding.set(DATA_DIR, initialization);
   return initialization;
 }
+/**
+ * A seed file gives each follow-up a number of days, not dates, so the demo's are open whenever it is
+ * seeded or reset: each reads as raised on yesterday's call.
+ */
+type SeedFollowUp = { text: string; kind?: FollowUp["kind"]; days: number };
+const seededFollowUps = (seed: { follow_ups?: unknown }, today = japanDate()): FollowUp[] =>
+  ((seed.follow_ups ?? []) as SeedFollowUp[]).map((f, i) => ({
+    id: `seed${i}`,
+    text: f.text,
+    kind: f.kind,
+    created: daysBefore(today, 1),
+    expires: daysBefore(today, -f.days),
+  }));
+
 async function seed() {
   const existing = await readdir(path.join(DATA_DIR, "residents")).catch(() => []);
   if (existing.length === 0) {
     await mkdir(DATA_DIR, { recursive: true });
     await cp(SEED_DIR, DATA_DIR, { recursive: true });
+    for (const name of await readdir(path.join(DATA_DIR, "residents"))) {
+      const at = path.join(DATA_DIR, "residents", name);
+      const resident = JSON.parse(await readFile(at, "utf8"));
+      await write("residents", name.slice(0, -5), { ...resident, follow_ups: seededFollowUps(resident) });
+    }
     return;
   }
   // A disk from before people had their own files holds names inside each resident. Nobody had
@@ -276,7 +296,7 @@ export async function resetDemoData() {
       ...r,
       facts,
       recent_calls,
-      follow_ups: [],
+      follow_ups: seededFollowUps(seed),
       retired_facts: [],
       care_notes: "",
       care_notes_en: "",

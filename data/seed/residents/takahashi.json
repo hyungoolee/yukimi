@@ -34,6 +34,7 @@
       "locked": true
     }
   ],
+  "follow_ups": [{ "text": "孫のマフラーは完成したか", "kind": "thread", "days": 3 }],
   "recent_calls": [
     {
       "date": "2026-11-25",

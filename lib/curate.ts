@@ -5,7 +5,7 @@ import type { FollowUp, Resident, Turn } from "./types";
 
 const CurationSchema = z.object({
   resolved: z.array(z.string()),
-  new_follow_ups: z.array(z.object({ text: z.string(), days: z.number() })),
+  new_follow_ups: z.array(z.object({ text: z.string(), days: z.number(), kind: z.enum(["check", "thread"]) })),
   fact_changes: z.object({
     add: z.array(z.object({ text: z.string(), en: z.string() })),
     update: z.array(z.object({ id: z.string(), text: z.string(), en: z.string() })),
@@ -20,14 +20,12 @@ You get today's date, the facts remembered about the resident and the follow-ups
 
 # Follow-ups
 
-resolved: the ids of open follow-ups that this call settled. Close one only when the resident said plainly that it is over: the pain is gone, the exam result is in, the heater was fixed. "Better", "a little easier" or a brush-off such as 「大丈夫」 is not over: older people often play pain down, so leave it open. If it was not discussed, leave it open.
+resolved: the ids of open follow-ups that this call settled. Close one only when the resident said plainly that it is over: the pain is gone, the exam result is in, the heater was fixed. "Better", "a little easier" or a brush-off such as 「大丈夫」 is not over: older people often play pain down, so leave it open. If it was not discussed, leave it open. A thread is different: close it once this call talked about it, unless the resident said there is more to come (the result is not out yet, the visit is still ahead), so the caller does not open with the same thing again.
 
-new_follow_ups: what the caller should bring up on a later call. The caller reads this list as 「前回からの確認」, and the family sees it as "To ask on the next call". Separately, the caller is already given the checks it makes every morning (meals, sleep, heating, getting out, food, medicine and kerosene) and the status of any snow or supplies help that was arranged. So this list holds only what it would otherwise forget: what a friend who remembered this call would ask about next time. Usually that is:
-- a health problem to check again (a fall, pain, a cough, a wound);
-- a plan or promise (they will see the doctor on Thursday, their son is visiting at the weekend);
-- an event they are waiting on (a grandchild's exam result);
-- a topic the agent said it would like to hear about again ("また今度、聞かせてください"): give it 3 days, so one missed call does not lose it.
-List health problems first: only the first three are kept. If snow or running short led to a health problem, the follow-up is the health problem (「転んだ腰の痛みはその後どうか」), not the snow. Do not add anything about money, bank accounts or cards, even if it came up. Do not repeat something that is already open. An empty list is common.
+new_follow_ups: what the caller should bring up on a later call. The family sees them as "To ask on the next call". Separately, the caller is already given the checks it makes every morning (meals, sleep, heating, getting out, food, medicine and kerosene) and the status of any snow or supplies help that was arranged. So this list holds only what it would otherwise forget: what a friend who remembered this call would ask about next time. Each has a kind:
+- check: a health or safety matter the caller must confirm before the call ends (a fall, pain, a cough, a wound, a doctor's visit). The caller reads these as 「前回からの確認」. List checks first: only the first three are kept. If snow or running short led to a health problem, the check is the health problem (「転んだ腰の痛みはその後どうか」), not the snow.
+- thread: a light thing from the resident's life that a friend would pick up again, and that the caller may use to open the next call or bring up later: an event they are waiting on (a grandchild's exam result), a plan (their son is visiting at the weekend), something they enjoyed telling, or a topic the agent said it would like to hear about again ("また今度、聞かせてください"; give it 3 days, so one missed call does not lose it). The caller reads these as 「話のつづき」. At most two can be open at once, counting those already open, and each lasts at most 7 days. Never make a thread of something that is also a check.
+Do not add anything about money, bank accounts or cards, even if it came up. Do not repeat something that is already open. An empty list is common.
 
 Write each text in Japanese as a short note of what to ask, for example 「腰の痛みはその後どうか」 or 「健太さんの受験の結果（金曜に発表）」. days is how many days from today it stays worth asking, from 1 to 14: a few days for something that should pass quickly, longer for a dated event.
 
@@ -56,7 +54,7 @@ export async function curate(resident: Resident, open: FollowUp[], transcript: T
         content: `Today: ${today}\n\nFacts about ${resident.name}さん (${resident.facts.length} of at most 30):\n${
           resident.facts.map((f) => `- [${f.id}]${f.locked ? " (locked)" : ""} ${f.text}`).join("\n") || "(none)"
         }\n\nOpen follow-ups:\n${
-          open.map((f) => `- [${f.id}] ${f.text}`).join("\n") || "(none)"
+          open.map((f) => `- [${f.id}] (${f.kind ?? "check"}) ${f.text}`).join("\n") || "(none)"
         }\n\nTranscript:\n${transcript.map((t) => `${t.role}: ${t.message}`).join("\n")}`,
       },
     ],
