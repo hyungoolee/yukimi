@@ -57,6 +57,21 @@ describe("people in the store", () => {
     await store.assign("sato", { helper: "p_tanaka" });
   });
 
+  it("gives the seed's family contacts their resident on a disk seeded before family_of existed", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "yukimi-family-"));
+    await cp(path.join(process.cwd(), "data/seed"), dir, { recursive: true });
+    const file = path.join(dir, "people", "p_yuki.json");
+    const old = JSON.parse(await readFile(file, "utf8"));
+    delete old.family_of;
+    await writeFile(file, JSON.stringify({ ...old, line_id: "U_yuki" }));
+
+    vi.resetModules();
+    vi.stubEnv("DATA_DIR", dir);
+    const fresh = await import("@/lib/store");
+    expect(await fresh.getPerson("p_yuki")).toMatchObject({ family_of: "sato", line_id: "U_yuki" });
+    vi.unstubAllEnvs();
+  });
+
   it("gives a disk from before people had files its people from the seed, once, keeping everything else", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "yukimi-old-"));
     await mkdir(path.join(dir, "residents"));
@@ -79,6 +94,7 @@ describe("people in the store", () => {
     vi.resetModules(); // a restart: nothing is converted twice, and a registration made since is kept
     const again = await import("@/lib/store");
     expect((await again.getResident("sato"))!.helper.line_id).toBe("U_kept");
+    expect((await again.getPerson("p_yuki"))!.family_of).toBe("sato");
     expect(JSON.parse(await readFile(path.join(dir, "residents", "sato.json"), "utf8")).helper).toBe("p_tanaka");
     vi.unstubAllEnvs();
   });
@@ -137,12 +153,6 @@ describe("managing people", () => {
 
     await store.assign("sato", { second_contact: "p_yuki" });
     for (const p of [husband, daughter]) await store.deletePerson(p.id);
-  });
-
-  it("gives seeded family their resident on a demo reset, for a disk seeded before family_of existed", async () => {
-    await store.updatePerson("p_yuki", (p) => ({ ...p, family_of: undefined }));
-    await store.resetDemoData();
-    expect((await store.getPerson("p_yuki"))!.family_of).toBe("sato");
   });
 
   it("removes a LINE registration and hands out a fresh code", async () => {

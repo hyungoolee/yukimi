@@ -36,6 +36,13 @@ async function seed() {
     const roles = Object.fromEntries(ROLES.map((role) => [role, typeof old[role] === "string" ? old[role] : (fresh?.[role] ?? "")]));
     await write("residents", name.slice(0, -5), { ...old, ...roles });
   }
+  // A disk seeded before family_of existed: the seed's family contacts get their resident, so each
+  // is offered only as that resident's family. Read directly: the store's own reads wait on this seeding.
+  for (const name of await readdir(path.join(SEED_DIR, "people"))) {
+    const seed = await json<Person>(path.join(SEED_DIR, "people", name));
+    const person = await json<Person>(path.join(DATA_DIR, "people", name));
+    if (seed?.family_of && person && !person.family_of) await write("people", person.id, { ...person, family_of: seed.family_of });
+  }
 }
 
 async function read<T>(dir: string, id: string): Promise<T | null> {
@@ -247,13 +254,7 @@ export async function resetDemoData() {
     JSON.parse(await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, dir, `${id}.json`), "utf8").catch(() => "null")) as T | null;
   for (const { id } of await readAll<Person>("people")) {
     const seed = await seedFile<Person>("people", id);
-    // A disk seeded before family_of existed gets it here, so each family is offered only for their resident.
-    if (seed) {
-      await updatePerson(id, (p) =>
-        (p.location || !seed.location) && (p.family_of || !seed.family_of)
-          ? null
-          : { ...p, location: p.location ?? seed.location, family_of: p.family_of ?? seed.family_of });
-    }
+    if (seed?.location) await updatePerson(id, (p) => (p.location ? null : { ...p, location: seed.location }));
   }
   for (const current of await readAll<Stored>("residents")) {
     const seed = await seedFile<Stored>("residents", current.id);
