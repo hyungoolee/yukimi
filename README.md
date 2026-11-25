@@ -17,7 +17,7 @@ The resident page shows observations across seven Japan dates. A meal trend aler
 
 Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set every value from `.env` on the host too, except `DATA_DIR`. Always set `DASHBOARD_PASSWORD` on a public deploy: without it, anyone with the address can change phone numbers and place calls. `APP_URL` is the public address with `https://` and no trailing slash.
 
-1. **ElevenLabs:** create an API key and choose a Japanese voice (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`).
+1. **ElevenLabs:** create an API key and choose a Japanese voice (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`; we use Hiyori, `AP6mVmGgRkbG5mCR7fCS`).
 2. **Post-call webhook:** in ElevenLabs, create one pointing at `<APP_URL>/api/webhooks/elevenlabs` (`ELEVENLABS_WEBHOOK_ID`, `ELEVENLABS_WEBHOOK_SECRET`).
 3. **Agent:** run `pnpm agent:setup`. It prints `ELEVENLABS_TOOL_ID`, `ELEVENLABS_AGENT_ID` and `ELEVENLABS_NEWS_AGENT_ID`; add all three to `.env` and the host. Run it again after editing `agent/prompt.md` or `agent/news.md`.
    **Order matters when the prompt gains a `{{variable}}`:** the deployed app must already be sending that variable, or calls may fail and the missed-call ladder will alert families. So deploy the app first, confirm it is live, then run `pnpm agent:setup`. To undo, go in reverse: check out the previous `agent/` and run `pnpm agent:setup` to restore the old prompt, then roll the app back. **Exception:** once the app stores facts as objects (`lib/resident.ts`), an older app cannot read the resident files it has rewritten in `DATA_DIR/residents`, so do not roll back past that release: fix forward, or restore the resident files from a copy taken before it.
