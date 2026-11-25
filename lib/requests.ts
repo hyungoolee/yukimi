@@ -50,7 +50,7 @@ export const isRequestKind = (kind: string): kind is RequestKind => Object.hasOw
 /**
  * The people who could do this, in the order they are asked. The first is whoever holds the role,
  * even when that post is vacant, so a request that reaches nobody is still recorded against it.
- * Snow clearing can have more people after them, volunteers or businesses (the 連絡体制 page).
+ * Snow clearing can have more people after them, volunteers or businesses (the resident's settings).
  */
 export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
   resident[REQUESTS[kind].role],

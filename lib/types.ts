@@ -49,7 +49,11 @@ export type MemoryChange = {
 };
 
 /** Something worth asking about on a later call, until `expires` (Japan dates). */
-export type FollowUp = { id: string; text: string; created: string; expires: string };
+/**
+ * Something to bring up on a later call. A check must be asked before the call ends (health, safety);
+ * a thread is a light topic the caller may pick up, often to open the call. Absent kind: a check.
+ */
+export type FollowUp = { id: string; text: string; created: string; expires: string; kind?: "check" | "thread" };
 
 export type Resident = {
   id: string;
@@ -170,7 +174,7 @@ export type RequestState = {
   escalated_at?: string;
   /**
    * One pass down the line of people who could do it (lib/actions.ts). The line is fixed when the run
-   * starts, so editing who is in line on the 連絡体制 page changes the next run, not this one; a
+   * starts, so editing who is in line in the resident's settings changes the next run, not this one; a
    * coordinator who needs it now restarts the run. Kept on the record the run started on: a reminder
    * on a later call points back to it rather than copying it.
    */

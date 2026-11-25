@@ -42,7 +42,7 @@ const SYSTEM = `You read the transcript of a daily check-in phone call between a
 
 Set answered_by_person to false when the "user" side is a voicemail or answering-machine greeting (留守番電話), a recorded announcement, or someone other than the resident who says the resident is not there. Otherwise set it to true.
 
-Write summary and notes in Japanese. In english, give a faithful English translation of the summary and of each note, adding nothing. summary is one or two sentences the caller can refer to tomorrow.
+Write summary and notes in Japanese. In english, give a faithful English translation of the summary and of each note, adding nothing. summary is one or two sentences for the welfare volunteer to read on the resident page.
 
 Set each signal to true only when the resident's own words support it. When the resident corrects or denies something, go with the correction.
 - emergency: describes something needing an ambulance now, such as chest pain, trouble breathing, or signs of a stroke.
