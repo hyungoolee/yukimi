@@ -86,14 +86,16 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               waiting: t.captionWaiting,
             }}
           />
-          {DEMO_MODE && (
+          <MarkHandledButton call={current} t={t} />
+        </div>
+        {DEMO_MODE && (
+          // Stand-ins for what a resident or volunteer would do: kept apart from the real actions.
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-dashed border-zinc-300 p-2 text-sm">
             <form action={simulateNoAnswer}>
               <input type="hidden" name="resident_id" value={resident.id} />
               <SubmitButton pending={t.calling}>{t.noAnswerDemo}</SubmitButton>
             </form>
-          )}
-          {DEMO_MODE &&
-            requests
+            {requests
               .filter((r) => r.status !== "accepted")
               .map((r) => (
                 <form key={r.kind} action={acceptDemo}>
@@ -102,8 +104,8 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                   <SubmitButton pending={t.saving}>{t.acceptDemo(r, slotLabel(nextSlot, new Date(), lang))}</SubmitButton>
                 </form>
               ))}
-          <MarkHandledButton call={current} t={t} />
-        </div>
+          </div>
+        )}
       </section>
 
       <MemoryEditor resident={resident} t={t} lang={lang} />
@@ -265,7 +267,9 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
       <form action={setActive} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <input type="hidden" name="resident_id" value={resident.id} />
         <input type="hidden" name="active" value={resident.active === false ? "1" : "0"} />
-        <SubmitButton pending={t.saving}>{resident.active === false ? t.resumeService : t.stopService}</SubmitButton>
+        <SubmitButton pending={t.saving} confirm={resident.active === false ? undefined : t.stopServiceConfirm(t.name(resident))}>
+          {resident.active === false ? t.resumeService : t.stopService}
+        </SubmitButton>
         <span className="text-zinc-500">{resident.active === false ? t.inactiveHelp : t.stopServiceHelp}</span>
       </form>
     </main>
