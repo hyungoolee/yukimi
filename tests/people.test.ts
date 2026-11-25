@@ -1,9 +1,10 @@
-import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = { value: "ok" as "ok" | "denied" };
+vi.mock("node:fs/promises", { spy: true });
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); } }));
@@ -57,6 +58,35 @@ describe("people in the store", () => {
     await store.assign("sato", { helper: "p_tanaka" });
   });
 
+  it("backfills family metadata once across store copies and preserves the latest LINE registration", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "yukimi-family-"));
+    await cp(path.join(process.cwd(), "data/seed"), dir, { recursive: true });
+    const file = path.join(dir, "people", "p_yuki.json");
+    const old = JSON.parse(await readFile(file, "utf8"));
+    delete old.family_of;
+    await writeFile(file, JSON.stringify({ ...old, code: "12345678" }));
+
+    vi.stubEnv("DATA_DIR", dir);
+    try {
+      vi.resetModules();
+      const reader = await import("@/lib/store");
+      vi.resetModules();
+      const writer = await import("@/lib/store");
+
+      const [person] = await Promise.all([
+        reader.getPerson("p_yuki"),
+        writer.updatePerson("p_yuki", (p) => ({ ...p, line_id: "U_yuki", code: undefined })),
+      ]);
+      expect(person?.family_of).toBe("sato");
+      const saved = await reader.getPerson("p_yuki");
+      expect(saved).toMatchObject({ family_of: "sato", line_id: "U_yuki" });
+      expect(saved?.code).toBeUndefined();
+      expect(vi.mocked(readdir).mock.calls.filter(([at]) => at === path.join(dir, "residents"))).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("gives a disk from before people had files its people from the seed, once, keeping everything else", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "yukimi-old-"));
     await mkdir(path.join(dir, "residents"));
@@ -79,6 +109,7 @@ describe("people in the store", () => {
     vi.resetModules(); // a restart: nothing is converted twice, and a registration made since is kept
     const again = await import("@/lib/store");
     expect((await again.getResident("sato"))!.helper.line_id).toBe("U_kept");
+    expect((await again.getPerson("p_yuki"))!.family_of).toBe("sato");
     expect(JSON.parse(await readFile(path.join(dir, "residents", "sato.json"), "utf8")).helper).toBe("p_tanaka");
     vi.unstubAllEnvs();
   });
@@ -95,9 +126,9 @@ describe("managing people", () => {
     await actions.editPerson(form({ person_id: sasaki.id, name: "  " })); // a name is required
     expect((await store.getPerson(sasaki.id))!.name).toBe("佐々木 花");
 
-    await actions.assignRoles(form({ resident_id: "suzuki", helper: "p_tanaka", second_contact: sasaki.id, snow_volunteer: "" }));
+    await actions.assignRoles(form({ resident_id: "suzuki", helper: sasaki.id, second_contact: "p_takada", snow_volunteer: "" }));
     const suzuki = (await store.getResident("suzuki"))!;
-    expect([suzuki.helper.id, suzuki.second_contact.id, suzuki.snow_volunteer.name]).toEqual(["p_tanaka", sasaki.id, ""]);
+    expect([suzuki.helper.id, suzuki.second_contact.id, suzuki.snow_volunteer.name]).toEqual([sasaki.id, "p_takada", ""]);
     expect(suzuki.facts.length).toBeGreaterThan(0); // the rest of the file is untouched
 
     await actions.removePerson(form({ person_id: sasaki.id })); // serves Suzuki-san: refused
@@ -112,6 +143,57 @@ describe("managing people", () => {
     expect((await store.getResident("sato"))!.helper.id).toBe("p_tanaka");
   });
 
+  it("offers a family contact only for their own resident's family post", async () => {
+    const before = (await store.getResident("sato"))!;
+    // Suzuki-san's family (p_takada) can't become Sato-san's family or helper; someone else's helper can't be family.
+    for (const roles of [
+      { helper: "p_tanaka", second_contact: "p_takada", snow_volunteer: "p_yamamoto" },
+      { helper: "p_takada", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" },
+      { helper: "p_tanaka", second_contact: "p_yamamoto", snow_volunteer: "p_yamamoto" },
+    ]) await actions.assignRoles(form({ resident_id: "sato", ...roles }));
+    const sato = (await store.getResident("sato"))!;
+    expect([sato.helper.id, sato.second_contact.id]).toEqual([before.helper.id, before.second_contact.id]);
+  });
+
+  it("adds a family contact tied to one resident, filling the family post only when it is vacant", async () => {
+    await expect(actions.createFamily(form({ resident_id: "sato", name: "ゆきの夫" }))).rejects.toThrow("redirect:/people/p_");
+    const husband = (await store.listPeople()).find((p) => p.name === "ゆきの夫")!;
+    expect(husband).toMatchObject({ family_of: "sato", code: expect.stringMatching(/^\d{8}$/) });
+    expect((await store.getResident("sato"))!.second_contact.id).toBe("p_yuki"); // already held: unchanged
+
+    await store.assign("sato", { second_contact: "" });
+    await expect(actions.createFamily(form({ resident_id: "sato", name: "ゆきの娘" }))).rejects.toThrow("redirect:/people/p_");
+    const daughter = (await store.listPeople()).find((p) => p.name === "ゆきの娘")!;
+    expect((await store.getResident("sato"))!.second_contact.id).toBe(daughter.id);
+
+    await store.assign("sato", { second_contact: "p_yuki" });
+    for (const p of [husband, daughter]) await store.deletePerson(p.id);
+  });
+
+  it("keeps a family assignment saved while a new contact is being created", async () => {
+    await store.assign("sato", { second_contact: "" });
+    const started = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const addPerson = store.addPerson;
+    using create = vi.spyOn(store, "addPerson").mockImplementationOnce(async (...args) => {
+      started.resolve();
+      await resume.promise;
+      return addPerson(...args);
+    });
+
+    const creation = expect(actions.createFamily(form({ resident_id: "sato", name: "New family contact" })))
+      .rejects.toThrow("redirect:/people/p_");
+    await started.promise;
+    try {
+      await actions.assignRoles(form({ resident_id: "sato", helper: "p_tanaka", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" }));
+    } finally {
+      resume.resolve();
+    }
+    await creation;
+    expect(create).toHaveBeenCalledWith("New family contact", undefined, "sato");
+    expect((await store.getResident("sato"))?.second_contact.id).toBe("p_yuki");
+  });
+
   it("removes a LINE registration and hands out a fresh code", async () => {
     await actions.unregister(form({ person_id: "p_tanaka" }));
     const tanaka = (await store.getPerson("p_tanaka"))!;
@@ -124,7 +206,7 @@ describe("managing people", () => {
   it("refuses every change without the dashboard password", async () => {
     auth.value = "denied";
     const f = form({ person_id: "p_tanaka", name: "x", resident_id: "sato" });
-    for (const action of [actions.createPerson, actions.editPerson, actions.removePerson, actions.assignRoles, actions.newCode, actions.unregister]) {
+    for (const action of [actions.createPerson, actions.createFamily, actions.editPerson, actions.removePerson, actions.assignRoles, actions.newCode, actions.unregister]) {
       await expect(action(f)).rejects.toThrow("Unauthorized");
     }
     await expect(actions.sendTestMessage(undefined, f)).rejects.toThrow("Unauthorized");

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { coverage, criticalCount, reach, ROLES, served, type Reach } from "@/lib/coverage";
+import { coverage, criticalCount, eligible, reach, ROLES, served, type Reach } from "@/lib/coverage";
 import { LINE_READY } from "@/lib/env";
 import { listPeople, listResidents } from "@/lib/store";
 import type { Person } from "@/lib/types";
 import { getStrings } from "../lang";
 import { SubmitButton } from "../submit-button";
 import { assignRoles, createPerson } from "./actions";
+import { AddFamily } from "./add-family";
 import { TestMessage } from "./test-message";
 
 const DOT: Record<Reach, string> = { registered: "bg-emerald-600", unregistered: "bg-red-600", none: "bg-red-600" };
@@ -103,7 +104,7 @@ export default async function PeoplePage() {
                     </span>
                     <select name={role} defaultValue={resident[role].id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
                       <option value="">{t.vacant}</option>
-                      {everyone.map((person) => (
+                      {everyone.filter((person) => eligible(person, role, resident)).map((person) => (
                         <option key={person.id} value={person.id}>{person.name}</option>
                       ))}
                     </select>
@@ -112,6 +113,7 @@ export default async function PeoplePage() {
               })}
               <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
             </form>
+            <AddFamily residentId={resident.id} t={t} />
             {gaps.length > 0 && (
               <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
                 {gaps.map((gap) => (

@@ -13,10 +13,16 @@ function file(dir: string, id: string) {
   return path.join(DATA_DIR, dir, `${id}.json`);
 }
 
-// First run on an empty disk: copy the fictional seed residents in.
-// One shared promise, so parallel reads on a fresh disk don't seed twice.
-let seeded: Promise<void> | undefined;
-const ensureSeeded = () => (seeded ??= seed());
+// All copies of the store in this process wait for the same initialization of a data directory.
+const seeding: Map<string, Promise<void>> = ((globalThis as { yukimiSeeding?: Map<string, Promise<void>> }).yukimiSeeding ??=
+  new Map());
+function ensureSeeded() {
+  const pending = seeding.get(DATA_DIR);
+  if (pending) return pending;
+  const initialization = seed();
+  seeding.set(DATA_DIR, initialization);
+  return initialization;
+}
 async function seed() {
   const existing = await readdir(path.join(DATA_DIR, "residents")).catch(() => []);
   if (existing.length === 0) {
@@ -35,6 +41,13 @@ async function seed() {
     const fresh = await json<Stored>(path.join(SEED_DIR, "residents", name));
     const roles = Object.fromEntries(ROLES.map((role) => [role, typeof old[role] === "string" ? old[role] : (fresh?.[role] ?? "")]));
     await write("residents", name.slice(0, -5), { ...old, ...roles });
+  }
+  // A disk seeded before family_of existed: the seed's family contacts get their resident, so each
+  // is offered only as that resident's family. Read directly: the store's own reads wait on this seeding.
+  for (const name of await readdir(path.join(SEED_DIR, "people"))) {
+    const seed = await json<Person>(path.join(SEED_DIR, "people", name));
+    const person = await json<Person>(path.join(DATA_DIR, "people", name));
+    if (seed?.family_of && person && !person.family_of) await write("people", person.id, { ...person, family_of: seed.family_of });
   }
 }
 
@@ -80,8 +93,8 @@ export const listPeople = async () => (await readAll<Person>("people")).sort((a,
 export const deletePerson = (id: string) => rm(file("people", id), { force: true });
 const newCode = () => String(randomInt(1e8)).padStart(8, "0");
 /** A new person, with the code they register on LINE with. */
-export async function addPerson(name: string, phone?: string) {
-  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, code: newCode() };
+export async function addPerson(name: string, phone?: string, family_of?: string) {
+  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, family_of, code: newCode() };
   await write("people", person.id, person);
   return person;
 }
@@ -148,6 +161,12 @@ export function assign(residentId: string, roles: Partial<Record<Role, string>>)
   return queued(`residents/${residentId}`, async () => {
     const stored = await read<Stored>("residents", residentId);
     if (stored) await write("residents", residentId, { ...stored, ...roles });
+  });
+}
+export function assignFamilyIfVacant(residentId: string, personId: string) {
+  return queued(`residents/${residentId}`, async () => {
+    const stored = await read<Stored>("residents", residentId);
+    if (stored && !stored.second_contact) await write("residents", residentId, { ...stored, second_contact: personId });
   });
 }
 export async function listResidents() {

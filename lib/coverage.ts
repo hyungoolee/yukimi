@@ -41,6 +41,14 @@ export function coverage(resident: Resident) {
 export const criticalCount = (residents: Resident[]) =>
   residents.filter((r) => r.active !== false && coverage(r).level === "critical").length;
 
+/**
+ * Who can be picked for a role: a resident's own family for their family contact, and no one's family
+ * for the other roles, so alerts about one resident never go to another resident's family by a slip.
+ * Whoever holds the role now stays a choice (people saved before family_of existed).
+ */
+export const eligible = (person: Person, role: Role, resident: Resident) =>
+  person.id === resident[role].id || (role === "second_contact" ? person.family_of === resident.id : !person.family_of);
+
 /** Each person with the roles they hold and everyone they serve. */
 export function served(person: Person, residents: Resident[]) {
   const roles = ROLES.filter((role) => residents.some((r) => r[role].id === person.id));
