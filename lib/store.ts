@@ -13,10 +13,16 @@ function file(dir: string, id: string) {
   return path.join(DATA_DIR, dir, `${id}.json`);
 }
 
-// First run on an empty disk: copy the fictional seed residents in.
-// One shared promise, so parallel reads on a fresh disk don't seed twice.
-let seeded: Promise<void> | undefined;
-const ensureSeeded = () => (seeded ??= seed());
+// All copies of the store in this process wait for the same initialization of a data directory.
+const seeding: Map<string, Promise<void>> = ((globalThis as { yukimiSeeding?: Map<string, Promise<void>> }).yukimiSeeding ??=
+  new Map());
+function ensureSeeded() {
+  const pending = seeding.get(DATA_DIR);
+  if (pending) return pending;
+  const initialization = seed();
+  seeding.set(DATA_DIR, initialization);
+  return initialization;
+}
 async function seed() {
   const existing = await readdir(path.join(DATA_DIR, "residents")).catch(() => []);
   if (existing.length === 0) {
@@ -155,6 +161,12 @@ export function assign(residentId: string, roles: Partial<Record<Role, string>>)
   return queued(`residents/${residentId}`, async () => {
     const stored = await read<Stored>("residents", residentId);
     if (stored) await write("residents", residentId, { ...stored, ...roles });
+  });
+}
+export function assignFamilyIfVacant(residentId: string, personId: string) {
+  return queued(`residents/${residentId}`, async () => {
+    const stored = await read<Stored>("residents", residentId);
+    if (stored && !stored.second_contact) await write("residents", residentId, { ...stored, second_contact: personId });
   });
 }
 export async function listResidents() {
