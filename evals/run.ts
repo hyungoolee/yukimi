@@ -105,7 +105,7 @@ const nextDay = [
 ].map(([role, message]) => ({ role, message }));
 const second = await curate(sato, open, nextDay, today);
 console.log(`follow-up about the hip or the fall:  ${first.new_follow_ups.some((f) => /腰|転/.test(f.text)) ? "1/1" : "0/1"}`);
-const covered = /食事|睡眠|雪|玄関|外に出|食べ物|食料|買い物|薬が切れ|薬は届|灯油|暖房|ストーブ/;
+const covered = /食事|睡眠|雪|玄関|外に出|食べ物|食料|買い物|薬|灯油|暖房|ストーブ/;
 console.log(`follow-up about the back pain:        ${stuck.new_follow_ups.some((f) => /腰/.test(f.text)) ? "1/1" : "0/1"}`);
 console.log(`covered topics left out:              ${[first, stuck].filter((c) => !c.new_follow_ups.some((f) => covered.test(f.text))).length}/2`);
 console.log(`settled follow-up closed:             ${second.resolved.includes("hip") ? "1/1" : "0/1"}  (new: ${second.new_follow_ups.map((f) => f.text).join(" / ") || "none"})`);
