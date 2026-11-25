@@ -34,6 +34,7 @@
       "locked": true
     }
   ],
+  "follow_ups": [{ "text": "健太さんの模試の結果", "kind": "thread", "days": 3 }],
   "recent_calls": [
     {
       "date": "2026-11-25",
