@@ -153,10 +153,10 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                           <div>{t.messageNotRecorded}</div>
                         </li>,
                       ]
-                    : a.deliveries.map((d) => (
-                        <li key={`${a.type}-${d.role}`} className="rounded border border-zinc-200 p-2">
+                    : a.deliveries.map((d, i) => (
+                        <li key={`${a.type}-${d.role}-${i}`} className="rounded border border-zinc-200 p-2">
                           <div className="text-zinc-500">
-                            → {resident[d.role].name}
+                            → {d.name ?? resident[d.role].name}
                             <span className={d.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
                               {d.sent ? t.messageDelivered : d.registered ? t.messageFailed : t.messageUnregistered}
                             </span>
@@ -210,6 +210,16 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         initial={resident.snow_volunteer.location}
         labels={t.picker}
       />
+      {(resident.snow_next ?? []).map((c, i) => (
+        <LocationPicker
+          key={c.id}
+          residentId={resident.id}
+          who={`snow_next_${i}`}
+          label={c.kind === "business" ? `${c.name}${t.businessMark}` : t.volunteer(c.name)}
+          initial={c.location}
+          labels={t.picker}
+        />
+      ))}
       <form action={setActive} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <input type="hidden" name="resident_id" value={resident.id} />
         <input type="hidden" name="active" value={resident.active === false ? "1" : "0"} />

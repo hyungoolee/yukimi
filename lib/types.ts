@@ -12,6 +12,8 @@ export type Person = {
   location?: LatLng;
   /** Told when a help request reaches nobody or goes unanswered, or a red alert goes unacknowledged (lib/actions.ts). */
   coordinator?: boolean;
+  /** A business that charges for the work, not a volunteer: the family agrees before it is asked (lib/actions.ts). */
+  kind?: "business";
   /** Their LINE registration code, until they use it. */
   code?: string;
 };
@@ -54,6 +56,10 @@ export type Resident = {
   second_contact: Contact;
   helper: Contact;
   snow_volunteer: Contact;
+  /** Who is asked to clear snow after `snow_volunteer`, in order, when nobody before them takes the request. */
+  snow_next?: Contact[];
+  /** The family has agreed, once and for all, that a business may be asked for this resident. */
+  paid_help_ok?: boolean;
   amedas_station: string; // JMA station code
   location?: LatLng; // home, shown on the coordinator's map
   facts: Fact[]; // older files hold plain strings; lib/resident.ts converts them on read
@@ -127,10 +133,19 @@ export type RequestState = {
   done?: boolean;
   /** When the coordinators were told that nobody had taken it. */
   escalated_at?: string;
+  /** How far down the line of people who could do it the request has got (lib/requests.ts helpers). Absent: the first. */
+  asked?: number;
+  /** A business is next: "asked" while the family decides, then their answer. */
+  consent?: "asked" | "yes" | "no";
+  /** The one who took it is a business, so the agent names it without さん. */
+  accepted_business?: boolean;
 };
 /** One message to one person, as it was sent: kept so the dashboard shows history, not a reconstruction. */
 export type Delivery = {
   role: Role;
+  /** The person it went to, when that is not simply whoever holds the role: someone further down the line. */
+  person?: string;
+  name?: string;
   text: string;
   button?: string; // label of the reply button sent with it, if any
   reasons?: string[]; // an alert's reasons for this recipient

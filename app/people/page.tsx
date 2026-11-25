@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { coverage, criticalCount, reach, ROLES, served, type Reach } from "@/lib/coverage";
+import { coverage, criticalCount, reach, ROLES, served, SNOW_NEXT_SLOTS, type Reach } from "@/lib/coverage";
 import { LINE_READY } from "@/lib/env";
 import { listPeople, listResidents } from "@/lib/store";
 import type { Person } from "@/lib/types";
@@ -24,6 +24,9 @@ export default async function PeoplePage() {
     .sort((a, b) => rank[a.level] - rank[b.level]);
 
   const coordinators = everyone.filter((person) => person.coordinator);
+  const option = (person: Person) => (
+    <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
+  );
   const personRow = (person: Person) => {
     const state = reach(person);
     const { roles, residents: theirs } = served(person, residents);
@@ -32,7 +35,7 @@ export default async function PeoplePage() {
         <span className={`inline-block size-2 rounded-full ${DOT[state]}`} />
         <Link href={`/people/${person.id}`} className="font-medium hover:underline">{person.name}</Link>
         <span className="text-zinc-500">
-          {[...roles.map((role) => t.role[role]), ...(theirs.length || !person.coordinator ? [t.serves(theirs.length)] : []), t.reach[state]].join("・")}
+          {[...(person.kind === "business" ? [t.business] : []), ...roles.map((role) => t.role[role]), ...(theirs.length || !person.coordinator ? [t.serves(theirs.length)] : []), t.reach[state]].join("・")}
         </span>
         {state === "registered" && LINE_READY && (
           <span className="ml-auto">
@@ -72,6 +75,7 @@ export default async function PeoplePage() {
       )}
 
       <h2 className="mt-8 font-medium">{t.residentsHeading}</h2>
+      <p className="mt-1 text-sm text-zinc-600">{t.snowLineHelp}</p>
       <ul className="mt-2 space-y-3">
         {rows.map(({ resident, redAlertReaches, gaps, level }) => (
           <li
@@ -88,7 +92,7 @@ export default async function PeoplePage() {
             </div>
             {/* Keyed on who holds the roles, so the menus show a saved change instead of what they held before. */}
             <form
-              key={ROLES.map((role) => resident[role].id).join()}
+              key={[...ROLES.map((role) => resident[role].id), ...(resident.snow_next ?? []).map((c) => c.id), resident.paid_help_ok].join()}
               action={assignRoles}
               className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 text-sm"
             >
@@ -103,13 +107,31 @@ export default async function PeoplePage() {
                     </span>
                     <select name={role} defaultValue={resident[role].id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
                       <option value="">{t.vacant}</option>
-                      {everyone.map((person) => (
-                        <option key={person.id} value={person.id}>{person.name}</option>
-                      ))}
+                      {everyone.map(option)}
                     </select>
                   </label>
                 );
               })}
+              {/* Who is asked to clear snow when the first person doesn't take it, in order. */}
+              {Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => {
+                const current = resident.snow_next?.[i];
+                return (
+                  <label key={i} className="flex flex-col gap-0.5">
+                    <span className="text-zinc-500">
+                      {current && <span className={`mr-1.5 inline-block size-2 rounded-full ${DOT[reach(current)]}`} />}
+                      {t.snowNext(i + 2)}{current ? `（${t.reach[reach(current)]}）` : ""}
+                    </span>
+                    <select name="snow_next" defaultValue={current?.id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
+                      <option value="">{t.vacant}</option>
+                      {everyone.map(option)}
+                    </select>
+                  </label>
+                );
+              })}
+              <label className="flex items-center gap-1.5 py-1">
+                <input type="checkbox" name="paid_help_ok" defaultChecked={resident.paid_help_ok} />
+                {t.paidHelpOk}
+              </label>
               <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
             </form>
             {gaps.length > 0 && (
@@ -136,6 +158,10 @@ export default async function PeoplePage() {
         <label className="flex flex-col gap-0.5">
           <span className="text-zinc-500">{t.personPhone}</span>
           <input name="phone" maxLength={60} className="rounded border border-zinc-300 px-2 py-1" />
+        </label>
+        <label className="flex items-center gap-1.5 py-1">
+          <input type="checkbox" name="business" />
+          {t.business}
         </label>
         <SubmitButton pending={t.saving}>{t.addPerson}</SubmitButton>
       </form>

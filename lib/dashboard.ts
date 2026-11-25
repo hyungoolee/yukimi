@@ -1,4 +1,5 @@
-import { openRequests, type OpenRequest } from "./requests";
+import { snowLine } from "./coverage";
+import { helpers, openRequests, type OpenRequest } from "./requests";
 import type { CallRecord, Contact, LatLng, Resident, Risk } from "./types";
 
 // What the helper list and the coordinator's map both show. One rule, so they can't disagree.
@@ -35,6 +36,7 @@ export type SnowRequest = {
   residentId: string;
   status: "not_sent" | "sent" | "accepted";
   volunteer: string;
+  business: boolean;
   from?: LatLng;
   to?: LatLng;
   km?: number;
@@ -45,11 +47,15 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   const request = openRequests(resident, calls).find((r) => r.kind === "snow");
   if (!request) return undefined;
   const from = resident.location;
-  const to = resident.snow_volunteer.location;
+  // Whoever took it, or else whoever the request has got to in the line.
+  const line = helpers(resident, "snow");
+  const who = (request.status === "accepted" && line.find((c) => c.name === request.who)) || line[request.asked] || resident.snow_volunteer;
+  const to = who.location;
   return {
     residentId: resident.id,
     status: request.status,
-    volunteer: resident.snow_volunteer.name,
+    volunteer: who.name,
+    business: who.kind === "business",
     from,
     to,
     km: from && to ? distanceKm(from, to) : undefined,
@@ -65,16 +71,17 @@ export type MapData = {
   /** Residents with no location yet, so they are not silently missing from the map. */
   unplaced: number;
   /** key: volunteerKey, to select the pin. id: their person record, when they have one. */
-  volunteers: { key: string; id?: string; name: string; location: LatLng }[];
+  volunteers: { key: string; id?: string; name: string; business: boolean; location: LatLng }[];
   requests: SnowRequest[];
 };
 
 export function mapData(rows: Row[], calls: CallRecord[]): MapData {
   const volunteers = new Map<string, MapData["volunteers"][number]>();
   for (const { resident } of rows) {
-    const v = resident.snow_volunteer;
-    // The same volunteer sits in several residents' profiles: one pin each.
-    if (v.location) volunteers.set(volunteerKey(v), { key: volunteerKey(v), id: v.id, name: v.name, location: v.location });
+    for (const v of snowLine(resident)) {
+      // The same volunteer sits in several residents' profiles: one pin each.
+      if (v.location) volunteers.set(volunteerKey(v), { key: volunteerKey(v), id: v.id, name: v.name, business: v.kind === "business", location: v.location });
+    }
   }
   return {
     pins: rows.flatMap(({ resident, call }) =>

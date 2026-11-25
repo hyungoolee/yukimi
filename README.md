@@ -24,6 +24,7 @@ Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set
 4. **Twilio:** buy a voice number, enable Japan under Voice geo permissions, and import the number into ElevenLabs (`ELEVENLABS_PHONE_NUMBER_ID`).
 5. **LINE:** create a Messaging API channel with webhook `<APP_URL>/api/webhooks/line` (`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`). Turn off the channel's auto-reply.
 6. **People:** on the dashboard's 連絡体制 page (`/people`), add each helper, family contact and snow helper and assign them to residents. Each person's page shows an 8-digit code; they add the bot on LINE and send it the code to register.
+   **More than one snow helper:** each resident can have up to three people in line for snow clearing, asked in order; when one doesn't take the request in an hour, the next is asked, and the coordinators hear when the line runs out. Tick 事業者（有料） on a person's page for a business that charges: before it is asked, the family gets a LINE message with 頼む / 頼まない (no answer in 30 minutes counts as no), unless the resident's 有料の除雪は家族の了承済み box is ticked. The price is settled between the family and the business; the app handles no payment.
 7. **Phone number:** open a resident on the dashboard and save the number to call, in international format (`+81…`).
 8. **First call:** press 今すぐ電話.
 9. **Map (optional):** the dashboard's 地図 view shows residents and snow volunteers. Place each pin from the resident's page, under 地図上の位置. The base map is 国土地理院's tiles; keep the credit visible.

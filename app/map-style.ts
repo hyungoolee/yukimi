@@ -14,9 +14,10 @@ export const DEFAULT_CENTER: LatLng = { lat: 43.196, lng: 141.776 };
 // "none" (not called yet) is dark, so the pin still shows on the pale base map.
 export const RISK_COLOR = { red: "#dc2626", yellow: "#f59e0b", green: "#059669", none: "#3f3f46" };
 export const VOLUNTEER_COLOR = "#2563eb";
+export const BUSINESS_COLOR = "#7c3aed";
 
 /** A pin drawn in HTML, so no image files are needed. */
-export function pinHtml(color: string, shape: "circle" | "diamond", selected = false, faded = false) {
+export function pinHtml(color: string, shape: "circle" | "diamond" | "square", selected = false, faded = false) {
   return (
     `<div style="width:20px;height:20px;background:${color};border:2px solid #fff;` +
     `border-radius:${shape === "circle" ? "50%" : "3px"};` +

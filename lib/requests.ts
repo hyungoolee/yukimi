@@ -4,7 +4,7 @@
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
 import { daysBefore, japanDate } from "./trends.ts";
-import type { CallRecord, Resident, Role, Slot } from "./types";
+import type { CallRecord, Contact, Resident, Role, Slot } from "./types";
 
 type RequestDef = {
   /** Who is asked. */
@@ -41,6 +41,41 @@ export const REQUESTS = {
 
 export type RequestKind = keyof typeof REQUESTS;
 export const isRequestKind = (kind: string): kind is RequestKind => Object.hasOwn(REQUESTS, kind);
+
+/**
+ * The people who could do this, in the order they are asked. The first is whoever holds the role,
+ * even when that post is vacant, so a request that reaches nobody is still recorded against it.
+ * Snow clearing can have more people after them, volunteers or businesses (the 連絡体制 page).
+ */
+export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
+  resident[REQUESTS[kind].role],
+  ...(kind === "snow" ? (resident.snow_next ?? []).filter((c) => c.id && c.name) : []),
+];
+
+/**
+ * A business charges, so the family says yes before it is asked, unless they have agreed once and
+ * for all. Never for the family's own job (bringing supplies): they would be asking themselves.
+ */
+export const needsConsent = (resident: Resident, kind: RequestKind, who: Contact) =>
+  who.kind === "business" && !resident.paid_help_ok && REQUESTS[kind].role !== "second_contact";
+
+/**
+ * Who may answer a request's buttons: whoever holds the role, and anyone further down the line the
+ * request has actually been sent to. `calls` are the resident's records.
+ */
+export function askedHelpers(resident: Resident, calls: CallRecord[], kind: RequestKind, requestId: string): Contact[] {
+  const reached = new Set(
+    calls.flatMap((c) =>
+      c.actions.flatMap((a) =>
+        a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId
+          ? (a.deliveries ?? []).flatMap((d) => (d.sent && d.person ? [d.person] : []))
+          : [],
+      ),
+    ),
+  );
+  const [first, ...rest] = helpers(resident, kind);
+  return [first, ...rest.filter((c) => reached.has(c.id!))];
+}
 
 const japanHour = (now: Date) => Number(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit" }));
 const parts = ["am", "pm"] as const;
@@ -81,8 +116,16 @@ export type OpenRequest = {
   since: string;
   /** The coordinators have been told that nobody has taken it. */
   escalated: boolean;
-  /** Who took it, or else who was asked. */
+  /** Who took it, or else who is being asked now. */
   who: string;
+  /** `who` is a business: named without さん. */
+  business: boolean;
+  /** How far down the line the request has got (0: the first person). Past the end: everyone has been tried. */
+  asked: number;
+  /** The family is deciding whether the business that is next may be asked. */
+  awaitingConsent: boolean;
+  /** Place in line and the family's answer, as one value: a check booked for an earlier one is out of date. */
+  stage: string;
   slot?: Slot;
 };
 
@@ -108,14 +151,20 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       const records = calls.flatMap((c) =>
         c.actions.filter((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId).map((a) => ({ at: c.at, a })),
       );
+      const asked = action.asked ?? 0;
+      const current = helpers(resident, kind)[asked];
       return [{
         kind,
         requestId,
         callId: call.id,
+        asked,
+        stage: `${asked}:${action.consent ?? ""}`,
+        awaitingConsent: action.consent === "asked" && action.accepted_by === undefined,
+        business: action.accepted_by !== undefined ? !!action.accepted_business : current?.kind === "business",
         since: records.at(-1)?.at ?? call.at,
         escalated: records.some((r) => r.a.escalated_at),
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
-        who: action.accepted_by || resident[REQUESTS[kind].role].name,
+        who: action.accepted_by || (current ?? resident[REQUESTS[kind].role]).name,
         slot: action.slot,
       }];
     }
@@ -136,11 +185,12 @@ export function helpLine(resident: Resident, calls: CallRecord[], now = new Date
     const def = REQUESTS[r.kind];
     if (r.status === "not_sent") return [];
     if (r.status === "sent") return [`・${def.label.ja}：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。`];
-    if (!r.slot) return [`・${def.label.ja}：${r.who}さんが引き受けた。そう伝え、来る時間は約束しない。`];
+    const who = r.business ? r.who : `${r.who}さん`; // a business is named as it is
+    if (!r.slot) return [`・${def.label.ja}：${who}が引き受けた。そう伝え、来る時間は約束しない。`];
     const when = slotLabel(r.slot, now);
     return passed(r.slot, now)
-      ? [`・${def.label.ja}：${r.who}さんが${when}に${def.visit}だった。${def.check}`]
-      : [`・${def.label.ja}：${r.who}さんが${when}に${def.visit}。そう伝える。`];
+      ? [`・${def.label.ja}：${who}が${when}に${def.visit}だった。${def.check}`]
+      : [`・${def.label.ja}：${who}が${when}に${def.visit}。そう伝える。`];
   });
   return lines.join(" ") || "なし";
 }

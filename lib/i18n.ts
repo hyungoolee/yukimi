@@ -24,7 +24,7 @@ const ja = {
   badge: { red: "すぐ確認", yellow: "訪問リスト", green: "問題なし", none: "通話なし" },
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
-      r.status === "not_sent" ? "送信できていません" : r.status === "sent" ? "返事待ち" : `${r.who}さんが引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
+      r.status === "not_sent" ? "送信できていません" : r.awaitingConsent ? `${r.who}（有料）に頼んでよいか、家族に確認中` : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
     }${r.status === "accepted" ? "" : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
@@ -109,8 +109,8 @@ const ja = {
   noLocation: "この方の位置はまだ登録されていません。",
   placeHome: "自宅を地図で登録",
   openPerson: "詳しく見る",
-  requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted") =>
-    `${volunteer}さんへ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
+  requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted", business = false) =>
+    `${volunteer}${business ? "" : "さん"}へ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
@@ -129,6 +129,11 @@ const ja = {
     snow_unreachable: "除雪の協力員に連絡できません",
   },
   role: { helper: "民生委員", second_contact: "家族", snow_volunteer: "除雪" },
+  snowNext: (n: number) => `除雪（${n}番目に頼む）`,
+  business: "事業者（有料）",
+  businessMark: "（有料）",
+  paidHelpOk: "有料の除雪は家族の了承済み（毎回は確認しない）",
+  snowLineHelp: "除雪は上から順にお願いします。引き受け手がないと次の人へ。事業者（有料）に頼む前には、家族にLINEで確認します。",
   reach: { none: "未定", unregistered: "LINE未登録", registered: "LINE登録済み" },
   coordinator: "コーディネーター（引き受け手のないお願いの連絡先）",
   coordinatorShort: "コーディネーター",
@@ -169,7 +174,7 @@ const en: typeof ja = {
   badge: { red: "Check now", yellow: "Visit list", green: "All fine", none: "No calls" },
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
-      r.status === "not_sent" ? "request could not be sent" : r.status === "sent" ? "asked, waiting for a reply" : `accepted${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
+      r.status === "not_sent" ? "request could not be sent" : r.awaitingConsent ? `asking the family before ${r.who} (paid) is asked` : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
     }${r.status === "accepted" ? "" : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
@@ -254,8 +259,8 @@ const en: typeof ja = {
   noLocation: "This resident has no location yet.",
   placeHome: "Place their home",
   openPerson: "Open their page",
-  requestStatus: (_volunteer, status) =>
-    `Snow volunteer: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
+  requestStatus: (volunteer, status) =>
+    `${volunteer}: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
   home: "Home",
   volunteer: () => "Snow volunteer",
@@ -274,6 +279,11 @@ const en: typeof ja = {
     snow_unreachable: "The snow helper can't be reached",
   },
   role: { helper: "Helper", second_contact: "Family", snow_volunteer: "Snow helper" },
+  snowNext: (n) => `Snow helper (asked ${n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`})`,
+  business: "Business (charges)",
+  businessMark: " (paid)",
+  paidHelpOk: "Family has agreed to paid snow clearing (don't ask each time)",
+  snowLineHelp: "Snow helpers are asked in order; if nobody takes the request it moves to the next. Before a business (paid) is asked, the family is asked on LINE.",
   reach: { none: "Nobody assigned", unregistered: "Not on LINE", registered: "On LINE" },
   coordinator: "Coordinator (told when a help request has nobody on it)",
   coordinatorShort: "Coordinators",

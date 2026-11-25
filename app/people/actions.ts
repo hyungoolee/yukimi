@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ROLES } from "@/lib/coverage";
+import { ROLES, serves, SNOW_NEXT_SLOTS } from "@/lib/coverage";
 import { dashboardAccess } from "@/lib/env";
 import { push, text } from "@/lib/line";
 import { addPerson, assign, deletePerson, getPerson, listResidents, renewCode, updatePerson } from "@/lib/store";
@@ -20,7 +20,7 @@ export async function createPerson(formData: FormData) {
   await requireAccess();
   const name = field(formData, "name");
   if (!name) return;
-  const person = await addPerson(name, field(formData, "phone") || undefined);
+  const person = await addPerson(name, field(formData, "phone") || undefined, formData.get("business") === "on" ? "business" : undefined);
   redirect(`/people/${person.id}`);
 }
 
@@ -29,7 +29,8 @@ export async function editPerson(formData: FormData) {
   const name = field(formData, "name");
   if (!name) return;
   const coordinator = formData.get("coordinator") === "on" || undefined;
-  await updatePerson(field(formData, "person_id"), (p) => ({ ...p, name, phone: field(formData, "phone") || undefined, coordinator }));
+  const kind = formData.get("business") === "on" ? ("business" as const) : undefined;
+  await updatePerson(field(formData, "person_id"), (p) => ({ ...p, name, phone: field(formData, "phone") || undefined, coordinator, kind }));
   revalidatePath("/", "layout");
 }
 
@@ -37,12 +38,15 @@ export async function editPerson(formData: FormData) {
 export async function removePerson(formData: FormData) {
   await requireAccess();
   const id = field(formData, "person_id");
-  if ((await listResidents()).some((r) => ROLES.some((role) => r[role].id === id))) return;
+  if ((await listResidents()).some((r) => serves(r, id))) return;
   await deletePerson(id);
   redirect("/people");
 }
 
-/** Who holds each of a resident's three roles. An empty choice leaves the post vacant. */
+/**
+ * Who holds each of a resident's three roles, and who is asked to clear snow after the first person.
+ * An empty choice leaves the post vacant.
+ */
 export async function assignRoles(formData: FormData) {
   await requireAccess();
   const roles: Record<string, string> = {};
@@ -51,7 +55,15 @@ export async function assignRoles(formData: FormData) {
     if (id && !(await getPerson(id))) return;
     roles[role] = id;
   }
-  await assign(field(formData, "resident_id"), roles);
+  // In the order chosen, each person once, and never the one already first in line.
+  const snow_next: string[] = [];
+  for (const raw of formData.getAll("snow_next").slice(0, SNOW_NEXT_SLOTS)) {
+    const id = String(raw).normalize("NFKC").trim().slice(0, 60);
+    if (!id || id === roles.snow_volunteer || snow_next.includes(id)) continue;
+    if (!(await getPerson(id))) return;
+    snow_next.push(id);
+  }
+  await assign(field(formData, "resident_id"), { ...roles, snow_next, paid_help_ok: formData.get("paid_help_ok") === "on" || undefined });
   revalidatePath("/", "layout");
 }
 
