@@ -68,7 +68,6 @@ const agentConfig = {
           name: "佐藤",
           introducer: "娘のゆきさん",
           facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
-          recent_calls: "2026-11-25：元気。孫の健太の模試の結果を気にしていた。",
           follow_ups: "なし",
           care_notes: "なし",
           briefing: "なし",
