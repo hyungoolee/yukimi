@@ -3,14 +3,26 @@ import type { Resident } from "@/lib/types";
 import { addFactAction, deleteFactAction, editFactAction, restoreFactAction, retireFactAction, saveCareNotes } from "../../actions";
 import { japanTime } from "../../ui";
 import { InlineText } from "./inline-text";
+import { translateMemory } from "@/lib/translate";
 
 const button = "rounded border border-zinc-300 px-2 py-0.5 hover:bg-zinc-50";
 
 /** What Yukimi remembers about a resident, for the helper to read and correct. */
-export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Strings; lang: Lang }) {
+export async function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Strings; lang: Lang }) {
   const id = <input type="hidden" name="resident_id" value={resident.id} />;
   const retired = resident.retired_facts ?? [];
   const log = [...(resident.memory_log ?? [])].reverse();
+  // English view: the Japanese stays (it is what Yukimi reads and what the helper edits), with English under it.
+  const english =
+    lang === "en"
+      ? await translateMemory([
+          ...[...resident.facts, ...retired].map((f) => f.text),
+          resident.care_notes ?? "",
+          ...log.flatMap((e) => [e.before ?? "", e.text ?? ""]),
+        ])
+      : undefined;
+  const en = (text?: string) => (text && english?.get(text)) || "";
+  const gloss = (text?: string) => en(text) && <span className="block text-xs text-zinc-500">{en(text)}</span>;
 
   return (
     <section className="mt-6 text-sm">
@@ -18,14 +30,18 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
       <ul className="mt-2 space-y-1">
         {resident.facts.map((fact) => (
           <li key={fact.id} className="group flex items-start gap-2">
-            <InlineText
-              action={editFactAction}
-              fields={{ resident_id: resident.id, fact_id: fact.id }}
-              value={fact.text}
-              empty=""
-              label={t.editFact}
-              maxLength={80}
-            />
+            {/* Once open, the field takes the row, as it did before the English line wrapped it. */}
+            <div className="min-w-0 has-[form]:flex-1">
+              <InlineText
+                action={editFactAction}
+                fields={{ resident_id: resident.id, fact_id: fact.id }}
+                value={fact.text}
+                empty=""
+                label={t.editFact}
+                maxLength={80}
+              />
+              {gloss(fact.text)}
+            </div>
             {/* Facts the model learned on a call are the ones to check, so their label stands out, with the day. */}
             <span className={`shrink-0 pt-0.5 text-xs ${fact.source === "call" && !fact.locked ? "text-amber-700" : "text-zinc-400"}`}>
               {t.factSource[fact.source]}
@@ -65,6 +81,7 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
           multiline
         />
       </div>
+      {gloss(resident.care_notes)}
 
       {retired.length > 0 && (
         <details className="mt-3">
@@ -72,7 +89,7 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
           <ul className="mt-1 space-y-1">
             {retired.map((fact) => (
               <li key={fact.id} className="flex items-center gap-2">
-                <span className="flex-1 text-zinc-600">{fact.text}</span>
+                <span className="flex-1 text-zinc-600">{fact.text}{gloss(fact.text)}</span>
                 <span className="text-xs text-zinc-500">{fact.retired}</span>
                 <form action={restoreFactAction}>
                   {id}
@@ -99,6 +116,11 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
                 <span className="text-zinc-500">{japanTime(entry.at, lang)}　{t.logBy(entry.by)}　</span>
                 {t.logOps[entry.op]}
                 {entry.before ? `：${entry.before} → ${entry.text ?? ""}` : entry.text ? `：${entry.text}` : ""}
+                {(en(entry.before) || en(entry.text)) && (
+                  <span className="block text-xs text-zinc-500">
+                    {entry.before ? `${en(entry.before)} → ${en(entry.text)}` : en(entry.text)}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
