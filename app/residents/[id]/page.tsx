@@ -16,7 +16,7 @@ import { LocationPicker } from "./location-picker";
 import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
-import { slotChoices, slotLabel } from "@/lib/requests";
+import { REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -188,6 +188,19 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                 </p>
               ))}
             </details>
+          )}
+          {call.actions.map((a) =>
+            a.type === "request" && a.told?.transcript ? (
+              <details key={a.kind} className="mt-3 text-sm">
+                <summary className="cursor-pointer text-zinc-500">{t.showNewsTranscript(REQUESTS[a.kind].label[lang])}</summary>
+                {a.told.transcript.map((line, i) => (
+                  <p key={i} className="mt-1">
+                    <span className="text-zinc-500">{line.role === "user" ? resident.name : "AI"}：</span>
+                    {line.message}
+                  </p>
+                ))}
+              </details>
+            ) : null,
           )}
         </section>
       ))}

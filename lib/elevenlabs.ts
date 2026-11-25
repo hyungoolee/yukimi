@@ -31,26 +31,43 @@ async function callVariables(resident: Resident, attempt: number) {
 /** Whether a call's variables told its agent to run the winter checks (lib/weather.ts describeWeather). */
 export const toldToRunWinterChecks = (variables: { winter_check?: unknown }) => String(variables.winter_check ?? "").startsWith("必要");
 
-/** Ask ElevenLabs to phone the resident. attempt 2 is the missed-call retry. */
-export async function placeCall(resident: Resident, attempt = 1) {
-  const variables = await callVariables(resident, attempt);
+async function outboundCall(resident: Resident, clientData: object, agentId = env("ELEVENLABS_AGENT_ID")) {
   const res = await fetch("https://api.elevenlabs.io/v1/convai/twilio/outbound-call", {
     signal: AbortSignal.timeout(15_000),
     method: "POST",
     headers: { "xi-api-key": env("ELEVENLABS_API_KEY"), "content-type": "application/json" },
     body: JSON.stringify({
-      agent_id: env("ELEVENLABS_AGENT_ID"),
+      agent_id: agentId,
       agent_phone_number_id: env("ELEVENLABS_PHONE_NUMBER_ID"),
       to_number: resident.phone,
-      conversation_initiation_client_data: { dynamic_variables: variables },
+      conversation_initiation_client_data: clientData,
     }),
   });
   const body = await res.json();
   if (!res.ok || !body.conversation_id) {
     throw new Error(`ElevenLabs outbound call failed (${res.status}): ${JSON.stringify(body)}`);
   }
-  await savePending(body.conversation_id, { resident_id: resident.id, attempt, winter_checks: toldToRunWinterChecks(variables) });
   return body.conversation_id as string;
+}
+
+/** Ask ElevenLabs to phone the resident. attempt 2 is the missed-call retry. */
+export async function placeCall(resident: Resident, attempt = 1) {
+  const variables = await callVariables(resident, attempt);
+  const id = await outboundCall(resident, { dynamic_variables: variables });
+  await savePending(id, { resident_id: resident.id, attempt, winter_checks: toldToRunWinterChecks(variables) });
+  return id;
+}
+
+/**
+ * A short call that only tells the resident that someone is coming (lib/actions.ts newsStep), placed by
+ * the news agent (agent/news.md). `purpose: "news"` tells the post-call webhook this is not a check-in.
+ */
+export async function placeNewsCall(resident: Resident, news: string, request: { call_id: string; request_kind: string }) {
+  const variables = { resident_id: resident.id, name: resident.name, news, purpose: "news", ...request };
+  const id = await outboundCall(resident, { dynamic_variables: variables }, env("ELEVENLABS_NEWS_AGENT_ID"));
+  // Counted as a call in progress, so no other call rings her phone at the same time.
+  await savePending(id, { resident_id: resident.id, attempt: 1, news: request });
+  return id;
 }
 
 /** A one-time token and the call's variables, for a call taken in the browser instead of on a phone. */

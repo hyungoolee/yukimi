@@ -6,7 +6,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const { placeDailyCalls, UNPLACED } = await import("@/lib/daily");
-const { missed } = await import("@/lib/ladder");
+const { missed, retryStep } = await import("@/lib/ladder");
 const store = await import("@/lib/store");
 
 // Seed call times: Sato 09:00, Suzuki 09:30, Takahashi 10:00. Japan is UTC+9.
@@ -95,6 +95,30 @@ describe("daily calls", () => {
     for (let i = 0; i < 3; i++) await placeDailyCalls(new Date());
     expect(called().filter((id) => id !== "takahashi")).toEqual([]);
     await store.clearPending("conv_busy");
+  });
+
+  it("calls someone after the call that had her line ends, instead of dropping her for the day", async () => {
+    vi.useFakeTimers({ now: at("09:30") });
+    await store.savePending("conv_busy", { resident_id: "suzuki", attempt: 1, news: { call_id: "c", request_kind: "snow" } });
+    for (let i = 0; i < 3; i++) await placeDailyCalls(at("09:30"));
+    expect(called()).toEqual(["sato"]);
+    await store.clearPending("conv_busy");
+    await placeDailyCalls(at("09:31"));
+    expect(called()).toEqual(["sato", "suzuki"]);
+    vi.useRealTimers();
+  });
+
+  it("puts off the missed-call retry while a news call has her line, rather than counting it as missed", async () => {
+    await missed("sato", 1);
+    const ladder = (await store.getLadder("sato"))!;
+    await store.savePending("conv_busy", { resident_id: "sato", attempt: 1, news: { call_id: "c", request_kind: "snow" } });
+    await retryStep("sato", ladder.at);
+    expect(called()).toEqual([]);
+    expect((await store.getLadder("sato"))!.stage).toBe("retry");
+    expect((await store.listTasks()).filter((t) => t.kind === "ladder_retry" && t.ladder_at === ladder.at)).toHaveLength(2);
+    await store.clearPending("conv_busy");
+    await retryStep("sato", ladder.at);
+    expect(called()).toEqual(["sato"]);
   });
 
   it("does not phone late or tell the family: a call the app was down for is noted for the coordinator", async () => {
