@@ -78,10 +78,10 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
   // The record as it is now: someone may have tapped the button while the re-send was going out.
   const now = await updateCall(callId, () => ({ alert_rounds: round }));
   if (now?.handled || now?.acknowledged_by) return;
-  // Once only: noted on the call when it reached someone, so a later round tries again only if it did not.
+  // Each coordinator once: those reached are noted on the call, so a later round tries only the rest.
   // With no call record there is nowhere to note it, so that case gets the one round.
-  if (now ? round >= COORDINATORS_AT_RESEND && !now.coordinators_told_at : round === COORDINATORS_AT_RESEND) {
-    await tellCoordinators(resident, callId, Object.keys(recipients) as Role[]);
+  if (now ? round >= COORDINATORS_AT_RESEND : round === COORDINATORS_AT_RESEND) {
+    await tellCoordinators(resident, callId, Object.keys(recipients) as Role[], now?.coordinators_told ?? []);
   }
 }
 
@@ -89,12 +89,18 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
  * Tells the coordinators that nobody has answered a red alert. No reasons: an alert about thoughts
  * of dying goes to the helper alone, so the detail stays off other phones.
  */
-async function tellCoordinators(resident: Resident, callId: string, alreadySent: Role[]) {
+async function tellCoordinators(resident: Resident, callId: string, alreadySent: Role[], told: string[]) {
   const has = new Set(alreadySent.map((role) => resident[role].line_id));
-  const coordinators = (await listPeople()).filter((p) => p.coordinator && p.line_id && !has.has(p.line_id));
+  const coordinators = (await listPeople()).filter((p) => p.coordinator && p.line_id && !has.has(p.line_id) && !told.includes(p.id));
   const body = `【未確認・要確認】${resident.name}さんの緊急の通知に、まだ誰も応答していません。${link(resident)}`;
   const sent = await Promise.all(coordinators.map((p) => push(p.line_id, [text(body), ackButton(resident, callId)])));
-  if (sent.some(Boolean)) await updateCall(callId, () => ({ coordinators_told_at: new Date().toISOString() }));
+  const reached = coordinators.filter((_, i) => sent[i]).map((p) => p.id);
+  if (!reached.length) return;
+  const at = new Date().toISOString();
+  await updateCall(callId, (c) => ({
+    coordinators_told_at: c.coordinators_told_at ?? at,
+    coordinators_told: [...(c.coordinators_told ?? []), ...reached],
+  }));
 }
 
 /** Asks the person for this kind of help, with a button for each half-day they could come. */
