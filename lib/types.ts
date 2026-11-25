@@ -58,6 +58,12 @@ export type Resident = {
   snow_volunteer: Contact;
   /** Who is asked to clear snow after `snow_volunteer`, in order, when nobody before them takes the request. */
   snow_next?: Contact[];
+  /**
+   * The businesses that were marked as charging when this resident's line was last saved: the paid
+   * help agreed for this resident. A business in the line that is not here (someone marked as a
+   * business afterwards) is not asked until the line is saved again. See lib/requests.ts canAsk.
+   */
+  paid_ok?: string[];
   amedas_station: string; // JMA station code
   location?: LatLng; // home, shown on the coordinator's map
   facts: Fact[]; // older files hold plain strings; lib/resident.ts converts them on read
@@ -133,6 +139,8 @@ export type RequestState = {
   escalated_at?: string;
   /** How far down the line of people who could do it the request has got (lib/requests.ts helpers). Absent: the first. */
   asked?: number;
+  /** The person at that place when they were asked. Someone else there now has not been asked. */
+  asked_id?: string;
   /** When whoever is being asked now runs out of time. Epoch ms. */
   step_due?: number;
   /** The one who took it is a business, so the agent names it without さん. */
