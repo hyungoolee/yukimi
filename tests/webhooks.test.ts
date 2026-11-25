@@ -22,7 +22,8 @@ const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ fact_c
 const noFacts: import("@/lib/curate").Curation["fact_changes"] = { add: [], update: [], retire: [] };
 vi.mock("@/lib/curate", () => ({ curate }));
 const placeCall = vi.fn(async () => "conv_retry");
-vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall }));
+const placeNewsCall = vi.fn<(resident: { id: string }, news: string, request: { call_id: string; request_kind: string }) => Promise<string>>(async () => "conv_news");
+vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall, placeNewsCall }));
 
 // after() needs a real request; here its work is collected and awaited by the test.
 const background: Promise<unknown>[] = [];
@@ -93,6 +94,7 @@ beforeEach(async () => {
   extract.mockClear();
   curate.mockClear();
   placeCall.mockClear();
+  placeNewsCall.mockClear();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     lineCalls.push({ url, body: JSON.parse(String(init.body)) });
     return new Response("{}");
@@ -1186,6 +1188,112 @@ describe("help requests", () => {
     await heard("conv_h3", false, false);
     expect((await requestsOf("conv_h1")).map((a) => a.done)).toEqual([true, true]);
     expect(await helpStatus()).toBe("なし");
+  });
+
+  describe("telling the resident someone is coming", () => {
+    // 10:00 in Japan tomorrow, so the slots and the daytime window don't depend on when the tests run,
+    // and these calls are newer than the ones earlier tests saved.
+    const day = new Date(Date.now() + 86400_000).toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+    beforeEach(() => vi.useFakeTimers({ now: new Date(`${day}T10:00:00+09:00`), toFake: ["Date"] }));
+    afterEach(async () => {
+      vi.useRealTimers();
+      await store.updateResident("suzuki", (r) => ({ ...r, phone: "" }));
+      // Back in the past, so these calls are not the newest for the tests that follow.
+      for (const id of ["conv_n1", "conv_n2"]) {
+        const call = await store.getCall(id);
+        if (call) await store.saveCall({ ...call, at: "2026-01-01T00:00:00Z" });
+      }
+    });
+    const newsTasks = async () => (await store.listTasks()).filter((t) => t.kind === "news_call");
+    const newsWebhook = (kind: string, transcript: object[]) =>
+      elevenlabs(signedElevenLabs(JSON.stringify({
+        type: "post_call_transcription",
+        data: { conversation_id: `conv_news_${kind}`, transcript,
+          conversation_initiation_client_data: { dynamic_variables: { resident_id: "suzuki", purpose: "news", call_id: "conv_n1", request_kind: kind } } },
+      })));
+
+    it("phones her once someone accepts, tells the family about snow, and never counts it as a check-in", async () => {
+      const { slotChoices } = await import("@/lib/requests");
+      await closeRequests("suzuki");
+      await store.updateResident("suzuki", (r) => ({ ...r, phone: "+819000000001" }));
+      const [first] = slotChoices();
+      await heard("conv_n1", true, true);
+      lineCalls.length = 0;
+      await tap(`accept:conv_n1:snow:${first.date}:${first.part}`, "U_volunteer");
+      await tap(`accept:conv_n1:supplies:${first.date}:${first.part}`, "U_family");
+      // The family hears about the snow; for supplies they are the ones who accepted.
+      expect(pushes()).toMatchObject([{ to: "U_family", messages: [{ text: "山本さんが今日の午前、鈴木さん宅の雪かきに伺います。" }] }]);
+      expect(await newsTasks()).toHaveLength(2);
+
+      // Each news call holds her line, as a real one does: the second waits for the first to end.
+      placeNewsCall.mockImplementation(async (resident, _news, request) => {
+        await store.savePending(`conv_news_${request.request_kind}`, { resident_id: resident.id, attempt: 1, news: request });
+        return `conv_news_${request.request_kind}`;
+      });
+      await after(0);
+      expect(placeNewsCall).toHaveBeenCalledOnce();
+      const [, firstNews, { request_kind: firstKind }] = placeNewsCall.mock.calls[0];
+      await store.clearPending(`conv_news_${firstKind}`);
+      await after(11 * 60);
+      const news = placeNewsCall.mock.calls.map(([, text]) => text);
+      expect(news[0]).toBe(firstNews);
+      expect([...news].sort()).toEqual(["山本さんが今日の午前に雪かきに伺います。", "隣の高田さんが今日の午前に足りないものを届けに伺います。"].sort());
+      for (const kind of ["snow", "supplies"]) await store.clearPending(`conv_news_${kind}`);
+      placeNewsCall.mockReset().mockImplementation(async () => "conv_news");
+
+      extract.mockClear();
+      await newsWebhook("snow", [{ role: "agent", message: "お知らせです。" }, { role: "user", message: "はい、わかりました。" }]);
+      await newsWebhook("supplies", [{ role: "agent", message: "お知らせです。" }]);
+      expect(extract).not.toHaveBeenCalled();
+      expect(await store.getCall("conv_news_snow")).toBeNull();
+      expect(await store.getLadder("suzuki")).toBeNull();
+      expect(await requestsOf("conv_n1")).toMatchObject([
+        { kind: "snow", told: { result: "answered", transcript: [{}, { message: "はい、わかりました。" }] } },
+        { kind: "supplies", told: { result: "no_answer" } },
+      ]);
+
+      // Told once: a repeat of the step phones nobody.
+      placeNewsCall.mockClear();
+      const { newsStep } = await import("@/lib/actions");
+      await newsStep({ resident_id: "suzuki", call_id: "conv_n1", request_kind: "snow" });
+      expect(placeNewsCall).not.toHaveBeenCalled();
+    });
+
+    it("waits for the morning at night, and notes a resident with no phone", async () => {
+      const { slotChoices } = await import("@/lib/requests");
+      const { newsStep } = await import("@/lib/actions");
+      await closeRequests("suzuki");
+      const [first] = slotChoices();
+      await heard("conv_n2", true, false);
+      await tap(`accept:conv_n2:snow:${first.date}:${first.part}`, "U_volunteer");
+      for (const task of await store.listTasks()) await store.deleteTask(task.id);
+
+      await newsStep({ resident_id: "suzuki", call_id: "conv_n2", request_kind: "snow" }, new Date(`${day}T05:00:00+09:00`));
+      expect((await newsTasks()).map((t) => new Date(t.due).toISOString())).toEqual([new Date(`${day}T08:00:00+09:00`).toISOString()]);
+      expect(placeNewsCall).not.toHaveBeenCalled();
+
+      await newsStep({ resident_id: "suzuki", call_id: "conv_n2", request_kind: "snow" });
+      expect(placeNewsCall).not.toHaveBeenCalled();
+      expect((await requestsOf("conv_n2"))[0].told).toMatchObject({ result: "no_phone" });
+    });
+
+    it("calls nobody when a check-in since the accept has told her already", async () => {
+      const { slotChoices } = await import("@/lib/requests");
+      const { newsStep } = await import("@/lib/actions");
+      await closeRequests("suzuki");
+      await store.updateResident("suzuki", (r) => ({ ...r, phone: "+819000000001" }));
+      const [first] = slotChoices();
+      await heard("conv_n3", true, false);
+      await tap(`accept:conv_n3:snow:${first.date}:${first.part}`, "U_volunteer");
+      vi.setSystemTime(Date.now() + 60_000);
+      await store.saveCall({ id: "conv_n3_checkin", resident_id: "suzuki", at: new Date().toISOString(), kind: "call", risk: "green", reasons: [], actions: [] });
+      await newsStep({ resident_id: "suzuki", call_id: "conv_n3", request_kind: "snow" });
+      expect(placeNewsCall).not.toHaveBeenCalled();
+      for (const id of ["conv_n3", "conv_n3_checkin"]) {
+        const call = (await store.getCall(id))!;
+        await store.saveCall({ ...call, at: "2026-01-01T00:00:00Z" });
+      }
+    });
   });
 
   it("asks again when nobody took it, and the old message's button answers the new request", async () => {
