@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { startBrowserCall, translateCaption } from "../../actions";
 import { liveCall } from "../../refresh";
+import { stripAudioTags } from "@/lib/audio-tags";
 
 type Labels = { start: string; connecting: string; end: string; micError: string; agent: string; you: string; waiting: string };
 type Caption = { key: string; fromAgent: boolean; text: string; english?: string };
@@ -66,7 +67,7 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
           router.refresh(); // the call's notes arrive a few seconds after it ends
         },
         onError: (message) => setError(message),
-        onMessage: ({ message, source, event_id }) => caption(`${source}-${event_id}`, source === "ai", message),
+        onMessage: ({ message, source, event_id }) => caption(`${source}-${event_id}`, source === "ai", stripAudioTags(message)),
       });
       // The page was left while connecting: hang up now, since the cleanup above had nothing to end yet.
       if (gone.current) return void call.current.endSession();

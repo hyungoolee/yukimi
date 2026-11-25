@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { recordTold, runActions } from "@/lib/actions";
+import { stripAudioTags } from "@/lib/audio-tags";
 import { toldToRunWinterChecks, verifySignature } from "@/lib/elevenlabs";
 import { env } from "@/lib/env";
 import { missed } from "@/lib/ladder";
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   const news = variables?.purpose === "news" && variables.call_id ? { call_id: String(variables.call_id), request_kind: String(variables.request_kind) } : pending?.news;
   if (news) {
     after(async () => {
-      const transcript: Turn[] = (data.transcript ?? []).filter((t: Turn) => t.message).map((t: Turn) => ({ role: t.role, message: t.message }));
+      const transcript: Turn[] = (data.transcript ?? []).filter((t: Turn) => t.message).map((t: Turn) => ({ role: t.role, message: stripAudioTags(t.message) }));
       const answered = type === "post_call_transcription" && transcript.some((t) => t.role === "user");
       await recordTold(news.call_id, news.request_kind, {
         at: new Date().toISOString(),
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       } else if (type === "post_call_transcription") {
         const transcript: Turn[] = (data.transcript ?? [])
           .filter((t: Turn) => t.message)
-          .map((t: Turn) => ({ role: t.role, message: t.message }));
+          .map((t: Turn) => ({ role: t.role, message: stripAudioTags(t.message) }));
         // Nobody spoke: a silent pickup counts as a missed call.
         if (!transcript.some((t) => t.role === "user")) {
           if (byPhone) await missed(residentId, attempt);

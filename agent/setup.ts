@@ -95,8 +95,9 @@ const agentConfig = {
       model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_v3_conversational",
       speed: 0.9,
       stability: 0.4,
-      // Off: the voice was chosen without audio tags, and a tag inside say_exactly would break "read it word for word".
-      expressive_mode: false,
+      // On: the agent may add audio tags such as [warmly]. They are kept out of say_exactly (agent/prompt.md,
+      // agent/news.md) and taken out of transcripts and captions (lib/audio-tags.ts).
+      expressive_mode: true,
     },
     // Seconds of silence before the agent prompts the resident again.
     turn: {
