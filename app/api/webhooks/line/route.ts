@@ -54,14 +54,15 @@ export async function POST(request: Request) {
           }
         }
       } else if (kind === "decline" && isRequestKind(rest[0])) {
-        // "decline:<request>:<kind>": the person asked can't come. Only theirs to say while it is their turn.
+        // "decline:<request>:<kind>:<turn>": the person asked can't come. Only theirs to say, and only for the turn
+        // the card was sent for.
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
         if (resident && userId) {
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === rest[0] && r.requestId === id);
-          const current = open && !open.exhausted ? helpers(resident, open.kind)[open.asked] : undefined;
-          const theirs = !!current && current.line_id === userId && (!open!.askedId || current.id === open!.askedId);
-          const passed = theirs && open!.status === "sent" && (await declineRequest(resident, open!));
+          const current = open && !open.exhausted && open.askedId ? helpers(resident, open.kind).find((c) => c.id === open.askedId) : undefined;
+          const theirs = !!current && current.line_id === userId;
+          const passed = theirs && open!.status === "sent" && (await declineRequest(resident, open!, Number(rest[1])));
           await reply(
             event.replyToken,
             passed

@@ -153,6 +153,8 @@ export type RequestState = {
   step_due?: number;
   /** Everyone sent this request on this run of the line, by person id, in order. Not asked again on it. */
   tried?: string[];
+  /** Everyone in line has had their turn on this run, or could not be asked: the line has run out. */
+  ended?: boolean;
   /** The one who took it is a business, so the agent names it without さん. */
   accepted_business?: boolean;
   /** How the news that someone is coming reached the resident (lib/actions.ts newsStep). */

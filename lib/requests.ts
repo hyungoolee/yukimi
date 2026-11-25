@@ -78,18 +78,14 @@ export const tellsFamily = (kind: RequestKind, who: Contact) => who.kind === "bu
 export const stageKey = (s: Pick<RequestState, "asked" | "asked_id" | "step_due">) => `${s.asked ?? 0}:${s.asked_id ?? ""}:${s.step_due ?? ""}`;
 
 /**
- * Where in the line to go on from when the person asked has had their turn (or said they can't come).
- * Found by who they are, not by their old place: people may have been added, removed or reordered
- * since. Still in line: whoever is after them. Taken out: the first person not yet sent this request.
+ * Where in the line to go on from when the person asked has had their turn (or said they can't come):
+ * the start of the line as it is now. Everyone already sent the request on this run is skipped there
+ * (lib/actions.ts askFrom), so the next person asked is the first one in today's order not yet asked,
+ * however the line was edited meanwhile: someone added, removed or moved ahead is not missed.
  */
-export function nextFrom(resident: Resident, request: Pick<OpenRequest, "kind" | "asked" | "askedId" | "tried">) {
-  const line = helpers(resident, request.kind);
-  if (!request.askedId) return request.asked + 1; // a record from before people were tracked by id
-  const at = line.findIndex((c) => c.id === request.askedId);
-  if (at >= 0) return at + 1;
-  const tried = new Set(request.tried ?? []);
-  const next = line.findIndex((c) => !c.id || !tried.has(c.id));
-  return next >= 0 ? next : line.length;
+export function nextFrom(request: Pick<OpenRequest, "asked" | "tried">) {
+  // A record from before people were tracked: nobody to skip by name, so on from the old place.
+  return request.tried?.length ? 0 : request.asked + 1;
 }
 
 /**
@@ -207,14 +203,21 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         c.actions.filter((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId).map((a) => ({ at: c.at, a })),
       );
       const asked = action.asked ?? 0;
-      const current = helpers(resident, kind)[asked];
+      const line = helpers(resident, kind);
+      // Who has it: found by who they are, since the line may have been edited during their turn.
+      const current = action.asked_id ? line.find((c) => c.id === action.asked_id) : line[asked];
+      // The line has run out only when the record says so, not when an edit has left the old place
+      // empty: then the request goes on to whoever in today's line is not yet asked.
+      // (A record from before turns were tracked: run out when nobody holds the role.)
+      const tracked = action.asked !== undefined || action.asked_id !== undefined || action.ended !== undefined;
+      const exhausted = action.accepted_by === undefined && (tracked ? action.ended === true : !current);
       return [{
         kind,
         requestId,
         callId: call.id,
         asked,
         askedId: action.asked_id,
-        exhausted: action.accepted_by === undefined && !current,
+        exhausted,
         stage: stageKey(action),
         stepDue: action.step_due,
         tried: action.tried,
