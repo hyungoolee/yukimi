@@ -388,6 +388,33 @@ describe("the line changes while someone has the request", () => {
     expect(await open()).toMatchObject({ askedId: third, escalated: false });
   });
 
+  it("asks someone moved ahead of the person waiting, before telling the coordinators", async () => {
+    await store.assign("sato", { snow_next: [second, third] });
+    await raise();
+    await after(25); // the first's turn ends: the second is asked
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+    await store.assign("sato", { snow_next: [third, second] }); // the third moved ahead of the second
+    await after(50);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_third"]);
+    expect(await open()).toMatchObject({ askedId: third, escalated: false });
+  });
+
+  it("goes on to someone not yet asked when the line is cut short under the person waiting", async () => {
+    let fourth = "";
+    fourth = (await store.addPerson("木村")).id;
+    await store.updatePerson(fourth, (p) => ({ ...p, line_id: "U_fourth" }));
+    await store.assign("sato", { snow_next: [second, third] });
+    await raise();
+    await after(25);
+    await after(50);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_third"]); // the third, last in line, has it
+    await store.assign("sato", { snow_next: [fourth] }); // shorter: the third is gone, someone new is in
+    expect((await open()).exhausted).toBe(false);
+    await after(75);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_third", "U_fourth"]);
+    expect((await open()).escalated).toBe(false);
+  });
+
   it("does not ask anyone twice on the same run when the line is reordered", async () => {
     await store.assign("sato", { snow_next: [second, third] });
     await raise();
@@ -438,6 +465,35 @@ describe("a helper who can't come", () => {
     await tap(cant(pushed[0]), "U_volunteer"); // then says no
     expect(replies.at(-1)).toBe("すでに引き受け手が決まっています。ありがとうございます。");
     expect(to()).toEqual(["U_volunteer", "U_family"]);
+  });
+
+  it("does nothing from a card sent on an earlier run of the line", async () => {
+    const id = await raise();
+    await after(25);
+    await after(50); // the line runs out; the coordinators are told
+    const old = cant(pushed[0]);
+    pushed.length = 0;
+    await raise(id); // a later call starts the line again: the volunteer gets a fresh card
+    expect(to()).toEqual(["U_volunteer"]);
+    await tap(old, "U_volunteer"); // the earlier card
+    expect(to()).toEqual(["U_volunteer"]);
+    expect(await open()).toMatchObject({ askedId: "p_yamamoto", status: "sent" });
+    await tap(cant(pushed[0]), "U_volunteer"); // the fresh card works
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+  });
+
+  it("passes it on once when the same button is tapped twice while the next message is still going out", async () => {
+    await store.assign("sato", { snow_next: [business] });
+    await raise();
+    let release = () => {};
+    held = { to: "U_business", release: new Promise((done) => (release = done)) };
+    const first = tap(cant(pushed[0]), "U_volunteer");
+    await vi.waitFor(() => expect(held).toBeUndefined()); // the business's message is on its way and held
+    await tap(cant(pushed[0]), "U_volunteer"); // the same button again
+    release();
+    await first;
+    expect(to().filter((t) => t === "U_business")).toHaveLength(1);
+    expect(to().filter((t) => t === "U_family")).toHaveLength(1);
   });
 
   it("moves it on once when the tap and the timeout come together", async () => {

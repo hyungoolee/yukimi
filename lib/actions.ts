@@ -119,13 +119,14 @@ const isRequest = (kind: RequestKind) => (a: { type: string; kind?: string }) =>
 export const CANT_COME = "行けません";
 
 /** Asks one person for this kind of help, with a button for each half-day they could come. */
-async function sendRequest(resident: Resident, callId: string, request: RequestAction, who: Contact, first: boolean): Promise<Delivery> {
+async function sendRequest(resident: Resident, callId: string, request: RequestAction, who: Contact, first: boolean, turn: number): Promise<Delivery> {
   const { kind, request_id: id = callId } = request;
   const body = REQUESTS[kind].message(resident.name);
   const choices = [
     ...choicesFor(kind).map((slot) => ({ label: slotLabel(slot), data: `accept:${id}:${kind}:${slot.date}:${slot.part}` })),
     // Saying no at once hands it to the next person, instead of leaving it with them until their time runs out.
-    { label: CANT_COME, data: `decline:${id}:${kind}` },
+    // Carries this turn's deadline: a card from an earlier turn can't end a later one. A reminder keeps the turn.
+    { label: CANT_COME, data: `decline:${id}:${kind}:${turn}` },
   ];
   const button = choices.map((c) => c.label).join(" / ");
   // What she said she needs, so the person knows what to bring. Call notes, not fixed wording: marked as such.
@@ -172,11 +173,11 @@ async function askFrom(resident: Resident, callId: string, request: RequestActio
   const tried = ((await getCall(callId))?.actions.find(isRequest(kind)) as RequestState | undefined)?.tried ?? [];
   for (let i = from; i < line.length; i++) {
     if (!canAsk(resident, line[i]) || (line[i].id && tried.includes(line[i].id!))) continue;
-    const asked = await sendRequest(resident, callId, request, line[i], i === 0);
+    const due = Date.now() + waitFor(resident, kind);
+    const asked = await sendRequest(resident, callId, request, line[i], i === 0, due);
     deliveries.push(asked);
     if (!asked.sent) continue;
-    const due = Date.now() + waitFor(resident, kind);
-    const stage = { asked: i, asked_id: line[i].id, step_due: due, tried: line[i].id ? [...tried, line[i].id!] : tried };
+    const stage = { asked: i, asked_id: line[i].id, step_due: due, tried: line[i].id ? [...tried, line[i].id!] : tried, ended: false };
     await record(callId, kind, stage, deliveries, true);
     await scheduleCheck(resident.id, request.request_id ?? callId, kind, due, callId, stageKey(stage));
     if (tellsFamily(kind, line[i])) {
@@ -186,7 +187,7 @@ async function askFrom(resident: Resident, callId: string, request: RequestActio
     }
     return { deliveries, reached: true };
   }
-  await record(callId, kind, { asked: line.length, asked_id: undefined, step_due: undefined, tried }, deliveries);
+  await record(callId, kind, { asked: line.length, asked_id: undefined, step_due: undefined, tried, ended: true }, deliveries);
   return { deliveries, reached: false };
 }
 
@@ -199,7 +200,8 @@ async function endTurn(open: OpenRequest) {
   const isIt = isRequest(open.kind);
   return !!(await updateCall(open.callId, (c) => {
     const a = c.actions.find(isIt);
-    if (!a || a.accepted_by !== undefined || stageKey(a) !== open.stage) return null;
+    // Already ended by the other of the two (step_due -1): nothing more to do here.
+    if (!a || a.accepted_by !== undefined || a.step_due === -1 || stageKey(a) !== open.stage) return null;
     return { actions: c.actions.map((x) => (isIt(x) ? { ...x, step_due: -1 } : x)) };
   }));
 }
@@ -208,9 +210,10 @@ async function endTurn(open: OpenRequest) {
  * The person asked tapped 行けません: on to the next in line now, or the coordinators if there is nobody.
  * False when it isn't their turn any more (someone took it, or it has moved on).
  */
-export async function declineRequest(resident: Resident, open: OpenRequest) {
-  if (open.status !== "sent" || open.exhausted || !(await endTurn(open))) return false;
-  if (await advance(resident, open.callId, open.kind, nextFrom(resident, open))) return true;
+export async function declineRequest(resident: Resident, open: OpenRequest, turn: number) {
+  // The card is from this turn, not an earlier one of the same request.
+  if (open.status !== "sent" || open.exhausted || turn !== open.stepDue || !(await endTurn(open))) return false;
+  if (await advance(resident, open.callId, open.kind, nextFrom(open))) return true;
   await checkRequest({ resident_id: resident.id, call_id: open.requestId, request_kind: open.kind });
   return true;
 }
@@ -340,7 +343,7 @@ export async function checkRequest({ resident_id, call_id: requestId = "", reque
   if (round === 1 && !open.exhausted) {
     // Their own "can't come" may be moving it on this instant: only one of the two does.
     if (open.stepDue !== undefined && !(await endTurn(open))) return;
-    if (await advance(resident, open.callId, kind, nextFrom(resident, open))) return;
+    if (await advance(resident, open.callId, kind, nextFrom(open))) return;
   }
   // From here the coordinators are told, once per request, and only about a line that has run out:
   // a try left over from an earlier run must not speak during someone's turn.
@@ -380,12 +383,12 @@ export async function runActions(resident: Resident, callId: string, risk: Risk,
       const requestId = a.request_id ?? callId;
       // A reminder while the request is still with someone: it stays with them, and so does their deadline.
       const current = requestId === callId ? undefined : await inFlight(resident, callId, a.kind, requestId);
-      const who = current && helpers(resident, a.kind)[current.asked];
-      if (current && who && who.id === current.askedId && canAsk(resident, who)) {
+      const who = current && helpers(resident, a.kind).find((c) => !!c.id && c.id === current.askedId);
+      if (current && who && canAsk(resident, who)) {
         // The same person hears again. The family was told when a business was first asked: not twice.
-        const again = await sendRequest(resident, callId, a, who, current.asked === 0);
+        const again = await sendRequest(resident, callId, a, who, current.asked === 0, current.stepDue);
         // sent: it reached them on the earlier call
-        const kept = { asked: current.asked, asked_id: current.askedId, step_due: current.stepDue, tried: current.tried };
+        const kept = { asked: current.asked, asked_id: current.askedId, step_due: current.stepDue, tried: current.tried, ended: false };
         await record(callId, a.kind, kept, [again], true);
         await scheduleCheck(resident.id, requestId, a.kind, current.stepDue, callId, stageKey(kept));
         return { ...a, sent: true, deliveries: [again] };
@@ -394,7 +397,9 @@ export async function runActions(resident: Resident, callId: string, risk: Risk,
       // their own time and, for a business, the family told. Otherwise from the top of the line.
       // Someone asked: if they don't take it in time it moves down the line, and at the end of the
       // line the coordinators hear. Reached nobody: they hear now.
-      const { deliveries, reached } = await askFrom(resident, callId, a, current && who ? current.asked : 0);
+      // Carry who has been asked on this run, so they are not asked again; then the first not yet asked.
+      if (current) await record(callId, a.kind, { tried: current.tried, ended: false });
+      const { deliveries, reached } = await askFrom(resident, callId, a, current ? nextFrom(current) : 0);
       if (!reached) await checkRequest({ resident_id: resident.id, call_id: requestId, request_kind: a.kind });
       return { ...a, sent: reached, deliveries };
     }),
