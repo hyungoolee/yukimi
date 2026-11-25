@@ -63,7 +63,7 @@ export async function assignRoles(formData: FormData) {
     if (!(await getPerson(id))) return;
     snow_next.push(id);
   }
-  await assign(field(formData, "resident_id"), { ...roles, snow_next, paid_help_ok: formData.get("paid_help_ok") === "on" || undefined });
+  await assign(field(formData, "resident_id"), { ...roles, snow_next });
   revalidatePath("/", "layout");
 }
 

@@ -146,7 +146,7 @@ export function updateResident(id: string, change: (resident: Resident) => Resid
   });
 }
 /** Puts a person in a role for a resident; an empty id leaves the post vacant. */
-export function assign(residentId: string, roles: Partial<Record<Role, string>> & { snow_next?: string[]; paid_help_ok?: boolean }) {
+export function assign(residentId: string, roles: Partial<Record<Role, string>> & { snow_next?: string[] }) {
   return queued(`residents/${residentId}`, async () => {
     const stored = await read<Stored>("residents", residentId);
     if (stored) await write("residents", residentId, { ...stored, ...roles });

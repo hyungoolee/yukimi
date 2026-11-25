@@ -12,7 +12,7 @@ export type Person = {
   location?: LatLng;
   /** Told when a help request reaches nobody or goes unanswered, or a red alert goes unacknowledged (lib/actions.ts). */
   coordinator?: boolean;
-  /** A business that charges for the work, not a volunteer: the family agrees before it is asked (lib/actions.ts). */
+  /** A business that charges for the work, not a volunteer: the family is told when it is asked (lib/actions.ts). */
   kind?: "business";
   /** Their LINE registration code, until they use it. */
   code?: string;
@@ -58,8 +58,6 @@ export type Resident = {
   snow_volunteer: Contact;
   /** Who is asked to clear snow after `snow_volunteer`, in order, when nobody before them takes the request. */
   snow_next?: Contact[];
-  /** The family has agreed, once and for all, that a business may be asked for this resident. */
-  paid_help_ok?: boolean;
   amedas_station: string; // JMA station code
   location?: LatLng; // home, shown on the coordinator's map
   facts: Fact[]; // older files hold plain strings; lib/resident.ts converts them on read
@@ -135,13 +133,7 @@ export type RequestState = {
   escalated_at?: string;
   /** How far down the line of people who could do it the request has got (lib/requests.ts helpers). Absent: the first. */
   asked?: number;
-  /**
-   * A business is next and the family has been asked whether it may be. `id` is that one question's
-   * own id and `business` the person it is about, so a button on an older card, or a card about a
-   * business since replaced, can't answer it. No `answer` yet: they are still deciding.
-   */
-  consent?: { id: string; business: string; answer?: "yes" | "no" };
-  /** When whoever is being asked now (a helper, or the family about a business) runs out of time. Epoch ms. */
+  /** When whoever is being asked now runs out of time. Epoch ms. */
   step_due?: number;
   /** The one who took it is a business, so the agent names it without さん. */
   accepted_business?: boolean;
