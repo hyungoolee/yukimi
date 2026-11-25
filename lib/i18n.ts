@@ -14,6 +14,17 @@ function waited(r: OpenRequest, lang: "ja" | "en") {
   return hours ? `${hours}時間前から` : `${minutes}分前から`;
 }
 
+/** How the news that someone is coming reached the resident (lib/actions.ts newsStep). */
+function told(r: OpenRequest, lang: "ja" | "en") {
+  if (!r.told) return "";
+  const time = new Date(r.told.at).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+  const text = {
+    ja: { placed: "お知らせの電話をかけています", answered: `${time}に電話でお伝えしました`, no_answer: "お知らせの電話に出ませんでした", no_phone: "電話番号がないためお知らせしていません", failed: "お知らせの電話をかけられませんでした" },
+    en: { placed: "calling with the news", answered: `told by phone ${time}`, no_answer: "news call not answered", no_phone: "not told: no phone number", failed: "news call could not be placed" },
+  }[lang][r.told.result];
+  return lang === "ja" ? `・${text}` : ` · ${text}`;
+}
+
 const ja = {
   switchTo: "English",
   title: "見守りリスト",
@@ -26,7 +37,7 @@ const ja = {
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
       r.status === "not_sent" ? "送信できていません" : r.exhausted ? "順番の全員に頼みましたが、引き受け手がいません" : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
-    }${r.status === "accepted" ? "" : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
+    }${r.status === "accepted" ? told(r, "ja") : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
@@ -72,6 +83,7 @@ const ja = {
   needs: "困りごと",
   none: "なし",
   showTranscript: "会話を見る",
+  showNewsTranscript: (label: string) => `${label}のお知らせの電話を見る`,
   history: "これまでのまとめ",
   memory: "覚えていること",
   factSource: { intake: "登録時", call: "通話から", helper: "手入力" },
@@ -119,6 +131,7 @@ const ja = {
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
+  volunteerLocation: "除雪の拠点",
   picker: { set: "登録済み", unset: "未登録", place: "地図で登録", change: "変更", save: "この位置で保存", saving: "保存中…", hint: "地図をクリックして位置を決める" },
   people: "連絡体制",
   peopleIntro: "もしものとき、だれに知らせが届くか。届かないところを先に表示します。",
@@ -180,7 +193,7 @@ const en: typeof ja = {
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
       r.status === "not_sent" ? "request could not be sent" : r.exhausted ? "everyone in line was asked and nobody took it" : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
-    }${r.status === "accepted" ? "" : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
+    }${r.status === "accepted" ? told(r, "en") : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
@@ -226,6 +239,7 @@ const en: typeof ja = {
   needs: "Needs",
   none: "None",
   showTranscript: "Show conversation",
+  showNewsTranscript: (label) => `Show the news call (${label})`,
   history: "Earlier summaries",
   memory: "What Yukimi remembers",
   factSource: { intake: "from sign-up", call: "from a call", helper: "entered by hand" },
@@ -273,6 +287,7 @@ const en: typeof ja = {
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
   home: "Home",
   volunteer: () => "Snow volunteer",
+  volunteerLocation: "Snow helper base",
   picker: { set: "Set", unset: "Not set", place: "Place on map", change: "Change", save: "Save this spot", saving: "Saving…", hint: "Click the map to choose a spot" },
   people: "Who gets told",
   peopleIntro: "Who is told if something goes wrong, with the gaps first.",

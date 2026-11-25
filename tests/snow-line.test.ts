@@ -107,13 +107,16 @@ describe("a second volunteer in line", () => {
     await raise();
     await after(25);
     await tap(pushed[1].data[0], "U_second");
-    expect(to()).not.toContain("U_family"); // a volunteer coming is not the family's bill
+    // The family hears who is coming, as for any helper; nothing about paying.
+    expect(pushed.at(-1)).toMatchObject({ to: "U_family" });
+    expect(pushed.at(-1)!.text).toContain("佐々木さんが");
+    expect(pushed.at(-1)!.text).not.toContain("有料");
     expect(await open()).toMatchObject({ status: "accepted", who: "佐々木", business: false });
     expect(replies.at(-1)).toContain("承りました");
     await tap(pushed[0].data[0], "U_volunteer");
     expect(replies.at(-1)).toBe("すでに引き受け済みです。ありがとうございます。");
     await after(500);
-    expect(to()).toEqual(["U_volunteer", "U_second"]); // nobody else is troubled
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_family"]); // nobody else is troubled
   });
 
   it("records who each message went to", async () => {
@@ -160,8 +163,7 @@ describe("a business in line", () => {
     // The family hears who is coming and when.
     const { slotChoices, slotLabel } = await import("@/lib/requests");
     expect(to()).toEqual(["U_volunteer", "U_business", "U_family", "U_family"]);
-    expect(pushed[3].text).toBe(`【有料の除雪のお願い】佐藤さんの件、北野除雪（有料）が${slotLabel(slotChoices()[0])}に伺います。費用は先方と直接ご相談ください。`);
-    expect((await store.getCall(id))!.actions[0].deliveries).toHaveLength(4);
+    expect(pushed[3].text).toBe(`北野除雪（有料）が${slotLabel(slotChoices()[0])}、佐藤さん宅の雪かきに伺います。費用は先方と直接ご相談ください。`);
     await tap(pushed[1].data[1], "U_business"); // a second tap tells nobody anything new
     expect(to()).toHaveLength(4);
     const sato = (await store.getResident("sato"))!;
@@ -376,6 +378,24 @@ describe("who is in line", () => {
     expect(sato.snow_next!.map((c) => c.name)).toEqual(["北野除雪", "佐々木"]);
     const { serves } = await import("@/lib/coverage");
     expect(serves(sato, second)).toBe(true);
+  });
+
+  it("leaves the rest of the line, and what was agreed for it, alone when only the first place is saved", async () => {
+    await store.assign("sato", { snow_next: [business] });
+    await store.updatePerson(second, (p) => ({ ...p, kind: "business" }));
+    try {
+      await store.assign("sato", { snow_next: [business, second] });
+      await store.updatePerson(second, (p) => ({ ...p, kind: undefined }));
+      await store.assign("sato", { snow_next: [business, second] }); // second is a volunteer here
+      await store.updatePerson(second, (p) => ({ ...p, kind: "business" })); // ticked afterwards
+      // The resident's own page saves the three roles, as its form does.
+      await store.assign("sato", { helper: "p_tanaka", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" });
+      const sato = (await store.getResident("sato"))!;
+      expect(sato.snow_next!.map((c) => c.name)).toEqual(["北野除雪", "佐々木"]);
+      expect(sato.paid_ok).toEqual([business]); // still agreed; the one ticked afterwards still is not
+    } finally {
+      await store.updatePerson(second, (p) => ({ ...p, kind: undefined }));
+    }
   });
 
   it("reads a resident saved before there was a line", async () => {

@@ -34,6 +34,7 @@ const variables = {
   weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
   winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
   help_status: "なし",
+  call_length: "ふつう",
 };
 
 const base = "あなたは北海道で一人暮らしをしている80歳の佐藤さんです。見守り電話に出ています。話し言葉で、一度に1〜2文だけ短く答えてください。聞かれたことに答え、自分からは話を広げすぎないでください。";
@@ -46,7 +47,7 @@ const mild = {
 type Scenario = {
   expectTool: false | "emergency" | "self_harm";
   persona: string;
-  variables?: Partial<typeof variables>; // this scenario's own call variables
+  variables?: Partial<typeof variables> & { news?: string }; // this scenario's own call variables
   expectSay?: string; // the agent must say this somewhere
   /** The agent's first question after the greeting must contain one of these words. */
   opener?: string[];
@@ -58,8 +59,20 @@ type Scenario = {
   never?: RegExp;
   /** The resident leaves early: required questions may go unanswered. */
   leavesEarly?: boolean;
+  /** For the news agent (agent/news.md), not the check-in agent: run only when named, with SIM_AGENT_ID set to it. */
+  newsAgent?: boolean;
 };
 const scenarios: Record<string, Scenario> = {
+  // The news agent: SIM_AGENT_ID=<news agent> pnpm simulate news-call
+  "news-call": {
+    newsAgent: true,
+    expectTool: false,
+    expectSay: "山本",
+    leavesEarly: true, // a news call asks none of the daily questions
+    never: /\d+時|時ごろ|ご家族から|民生委員さんから|お電話でお知らせ/,
+    variables: { news: "山本さんが今日の午後に雪かきに伺います。" },
+    persona: `${base} 状況：雪で玄関が開かず、除雪をお願いしていた。お知らせを聞いたら、何時ごろ来るのかを一度だけたずねる。そのあと「最近ひざが痛くてね」と一言話してから、お礼を言って切る。`,
+  },
   "help-coming": {
     expectTool: false,
     expectSay: "山本",
@@ -87,6 +100,12 @@ const scenarios: Record<string, Scenario> = {
   demo: {
     expectTool: false,
     persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物も薬も灯油もある。孫の健太は模試がよくできた。`,
+  },
+  // The same story with the short demo-mode call: every required question must still be asked.
+  "demo-short": {
+    expectTool: false,
+    variables: { call_length: "短く" },
+    persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物も薬も灯油もある。`,
   },
   "chest-pain": {
     expectTool: "emergency",
@@ -187,7 +206,7 @@ async function call(method: string, path: string, body?: object) {
 const idsFile = new URL("./agent-tests.json", import.meta.url);
 const ids: Record<string, string> = existsSync(idsFile) ? JSON.parse(readFileSync(idsFile, "utf8")) : {};
 const only = process.argv.slice(2);
-const chosen = Object.entries(scenarios).filter(([id]) => !only.length || only.includes(id));
+const chosen = Object.entries(scenarios).filter(([id, s]) => (only.length ? only.includes(id) : !s.newsAgent));
 
 // Create each scenario's test once; update it on later runs so edits here take effect.
 for (const [id, s] of chosen) {

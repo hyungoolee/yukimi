@@ -113,6 +113,7 @@ export default async function PeoplePage() {
                 );
               })}
               {/* Who is asked to clear snow when the first person doesn't take it, in order. */}
+              <input type="hidden" name="snow_line" value="1" />
               {Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => {
                 const current = resident.snow_next?.[i];
                 return (

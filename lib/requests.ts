@@ -1,10 +1,11 @@
 // Help requests: something a call found that one person can come and fix. The agent raises it,
-// that person picks half a day, the resident is told on the next call, and the request closes when
+// that person picks half a day, the resident is phoned with the news (lib/actions.ts newsStep) and told
+// again on the next call, and the request closes when
 // the resident says the problem is gone. One row per kind; the wording is fixed, never generated.
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
 import { daysBefore, japanDate } from "./trends.ts";
-import type { CallRecord, Contact, RequestState, Resident, Role, Slot } from "./types";
+import type { CallRecord, Contact, RequestState, Resident, Role, Slot, Told } from "./types";
 
 type RequestDef = {
   /** Who is asked. */
@@ -18,6 +19,8 @@ type RequestDef = {
   visit: string;
   /** What the agent asks once the time has passed. */
   check: string;
+  /** How the resident is told on the news call: "<name>さんが<when>に" + this. */
+  news: string;
 };
 
 export const REQUESTS = {
@@ -28,6 +31,7 @@ export const REQUESTS = {
     message: (name) => `【除雪のお願い】${name}さん宅の玄関前。雪で外に出られません。行ける時間を押してください。`,
     visit: "雪かきに来る予定",
     check: "雪かきが済んで、玄関から出られるかを聞く。",
+    news: "雪かきに伺います",
   },
   supplies: {
     role: "second_contact",
@@ -36,6 +40,7 @@ export const REQUESTS = {
     message: (name) => `【お届けのお願い】${name}さんが、食料・薬・灯油のどれかが足りないと話しています。何が必要かをご本人に確かめて、届けられる時間を押してください。`,
     visit: "足りないものを届けに来る予定",
     check: "届いて、食料・薬・灯油が足りているかを聞く。",
+    news: "足りないものを届けに伺います",
   },
 } as const satisfies Record<string, RequestDef>;
 
@@ -90,7 +95,10 @@ export function askedHelpers(resident: Resident, calls: CallRecord[], kind: Requ
   return [first, ...rest.filter((c) => reached.has(c.id!))];
 }
 
-const japanHour = (now: Date) => Number(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit" }));
+/** 「山本さん」: some names are saved with their さん already (「隣の高田さん」). */
+export const san = (name: string) => (name.endsWith("さん") ? name : `${name}さん`);
+
+export const japanHour = (now: Date) => Number(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit" }));
 const parts = ["am", "pm"] as const;
 const index = (slot: Slot) => slot.date + (slot.part === "am" ? "0" : "1"); // sorts in time order
 
@@ -144,6 +152,8 @@ export type OpenRequest = {
   /** See stageKey. */
   stage: string;
   slot?: Slot;
+  acceptedAt?: string;
+  told?: Told;
 };
 
 // A request nobody closed stops being talked about after this long: the questions that close it are
@@ -185,6 +195,8 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
         who: action.accepted_by || current?.name || "",
         slot: action.slot,
+        acceptedAt: action.accepted_at,
+        told: action.told,
       }];
     }
     return [];
@@ -203,8 +215,8 @@ export function helpLine(resident: Resident, calls: CallRecord[], now = new Date
   const lines = openRequests(resident, calls, now).flatMap((r) => {
     const def = REQUESTS[r.kind];
     if (r.status === "not_sent") return [];
-    if (r.status === "sent") return [`・${def.label.ja}：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。`];
-    const who = r.business ? r.who : `${r.who}さん`; // a business is named as it is
+    if (r.status === "sent") return [`・${def.label.ja}：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。時間が決まったら電話で知らせると伝える。`];
+    const who = r.business ? r.who : san(r.who); // a business is named as it is
     if (!r.slot) return [`・${def.label.ja}：${who}が引き受けた。そう伝え、来る時間は約束しない。`];
     const when = slotLabel(r.slot, now);
     return passed(r.slot, now)

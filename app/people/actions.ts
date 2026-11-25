@@ -55,6 +55,12 @@ export async function assignRoles(formData: FormData) {
     if (id && !(await getPerson(id))) return;
     roles[role] = id;
   }
+  // The resident's own page chooses the three roles only: the rest of the snow line is left as it is.
+  if (!formData.has("snow_line")) {
+    await assign(field(formData, "resident_id"), roles);
+    revalidatePath("/", "layout");
+    return;
+  }
   // In the order chosen, each person once, and never the one already first in line.
   const snow_next: string[] = [];
   for (const raw of formData.getAll("snow_next").slice(0, SNOW_NEXT_SLOTS)) {

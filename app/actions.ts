@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { acceptRequest, tellFamilyAccepted } from "@/lib/actions";
+import { acceptRequest } from "@/lib/actions";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
@@ -108,8 +108,7 @@ export async function acceptDemo(formData: FormData) {
     // Whoever the request has got to in the line.
     const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === kind && r.callId === callId);
     const who = helpers(resident, kind)[open?.asked ?? 0] ?? resident[REQUESTS[kind].role];
-    const { mine, request } = await acceptRequest(callId, kind, who.name, slotChoices()[0], who.kind === "business");
-    if (mine) await tellFamilyAccepted(resident, callId, kind, who, request?.slot);
+    await acceptRequest(callId, kind, who.name, slotChoices()[0], who.kind === "business");
   }
   revalidatePath("/", "layout");
 }
