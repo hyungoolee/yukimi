@@ -370,6 +370,83 @@ describe("a later call that raises the same request", () => {
   });
 });
 
+describe("the line changes while someone has the request", () => {
+  let third = "";
+  beforeAll(async () => {
+    third = (await store.addPerson("加藤")).id;
+    await store.updatePerson(third, (p) => ({ ...p, line_id: "U_third" }));
+  });
+
+  it("goes on to the next person still in line when the one waiting is taken out", async () => {
+    await store.assign("sato", { snow_next: [second, third] });
+    await raise();
+    await after(25);
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+    await store.assign("sato", { snow_next: [third] }); // the second is taken out during their turn
+    await after(50);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_third"]); // the third is asked, not skipped
+    expect(await open()).toMatchObject({ askedId: third, escalated: false });
+  });
+
+  it("does not ask anyone twice on the same run when the line is reordered", async () => {
+    await store.assign("sato", { snow_next: [second, third] });
+    await raise();
+    await after(25);
+    await store.assign("sato", { snow_volunteer: second, snow_next: ["p_yamamoto", third] }); // reordered
+    await after(50);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_third"]);
+  });
+});
+
+describe("a helper who can't come", () => {
+  beforeEach(() => store.assign("sato", { snow_next: [second] }));
+  const cant = (p: { data: string[] }) => p.data.at(-1)!;
+
+  it("is offered today only, and a button to say no", async () => {
+    const { choicesFor, slotChoices } = await import("@/lib/requests");
+    await raise();
+    expect(pushed[0].data).toHaveLength(choicesFor("snow").length + 1);
+    expect(cant(pushed[0])).toMatch(/^decline:/);
+    const today = slotChoices()[0].date;
+    expect(pushed[0].data.slice(0, -1).every((d) => d.includes(`:${today}:`))).toBe(true);
+  });
+
+  it("passes the request on at once, without waiting for their time to run out", async () => {
+    await raise();
+    await tap(cant(pushed[0]), "U_volunteer");
+    expect(replies.at(-1)).toBe("承知しました。ほかの方にお願いします。ありがとうございます。");
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+    // Their own timeout, when it comes, does nothing more: the second's turn runs its course, then the coordinators hear once.
+    await after(25);
+    await after(500);
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_coordinator"]);
+  });
+
+  it("tells the coordinators at once when the last in line can't come", async () => {
+    await raise();
+    await after(25);
+    await tap(cant(pushed[1]), "U_second");
+    expect(to()).toEqual(["U_volunteer", "U_second", "U_coordinator"]);
+    expect((await open()).escalated).toBe(true);
+  });
+
+  it("is ignored from anyone whose turn it isn't, and once someone has taken it", async () => {
+    await raise();
+    await tap(cant(pushed[0]), "U_second"); // not their turn
+    expect(to()).toEqual(["U_volunteer"]);
+    await tap(pushed[0].data[0], "U_volunteer"); // takes it
+    await tap(cant(pushed[0]), "U_volunteer"); // then says no
+    expect(replies.at(-1)).toBe("すでに引き受け手が決まっています。ありがとうございます。");
+    expect(to()).toEqual(["U_volunteer", "U_family"]);
+  });
+
+  it("moves it on once when the tap and the timeout come together", async () => {
+    await raise();
+    await Promise.all([tap(cant(pushed[0]), "U_volunteer"), after(25)]);
+    expect(to().filter((t) => t === "U_second")).toHaveLength(1);
+  });
+});
+
 describe("who is in line", () => {
   it("keeps the order, survives a save, and blocks deleting someone in it", async () => {
     await store.assign("sato", { snow_next: [business, second] });
