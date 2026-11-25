@@ -39,7 +39,7 @@ describe("open requests", () => {
     const older = call([request("snow", { sent: false })]);
     const newer = call([request("snow"), request("supplies", { accepted_by: "ゆき", slot: slotChoices(morning)[1] })]);
     // The first person in line, nobody further down, no business waiting on the family.
-    const first = { asked: 0, stage: "0:", awaitingConsent: false, business: false };
+    const first = { asked: 0, stage: "0:", exhausted: false, awaitingConsent: false, consent: undefined, stepDue: undefined, business: false };
     expect(openRequests(sato, [newer, older])).toEqual([
       { ...first, kind: "snow", requestId: newer.id, callId: newer.id, since: newer.at, escalated: false, status: "sent", who: "山本", slot: undefined },
       { ...first, kind: "supplies", requestId: newer.id, callId: newer.id, since: newer.at, escalated: false, status: "accepted", who: "ゆき", slot: { date: "2026-11-26", part: "pm" } },

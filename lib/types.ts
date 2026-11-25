@@ -135,8 +135,14 @@ export type RequestState = {
   escalated_at?: string;
   /** How far down the line of people who could do it the request has got (lib/requests.ts helpers). Absent: the first. */
   asked?: number;
-  /** A business is next: "asked" while the family decides, then their answer. */
-  consent?: "asked" | "yes" | "no";
+  /**
+   * A business is next and the family has been asked whether it may be. `id` is that one question's
+   * own id and `business` the person it is about, so a button on an older card, or a card about a
+   * business since replaced, can't answer it. No `answer` yet: they are still deciding.
+   */
+  consent?: { id: string; business: string; answer?: "yes" | "no" };
+  /** When whoever is being asked now (a helper, or the family about a business) runs out of time. Epoch ms. */
+  step_due?: number;
   /** The one who took it is a business, so the agent names it without さん. */
   accepted_business?: boolean;
 };

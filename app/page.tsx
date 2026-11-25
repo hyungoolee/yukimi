@@ -170,7 +170,7 @@ function MapPanel({
             </ResidentCard>
             {request && (
               <p className="mt-2 text-sm text-zinc-600">
-                {t.requestStatus(request.volunteer, request.status, request.business)}
+                {t.requestStatus(request)}
                 {request.km !== undefined && t.straightLine(request.km)}
               </p>
             )}
@@ -226,7 +226,7 @@ function VolunteerCard({
               <Link href={`/?view=map&selected=${encodeURIComponent(resident.id)}`} scroll={false} className="hover:underline">
                 {t.name(resident)}
               </Link>
-              {request && <span className="ml-2 text-zinc-600">{t.requestStatus(request.volunteer, request.status, request.business)}</span>}
+              {request && <span className="ml-2 text-zinc-600">{t.requestStatus(request)}</span>}
             </li>
           );
         })}

@@ -4,7 +4,7 @@
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
 import { daysBefore, japanDate } from "./trends.ts";
-import type { CallRecord, Contact, Resident, Role, Slot } from "./types";
+import type { CallRecord, Contact, RequestState, Resident, Role, Slot } from "./types";
 
 type RequestDef = {
   /** Who is asked. */
@@ -58,6 +58,13 @@ export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
  */
 export const needsConsent = (resident: Resident, kind: RequestKind, who: Contact) =>
   who.kind === "business" && !resident.paid_help_ok && REQUESTS[kind].role !== "second_contact";
+
+/**
+ * Place in line and where the family's answer stands, as one value. A check booked for an earlier
+ * one is out of date: the request has moved on since, and whatever moved it booked its own.
+ */
+export const stageKey = (s: Pick<RequestState, "asked" | "consent">) =>
+  `${s.asked ?? 0}:${s.consent ? `${s.consent.id}:${s.consent.answer ?? "asked"}` : ""}`;
 
 /**
  * Who may answer a request's buttons: whoever holds the role, and anyone further down the line the
@@ -120,11 +127,17 @@ export type OpenRequest = {
   who: string;
   /** `who` is a business: named without さん. */
   business: boolean;
-  /** How far down the line the request has got (0: the first person). Past the end: everyone has been tried. */
+  /** How far down the line the request has got (0: the first person). */
   asked: number;
-  /** The family is deciding whether the business that is next may be asked. */
+  /** Everyone in line has had their turn (or could not be asked) and nobody took it. `who` is then empty. */
+  exhausted: boolean;
+  /** The family is deciding whether the business that is next may be asked. The business has not been asked. */
   awaitingConsent: boolean;
-  /** Place in line and the family's answer, as one value: a check booked for an earlier one is out of date. */
+  /** The family's question about the business that is next, and their answer once given. */
+  consent?: RequestState["consent"];
+  /** When whoever is being asked now runs out of time (epoch ms). Absent on requests from before this was kept. */
+  stepDue?: number;
+  /** See stageKey. */
   stage: string;
   slot?: Slot;
 };
@@ -158,13 +171,16 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         requestId,
         callId: call.id,
         asked,
-        stage: `${asked}:${action.consent ?? ""}`,
-        awaitingConsent: action.consent === "asked" && action.accepted_by === undefined,
+        exhausted: action.accepted_by === undefined && !current,
+        stage: stageKey(action),
+        consent: action.consent,
+        stepDue: action.step_due,
+        awaitingConsent: !!action.consent && !action.consent.answer && action.accepted_by === undefined,
         business: action.accepted_by !== undefined ? !!action.accepted_business : current?.kind === "business",
         since: records.at(-1)?.at ?? call.at,
         escalated: records.some((r) => r.a.escalated_at),
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
-        who: action.accepted_by || (current ?? resident[REQUESTS[kind].role]).name,
+        who: action.accepted_by || current?.name || "",
         slot: action.slot,
       }];
     }

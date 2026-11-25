@@ -29,17 +29,19 @@ export async function POST(request: Request) {
       // "snow_accept:<call>" is the button from before there were time slots.
       const [requestKind, date, part] = kind === "snow_accept" ? ["snow"] : rest;
       if (kind === "consent" && isRequestKind(requestKind)) {
-        // "consent:<request>:<kind>:<yes|no>": the family's answer about asking a business, which charges.
+        // "consent:<request>:<kind>:<yes|no>:<question>": the family's answer about asking a business, which charges.
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
         if (resident && userId && resident.second_contact.line_id === userId) {
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind && r.requestId === id);
-          const yes = date === "yes";
-          const mine = open?.awaitingConsent && (await answerConsent(resident, open, yes));
-          await reply(
-            event.replyToken,
-            !mine ? "この件はもう済んでいます。ありがとうございます。" : yes ? `${open!.who}に依頼します。ありがとうございます。` : "承知しました。依頼しません。",
-          );
+          // Whether this card's question is still the open one, and still in time, is decided where the answer is recorded.
+          const result = open?.awaitingConsent && part ? await answerConsent(resident, open, part, date === "yes") : "closed";
+          await reply(event.replyToken, {
+            asked: `${open?.who}に依頼します。ありがとうございます。`,
+            declined: "承知しました。依頼しません。",
+            late: "お返事の時間を過ぎたため、依頼していません。",
+            closed: "この件はもう済んでいます。ありがとうございます。",
+          }[result]);
         }
       } else if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
         const call = await getCall(id);
