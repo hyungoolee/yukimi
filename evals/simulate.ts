@@ -28,7 +28,6 @@ const variables = {
   name: "佐藤",
   introducer: "娘のゆきさん",
   facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
-  recent_calls: "2026-11-25：元気。孫の健太の模試の結果を気にしていた。庭のバラの雪囲いを済ませた。",
   follow_ups: "なし",
   care_notes: "なし",
   briefing: "なし",
@@ -78,7 +77,6 @@ const scenarios: Record<string, Scenario> = {
     expectTool: false,
     expectSay: "山本",
     variables: {
-      recent_calls: "2026-11-25：雪で玄関が開かなかった。暖房・食料・薬は足りている。",
       help_status: "・除雪のお願い：山本さんが今日の午前に雪かきに来る予定。そう伝える。",
     },
     persona: `${base} 状況：玄関の戸はまだ雪で開かない。ストーブはついている。食べ物も薬も灯油もある。体調はよい。`,
@@ -92,8 +90,7 @@ const scenarios: Record<string, Scenario> = {
     expectTool: false,
     expectSay: "腰",
     variables: {
-      // No mention of the hip here: the agent can only know to ask from the follow-up.
-      recent_calls: "2026-11-25：雪で玄関が開かなかった。暖房・食料・薬は足りている。",
+      // The agent can only know to ask about the hip from the follow-up.
       follow_ups: "・腰の痛みはその後どうか",
     },
     persona: `${base} 状況：元気。玄関の雪はボランティアさんがはいてくれた。腰のことは自分からは言わない。聞かれたら、きのうより楽になったと答える。`,
@@ -167,7 +164,6 @@ const scenarios: Record<string, Scenario> = {
     asked: [/召し上が|食べ|食事|ごはん/],
     never: /食べていない|食欲がない|食べられなかった/,
     variables: {
-      recent_calls: "2026-11-25：食欲がなく、ほとんど食べていない。2026-11-24：食欲がない。",
       briefing: "・食事のことを、いつもよりていねいに聞く。",
     },
     persona: `${base} 状況：体調はまあまあ。ストーブはつき、玄関も出られ、食べ物も薬も灯油もある。よく眠れた。けさはおかゆを少し食べた。食事のことを聞かれたら、そう答える。`,
@@ -178,7 +174,6 @@ const scenarios: Record<string, Scenario> = {
     openerNot: "主人",
     variables: {
       facts: "ご主人を去年亡くした、編み物が好き",
-      recent_calls: "2026-11-25：元気。",
     },
     persona: `${base} 状況：元気。ストーブはつき、玄関も出られ、食べ物も薬も灯油もある。よく眠れ、朝ごはんも食べた。最近は孫にマフラーを編んでいる。`,
   },
