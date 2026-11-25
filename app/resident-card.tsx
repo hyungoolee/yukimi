@@ -55,6 +55,7 @@ export function CallStatus({ call, requests = [], lang, t }: Row & { lang: Lang;
       {call.risk === "red" && !call.handled && call.actions.some((a) => a.type === "alert") && (
         <p className={`mt-1 text-sm ${call.acknowledged_by ? "text-zinc-600" : "font-medium text-red-700"}`}>
           {call.acknowledged_by ? t.alertSeen(call.acknowledged_by) : t.alertUnseen(call.alert_rounds ?? 0)}
+          {!call.acknowledged_by && call.coordinators_told_at && ` · ${t.coordinatorsTold(japanTime(call.coordinators_told_at, lang))}`}
         </p>
       )}
       {requests.map((r) => (
