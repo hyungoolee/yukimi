@@ -80,7 +80,7 @@ describe("what the agent is told about help on its way", () => {
 
   it("promises no time while nobody has taken it", () => {
     expect(helpLine(sato, [call([request("snow")])], morning)).toBe(
-      "・除雪のお願い：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。",
+      "・除雪のお願い：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。時間が決まったら電話で知らせると伝える。",
     );
   });
 

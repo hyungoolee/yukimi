@@ -1,4 +1,4 @@
-import { checkRequest, recheckAlert } from "./actions";
+import { checkRequest, newsStep, recheckAlert } from "./actions";
 import { placeDailyCalls } from "./daily";
 import { confirmStep, retryStep } from "./ladder";
 import { deleteTask, listTasks, type Task } from "./store";
@@ -7,6 +7,7 @@ const run = (task: Task) => {
   if (task.kind === "ladder_retry") return retryStep(task.resident_id, task.ladder_at);
   if (task.kind === "ladder_confirm") return confirmStep(task.resident_id, task.ladder_at);
   if (task.kind === "request_check") return checkRequest(task);
+  if (task.kind === "news_call") return newsStep(task);
   return recheckAlert(task);
 };
 

@@ -151,11 +151,15 @@ export function assign(residentId: string, roles: Partial<Record<Role, string>> 
     const stored = await read<Stored>("residents", residentId);
     if (!stored) return;
     const next = { ...stored, ...roles };
-    // Saving who is in line for snow clearing is the agreement to any business in it, as it is marked now.
+    // Saving who is in line for snow clearing is the agreement to a business in it, as it is marked
+    // now. Only the places this save set count: a form that shows the first place alone agrees
+    // nothing about the people after it, who keep whatever was agreed before.
     if (roles.snow_volunteer !== undefined || roles.snow_next !== undefined) {
+      const saved = new Set([...(roles.snow_volunteer ? [roles.snow_volunteer] : []), ...(roles.snow_next ?? [])]);
+      const was = new Set(stored.paid_ok ?? []);
       const line = [next.snow_volunteer, ...(next.snow_next ?? [])].filter(Boolean);
       const people = await Promise.all(line.map(getPerson));
-      next.paid_ok = people.flatMap((p) => (p?.kind === "business" ? [p.id] : []));
+      next.paid_ok = people.flatMap((p) => (p?.kind === "business" && (saved.has(p.id) || was.has(p.id)) ? [p.id] : []));
     }
     await write("residents", residentId, next);
   });
@@ -229,11 +233,13 @@ export async function claimTrendFiring(residentId: string, trendId: string, date
 }
 
 // A call we placed and are waiting to hear back about, keyed by ElevenLabs conversation ID.
-export type Pending = { resident_id: string; attempt: number; winter_checks?: boolean; at?: number };
+/** `news`: a news call (lib/elevenlabs.ts placeNewsCall), and which request it was about. */
+export type Pending = { resident_id: string; attempt: number; winter_checks?: boolean; at?: number; news?: { call_id: string; request_kind: string } };
 export const savePending = (conversationId: string, p: Pending) => write("pending", conversationId, { ...p, at: Date.now() });
 /** Calls placed and not yet reported back. One that never reports stops counting after 15 minutes. */
-export const callsInProgress = async (now = Date.now(), residentId?: string) =>
-  (await readAll<Pending>("pending")).filter((p) => (p.at ?? 0) > now - 15 * 60_000 && (!residentId || p.resident_id === residentId)).length;
+export const pendingCalls = async (now = Date.now(), residentId?: string) =>
+  (await readAll<Pending>("pending")).filter((p) => (p.at ?? 0) > now - 15 * 60_000 && (!residentId || p.resident_id === residentId));
+export const callsInProgress = async (now = Date.now(), residentId?: string) => (await pendingCalls(now, residentId)).length;
 export const getPending = (conversationId: string) => read<Pending>("pending", conversationId);
 export const clearPending = (conversationId: string) => rm(file("pending", conversationId), { force: true });
 
@@ -279,9 +285,9 @@ export async function resetDemoData() {
 export type Task = {
   id: string;
   due: number; // epoch ms
-  kind: "ladder_retry" | "ladder_confirm" | "alert_recheck" | "request_check";
+  kind: "ladder_retry" | "ladder_confirm" | "alert_recheck" | "request_check" | "news_call";
   resident_id: string;
-  call_id?: string; // for request_check: the call that first asked
+  call_id?: string; // request_check: the call that first asked; news_call: the record holding the request
   record?: string; // for request_check: the call record the request stood on when this was booked
   stage?: string; // for request_check: how far down the line it had got then (lib/actions.ts stageKey)
   request_kind?: RequestKind;

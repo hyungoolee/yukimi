@@ -62,7 +62,7 @@ export function LocationPicker({
   return (
     <details id={`location-${who}`} className="mt-2 scroll-mt-6 text-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <span className="w-28 text-zinc-500">{label}</span>
+        <span className="w-32 text-zinc-500">{label}</span>
         <span className={initial ? "" : "text-amber-700"}>{initial ? labels.set : labels.unset}</span>
         <span className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50">{initial ? labels.change : labels.place}</span>
       </summary>

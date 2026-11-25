@@ -1,9 +1,10 @@
+import { placeNewsCall } from "./elevenlabs";
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
 import { EMERGENCY } from "./rules";
-import { canAsk, helpers, openRequests, REQUESTS, slotChoices, slotLabel, stageKey, tellsFamily, type OpenRequest, type RequestKind } from "./requests";
-import { getCall, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
-import type { Action, AlertReasons, Contact, Delivery, RequestState, Resident, Risk, Role, Slot } from "./types";
+import { canAsk, helpers, japanHour, openRequests, passed, REQUESTS, san, slotChoices, slotLabel, stageKey, tellsFamily, type OpenRequest, type RequestKind } from "./requests";
+import { callsInProgress, getCall, getLadder, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
+import type { Action, AlertReasons, Contact, Delivery, RequestState, Resident, Risk, Role, Slot, Told } from "./types";
 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
 const ACK_MS = DEMO_MODE ? 30_000 : 10 * 60_000;
@@ -207,24 +208,77 @@ export async function acceptRequest(callId: string, kind: RequestKind, name: str
   const isIt = isRequest(kind);
   const saved = await updateCall(callId, (call) =>
     call.actions.some((a) => isIt(a) && a.accepted_by === undefined)
-      ? { actions: call.actions.map((a) => (isIt(a) ? { ...a, accepted_by: name, slot, ...(business ? { accepted_business: true } : {}) } : a)) }
+      ? { actions: call.actions.map((a) => (isIt(a) ? { ...a, accepted_by: name, slot, accepted_at: new Date().toISOString(), ...(business ? { accepted_business: true } : {}) } : a)) }
       : null,
   );
   const request = (saved ?? (await getCall(callId)))?.actions.find(isIt);
+  // Only the first to accept passes the news on; a failure here must not lose the accept itself.
+  if (saved) await announce(saved.resident_id, callId, kind, name, slot, business).catch((e) => console.error("Could not pass on the accept", e));
   return { mine: !!saved, request };
 }
 
-/**
- * A business has taken the request: the family is told who is coming and when, since they will be
- * paying. Kept with the request's other messages. Nothing is sent for a volunteer.
- */
-export async function tellFamilyAccepted(resident: Resident, callId: string, kind: RequestKind, who: Contact, slot?: Slot) {
-  if (!tellsFamily(kind, who)) return;
-  const body = `【有料の${REQUESTS[kind].label.ja}】${resident.name}さんの件、${who.name}（有料）が${slot ? `${slotLabel(slot)}に伺います` : "引き受けました"}。費用は先方と直接ご相談ください。`;
-  const told = await deliver(resident, "second_contact", body, [text(body)], {});
-  await updateCall(callId, (c) => ({
-    actions: c.actions.map((a) => (isRequest(kind)(a) ? { ...a, deliveries: [...(a.deliveries ?? []), told] } : a)),
+/** Someone has said they will come: phone the resident with the news, and for snow, tell the family too. */
+async function announce(residentId: string, callId: string, kind: RequestKind, name: string, slot?: Slot, business = false) {
+  await schedule({ kind: "news_call", resident_id: residentId, call_id: callId, request_kind: kind, due: Date.now() });
+  // For supplies the family is the one who accepted.
+  const resident = await getResident(residentId);
+  if (kind === "snow" && resident) {
+    // A business is named as it is, and the family, who will be paying, is reminded that it charges.
+    const who = business ? `${name}（有料）` : san(name);
+    const paid = business ? "費用は先方と直接ご相談ください。" : "";
+    await push(resident.second_contact.line_id, [text(`${who}が${slot ? `${slotLabel(slot)}、` : ""}${resident.name}さん宅の雪かきに伺います。${paid}`)]);
+  }
+}
+
+// News calls are made in the day only, Japan time.
+const NEWS_FROM = 8;
+const NEWS_UNTIL = 20;
+const WAIT_MS = 10 * 60_000;
+
+/** The next NEWS_FROM o'clock in Japan (UTC+9, no daylight saving), as epoch ms. */
+function nextMorning(now: Date) {
+  const japan = new Date(now.getTime() + 9 * 3600_000);
+  const morning = Date.UTC(japan.getUTCFullYear(), japan.getUTCMonth(), japan.getUTCDate(), NEWS_FROM) - 9 * 3600_000;
+  return morning > now.getTime() ? morning : morning + 24 * 3600_000;
+}
+
+/** What the resident hears: 「山本さんが今日の午後に雪かきに伺います。」 */
+export const newsText = (request: OpenRequest, now = new Date()) =>
+  `${request.business ? request.who : san(request.who)}が${request.slot ? `${slotLabel(request.slot, now)}に` : ""}${REQUESTS[request.kind].news}。`;
+
+/** Saves how the news reached the resident on the request it was about. */
+export const recordTold = (callId: string, kind: string, told: Told) =>
+  updateCall(callId, (call) => ({
+    actions: call.actions.map((a) => (a.type === "request" && a.kind === kind ? { ...a, told } : a)),
   }));
+
+/**
+ * Scheduled step: phone the resident that someone is coming. Skipped once the request is closed, the
+ * time has passed, or she has been told; put off at night, and while another call to her is going on.
+ */
+export async function newsStep({ resident_id, call_id, request_kind: kind }: Pick<Task, "resident_id" | "call_id" | "request_kind">, now = new Date()) {
+  const resident = await getResident(resident_id);
+  if (!resident || resident.active === false || !call_id || !kind) return;
+  const calls = await listCalls(resident_id);
+  const request = openRequests(resident, calls, now).find((r) => r.kind === kind && r.callId === call_id);
+  if (!request || request.status !== "accepted" || request.told || (request.slot && passed(request.slot, now))) return;
+  // A check-in since the accept has told her already (help_status): calling again would repeat it.
+  const acceptedAt = request.acceptedAt;
+  if (acceptedAt && calls.some((c) => c.kind === "call" && c.at > acceptedAt)) return;
+  const later = (due: number) => schedule({ kind: "news_call", resident_id, call_id, request_kind: kind, due });
+  const hour = japanHour(now);
+  if (hour < NEWS_FROM || hour >= NEWS_UNTIL) return later(nextMorning(now));
+  // On the phone, or in the missed-call steps, whose retry must not find her line busy.
+  if ((await callsInProgress(now.getTime(), resident_id)) > 0 || (await getLadder(resident_id))) return later(now.getTime() + WAIT_MS);
+  if (!resident.phone) return recordTold(call_id, kind, { at: now.toISOString(), result: "no_phone" });
+  // Noted as placed at once, so a lost webhook can't bring a second call; the webhook overwrites it.
+  await placeNewsCall(resident, newsText(request, now), { call_id, request_kind: kind }).then(
+    () => recordTold(call_id, kind, { at: now.toISOString(), result: "placed" }),
+    (e) => {
+      console.error(e);
+      return recordTold(call_id, kind, { at: now.toISOString(), result: "failed" });
+    },
+  );
 }
 
 const scheduleCheck = (residentId: string, requestId: string, kind: RequestKind, due: number, record?: string, stage?: string, round = 1) =>

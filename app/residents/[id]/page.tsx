@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getResident, listCalls } from "@/lib/store";
+import { getResident, listCalls, listPeople } from "@/lib/store";
+import { coverage, reach, ROLES } from "@/lib/coverage";
+import { assignRoles } from "../../people/actions";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
@@ -14,7 +16,7 @@ import { LocationPicker } from "./location-picker";
 import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
-import { slotChoices, slotLabel } from "@/lib/requests";
+import { REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -40,10 +42,11 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   const { id } = await params;
   const resident = await getResident(id);
   if (!resident) notFound();
-  const calls = await listCalls(id);
+  const [calls, everyone] = await Promise.all([listCalls(id), listPeople()]);
   const { lang, t } = await getStrings();
   const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
   const [nextSlot] = slotChoices();
+  const { gaps, level } = coverage(resident);
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
@@ -186,6 +189,19 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               ))}
             </details>
           )}
+          {call.actions.map((a) =>
+            a.type === "request" && a.told?.transcript ? (
+              <details key={a.kind} className="mt-3 text-sm">
+                <summary className="cursor-pointer text-zinc-500">{t.showNewsTranscript(REQUESTS[a.kind].label[lang])}</summary>
+                {a.told.transcript.map((line, i) => (
+                  <p key={i} className="mt-1">
+                    <span className="text-zinc-500">{line.role === "user" ? resident.name : "AI"}：</span>
+                    {line.message}
+                  </p>
+                ))}
+              </details>
+            ) : null,
+          )}
         </section>
       ))}
 
@@ -203,10 +219,44 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint }}
       />
       <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
+      {/* The same save as on the People page. Keyed on who holds the roles, so the menus show a saved change. */}
+      <form key={ROLES.map((role) => resident[role].id).join()} action={assignRoles} className="mt-2 space-y-2 text-sm">
+        <input type="hidden" name="resident_id" value={resident.id} />
+        {ROLES.map((role) => (
+          <div key={role} className="flex flex-wrap items-center gap-2">
+            <label htmlFor={`role-${role}`} className="w-32 text-zinc-500">{t.role[role]}</label>
+            <select
+              id={`role-${role}`}
+              name={role}
+              defaultValue={resident[role].id ?? ""}
+              className="w-48 rounded border border-zinc-300 bg-white px-2 py-1"
+            >
+              <option value="">{t.vacant}</option>
+              {everyone.map((person) => (
+                <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
+              ))}
+            </select>
+            <span className={reach(resident[role]) === "registered" ? "text-zinc-500" : "text-red-700"}>
+              {t.reach[reach(resident[role])]}
+            </span>
+          </div>
+        ))}
+        <div className="flex flex-wrap items-center gap-3 sm:pl-34">
+          <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
+          <Link href="/people" className="text-zinc-500 hover:underline">{t.people}</Link>
+        </div>
+        {gaps.length > 0 && (
+          <ul className={`list-disc pl-5 ${level === "critical" ? "font-medium text-red-700" : "text-zinc-700"}`}>
+            {gaps.map((gap) => (
+              <li key={gap}>{t.gap[gap]}</li>
+            ))}
+          </ul>
+        )}
+      </form>
       <LocationPicker
         residentId={resident.id}
         who="snow_volunteer"
-        label={t.volunteer(resident.snow_volunteer.name)}
+        label={t.volunteerLocation}
         initial={resident.snow_volunteer.location}
         labels={t.picker}
       />
