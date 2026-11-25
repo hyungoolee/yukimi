@@ -28,8 +28,11 @@ function Gauge({ label, value, fill, mark, over }: { label: string; value: strin
   );
 }
 
-/** This morning's weather, where it came from, and whether it puts the winter check in today's calls. */
-export function WeatherCard({ weather: w, lang, t }: { weather: WeatherReading; lang: Lang; t: Strings }) {
+/**
+ * This morning's weather, where it came from, and whether it puts the winter check in today's calls.
+ * `compact`: one line, so an open alert below it stays in view.
+ */
+export function WeatherCard({ weather: w, lang, t, compact }: { weather: WeatherReading; lang: Lang; t: Strings; compact?: boolean }) {
   const s = t.weather;
   const winter = isWinter(w);
   const snowy = w.snowfall_24h_cm > 0 || w.snow_depth_cm > 0;
@@ -39,6 +42,17 @@ export function WeatherCard({ weather: w, lang, t }: { weather: WeatherReading; 
       : w.source === "demo"
         ? s.demo(w.date)
         : s.fallback;
+  if (compact)
+    return (
+      <p aria-label={s.title} className="mt-2 flex flex-wrap items-baseline gap-x-3 text-sm text-zinc-600">
+        <span>{snowy ? "❄️" : "🌡️"} {w.temp_c === undefined ? s.low : s.now} {w.temp_c ?? w.low_c}℃</span>
+        <span>{s.snowfall} {w.snowfall_24h_cm} cm</span>
+        <span>{s.depth} {w.snow_depth_cm} cm</span>
+        {winter && <span className="font-medium text-red-800">{s.winterOn}</span>}
+        {w.source === "demo" && <span className="text-sky-800">{s.demo(w.date)}</span>}
+        {w.source === "fallback" && <span className="text-amber-900">⚠ {s.fallback}</span>}
+      </p>
+    );
   return (
     <section aria-label={s.title} className="mt-3 rounded-lg border border-zinc-200 p-4">
       <p className={`inline-block rounded px-2 py-0.5 text-xs ring-1 ${SOURCE[w.source]}`}>

@@ -27,7 +27,15 @@ export type Role = "helper" | "second_contact" | "snow_volunteer";
  * A lasting detail about the resident. Intake facts (given by family or the 社協 at sign-up) and
  * anything the helper has written or edited are locked: the model can't change or retire them.
  */
-export type Fact = { id: string; text: string; since: string; source: "intake" | "call" | "helper"; locked?: boolean };
+export type Fact = {
+  id: string;
+  text: string;
+  /** English for the dashboard's English view, written with the text. Absent when that failed, or on older facts. */
+  en?: string;
+  since: string;
+  source: "intake" | "call" | "helper";
+  locked?: boolean;
+};
 export type RetiredFact = Fact & { retired: string; reason: string };
 
 /** One entry in the record of what changed in a resident's memory, and who changed it. */
@@ -71,6 +79,7 @@ export type Resident = {
   facts: Fact[]; // older files hold plain strings; lib/resident.ts converts them on read
   retired_facts?: RetiredFact[]; // kept, hidden from the agent, restorable
   care_notes?: string; // written by the helper: what to avoid or handle gently
+  care_notes_en?: string; // its English, as for Fact.en
   memory_log?: MemoryChange[]; // newest last
   /** Hashes of facts the helper retired or deleted. The model can't write these back; the text isn't kept. */
   blocked_facts?: string[];

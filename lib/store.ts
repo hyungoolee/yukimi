@@ -293,6 +293,7 @@ export async function resetDemoData() {
       follow_ups: [],
       retired_facts: [],
       care_notes: "",
+      care_notes_en: "",
       memory_log: [],
       blocked_facts: [],
       location: r.location ?? seed.location,

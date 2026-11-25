@@ -10,7 +10,7 @@ import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact,
 import { isRequestKind, openRequests, REQUESTS, restartable, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
-import { translateToEnglish } from "@/lib/translate";
+import { translateNote, translateToEnglish } from "@/lib/translate";
 import { clearLadder, getCall, getPerson, getResident, listCalls, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
@@ -170,18 +170,20 @@ export async function translateCaption(text: string) {
 }
 
 // The helper's edits to what Yukimi remembers. The rules for each live in lib/memory.ts.
-async function editMemory(formData: FormData, change: (resident: Resident, value: string) => Resident) {
+// Text the helper writes is translated once, here, for the English view (lib/translate.ts).
+async function editMemory(formData: FormData, change: (resident: Resident, value: string, en: string) => Resident, translate = false) {
   await requireAccess();
   const residentId = String(formData.get("resident_id"));
   const value = String(formData.get("fact_id") ?? formData.get("text") ?? "");
-  await updateResident(residentId, (r) => change(r, value));
+  const en = translate ? await translateNote(String(formData.get("text") ?? "").trim().slice(0, 300)) : "";
+  await updateResident(residentId, (r) => change(r, value, en));
   revalidatePath(`/residents/${residentId}`);
 }
 
-export const addFactAction = async (formData: FormData) => editMemory(formData, (r, text) => addFact(r, text, japanDate()));
+export const addFactAction = async (formData: FormData) => editMemory(formData, (r, text, en) => addFact(r, text, japanDate(), en), true);
 export const retireFactAction = async (formData: FormData) => editMemory(formData, (r, id) => retireFact(r, id, japanDate()));
 export const restoreFactAction = async (formData: FormData) => editMemory(formData, restoreFact);
 export const deleteFactAction = async (formData: FormData) => editMemory(formData, deleteFact);
-export const saveCareNotes = async (formData: FormData) => editMemory(formData, setCareNotes);
+export const saveCareNotes = async (formData: FormData) => editMemory(formData, setCareNotes, true);
 export const editFactAction = async (formData: FormData) =>
-  editMemory(formData, (r, id) => editFact(r, id, String(formData.get("text") ?? "")));
+  editMemory(formData, (r, id, en) => editFact(r, id, String(formData.get("text") ?? ""), en), true);
