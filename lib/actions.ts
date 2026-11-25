@@ -192,30 +192,39 @@ async function askFrom(resident: Resident, callId: string, request: RequestActio
 }
 
 /**
- * Ends the turn of whoever has the request now, if it is still the turn `open` describes, so that
- * exactly one of their timeout and their own "can't come" moves the request on. False when the turn
- * has already ended or changed.
+ * Ends the turn of whoever has the request now, so the next person can be asked: their time ran out,
+ * or they tapped 行けません. Exactly one of those two ends a turn, and only if it is still the turn
+ * `open` describes. False when it has already ended or changed.
+ *
+ * The step that asks the next person is booked first, as a task due now, and only then is the turn
+ * marked ended (step_due -1). So a stop at any point leaves it runnable: before the mark, the turn's
+ * own timeout still stands and the booked step does nothing; after it, the booked step finds the turn
+ * ended and asks the next person (checkRequest).
  */
-async function endTurn(open: OpenRequest) {
+export async function handOff(open: OpenRequest) {
   const isIt = isRequest(open.kind);
+  const ended = { asked: open.asked, asked_id: open.askedId, step_due: -1 };
+  await schedule({
+    kind: "request_check", resident_id: open.residentId, call_id: open.requestId, request_kind: open.kind,
+    round: 1, due: Date.now(), record: open.callId, stage: stageKey(ended),
+  });
   return !!(await updateCall(open.callId, (c) => {
     const a = c.actions.find(isIt);
-    // Already ended by the other of the two (step_due -1): nothing more to do here.
+    // Already ended by the other of the two: nothing more to do here.
     if (!a || a.accepted_by !== undefined || a.step_due === -1 || stageKey(a) !== open.stage) return null;
     return { actions: c.actions.map((x) => (isIt(x) ? { ...x, step_due: -1 } : x)) };
   }));
 }
 
 /**
- * The person asked tapped 行けません: on to the next in line now, or the coordinators if there is nobody.
+ * The person asked tapped 行けません. Ends their turn; the step booked by handOff asks the next person,
+ * or tells the coordinators if there is nobody (the caller runs it at once: lib/tick.ts runDueTasksNow).
  * False when it isn't their turn any more (someone took it, or it has moved on).
  */
-export async function declineRequest(resident: Resident, open: OpenRequest, turn: number) {
+export async function declineRequest(open: OpenRequest, turn: number) {
   // The card is from this turn, not an earlier one of the same request.
-  if (open.status !== "sent" || open.exhausted || turn !== open.stepDue || !(await endTurn(open))) return false;
-  if (await advance(resident, open.callId, open.kind, nextFrom(open))) return true;
-  await checkRequest({ resident_id: resident.id, call_id: open.requestId, request_kind: open.kind });
-  return true;
+  if (open.status !== "sent" || open.exhausted || turn !== open.stepDue) return false;
+  return handOff(open);
 }
 
 /** Moves an open request on to the next person who can be asked. False when the line has run out. */
@@ -338,11 +347,11 @@ export async function checkRequest({ resident_id, call_id: requestId = "", reque
   // Booked for an earlier state of the request: a later call asked again, or it has already moved on.
   // Whatever moved it booked a check of its own.
   if ((booked && booked !== open.callId) || (stage && stage !== open.stage)) return;
-  // The person asked has had their time: on to whoever is next. This holds whether or not the
-  // coordinators were told on an earlier run of the line: a line started again keeps moving.
+  // The person asked has had their time, or their turn was ended (handOff): on to whoever is next.
+  // This holds whether or not the coordinators were told on an earlier run of the line.
   if (round === 1 && !open.exhausted) {
-    // Their own "can't come" may be moving it on this instant: only one of the two does.
-    if (open.stepDue !== undefined && !(await endTurn(open))) return;
+    // Their time ran out: end the turn. If their own "can't come" ended it first, its booked step goes on.
+    if (open.stepDue !== undefined && open.stepDue !== -1 && !(await handOff(open))) return;
     if (await advance(resident, open.callId, kind, nextFrom(open))) return;
   }
   // From here the coordinators are told, once per request, and only about a line that has run out:

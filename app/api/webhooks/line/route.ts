@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
 import { acceptRequest, declineRequest } from "@/lib/actions";
+import { runDueTasksNow } from "@/lib/tick";
 import { reply, verifyLineSignature } from "@/lib/line";
 import { askedHelpers, helpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
 import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
@@ -62,7 +63,9 @@ export async function POST(request: Request) {
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === rest[0] && r.requestId === id);
           const current = open && !open.exhausted && open.askedId ? helpers(resident, open.kind).find((c) => c.id === open.askedId) : undefined;
           const theirs = !!current && current.line_id === userId;
-          const passed = theirs && open!.status === "sent" && (await declineRequest(resident, open!, Number(rest[1])));
+          const passed = theirs && open!.status === "sent" && (await declineRequest(open!, Number(rest[1])));
+          // Ask the next person now, rather than at the scheduler's next pass.
+          if (passed) await runDueTasksNow();
           await reply(
             event.replyToken,
             passed

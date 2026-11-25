@@ -150,6 +150,7 @@ export function slotLabel(slot: Slot, now = new Date(), lang: "ja" | "en" = "ja"
 
 export type OpenRequest = {
   kind: RequestKind;
+  residentId: string;
   /** The call that first asked: what the buttons carry. */
   requestId: string;
   /** The call whose record holds the request now (the newest reminder). */
@@ -212,6 +213,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       const tracked = action.asked !== undefined || action.asked_id !== undefined || action.ended !== undefined;
       const exhausted = action.accepted_by === undefined && (tracked ? action.ended === true : !current);
       return [{
+        residentId: resident.id,
         kind,
         requestId,
         callId: call.id,
