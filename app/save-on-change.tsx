@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 
 /**
- * A form of menus that saves the moment one changes, and says so. The action returns whether it saved.
+ * A form of menus that saves the one that changed the moment it changes, and says so.
+ * The action gets that menu and the hidden fields, and returns whether it saved.
  * The page keys each menu on its saved value so a change made elsewhere (adding a family contact) shows,
  * which remounts the menu just changed: focus goes back to it, so arrow keys can keep moving through a list.
  */
@@ -39,8 +40,11 @@ export function SaveOnChange({
       onSubmit={(e) => e.preventDefault()}
       onChange={(e) => {
         const target = e.currentTarget;
-        changed.current = (e.target as EventTarget as HTMLSelectElement).name;
+        const menu = e.target as EventTarget as HTMLSelectElement;
+        changed.current = menu.name;
+        // Only the menu that changed: another may have been changed elsewhere since this page loaded.
         const formData = new FormData(target);
+        for (const other of target.querySelectorAll("select")) if (other !== menu) formData.delete(other.name);
         startTransition(async () => {
           const saved = await action(formData);
           setStatus(saved ? "saved" : "failed");
