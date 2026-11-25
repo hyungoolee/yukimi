@@ -96,7 +96,7 @@ export function MarkHandledButton({ call, t }: { call?: CallRecord; t: Strings }
   return (
     <form action={markHandled}>
       <input type="hidden" name="call_id" value={call.id} />
-      <SubmitButton pending={t.saving}>{t.markHandled}</SubmitButton>
+      <SubmitButton pending={t.saving} primary>{t.markHandled}</SubmitButton>
     </form>
   );
 }
