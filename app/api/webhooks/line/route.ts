@@ -1,6 +1,6 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
-import { acceptRequest } from "@/lib/actions";
+import { acceptRequest, tellFamilyAccepted } from "@/lib/actions";
 import { reply, verifyLineSignature } from "@/lib/line";
 import { askedHelpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
 import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
@@ -46,6 +46,7 @@ export async function POST(request: Request) {
             await reply(event.replyToken, "その時間は過ぎています。ほかの時間を押してください。");
           } else {
             const { mine, request } = await acceptRequest(open.callId, requestKind, person.name, slot, person.kind === "business");
+            if (mine) await tellFamilyAccepted(resident, open.callId, requestKind, person, request?.slot);
             const when = request?.slot ? `${slotLabel(request.slot)}で` : "";
             await reply(
               event.replyToken,

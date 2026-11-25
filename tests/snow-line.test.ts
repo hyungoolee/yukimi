@@ -93,6 +93,7 @@ describe("a second volunteer in line", () => {
     await raise();
     await after(25);
     await tap(pushed[1].data[0], "U_second");
+    expect(to()).not.toContain("U_family"); // a volunteer coming is not the family's bill
     expect(await open()).toMatchObject({ status: "accepted", who: "佐々木", business: false });
     expect(replies.at(-1)).toContain("承りました");
     await tap(pushed[0].data[0], "U_volunteer");
@@ -142,6 +143,13 @@ describe("a business in line", () => {
     ]);
 
     await tap(pushed[1].data[0], "U_business");
+    // The family hears who is coming and when.
+    const { slotChoices, slotLabel } = await import("@/lib/requests");
+    expect(to()).toEqual(["U_volunteer", "U_business", "U_family", "U_family"]);
+    expect(pushed[3].text).toBe(`【有料の除雪のお願い】佐藤さんの件、北野除雪（有料）が${slotLabel(slotChoices()[0])}に伺います。費用は先方と直接ご相談ください。`);
+    expect((await store.getCall(id))!.actions[0].deliveries).toHaveLength(4);
+    await tap(pushed[1].data[1], "U_business"); // a second tap tells nobody anything new
+    expect(to()).toHaveLength(4);
     const sato = (await store.getResident("sato"))!;
     const calls = await store.listCalls("sato");
     expect(await open()).toMatchObject({ status: "accepted", who: "北野除雪", business: true });
@@ -149,7 +157,7 @@ describe("a business in line", () => {
     expect(helpLine(sato, calls)).not.toContain("北野除雪さん");
     expect(snowRequest(sato, calls)).toMatchObject({ volunteer: "北野除雪", business: true, to: { lat: 43.21, lng: 141.78 } });
     await after(500);
-    expect(to()).toHaveLength(3);
+    expect(to()).toHaveLength(4);
   });
 
   it("is asked even when the family can't be told", async () => {
