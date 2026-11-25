@@ -10,7 +10,7 @@ export type Person = {
   phone?: string;
   line_id?: string;
   location?: LatLng;
-  /** Told when a help request reaches nobody or goes unanswered (lib/actions.ts). */
+  /** Told when a help request reaches nobody or goes unanswered, or a red alert goes unacknowledged (lib/actions.ts). */
   coordinator?: boolean;
   /** Their LINE registration code, until they use it. */
   code?: string;
@@ -155,4 +155,6 @@ export type CallRecord = {
   handled?: boolean;
   acknowledged_by?: string; // who tapped "確認しました" on a red alert
   alert_rounds?: number; // how many times an unacknowledged red alert was sent again
+  coordinators_told_at?: string; // ISO time a coordinator was first told nobody had acknowledged it
+  coordinators_told?: string[]; // ids of the coordinators that message reached
 };
