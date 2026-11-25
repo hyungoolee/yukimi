@@ -8,6 +8,8 @@ import type { Action, AlertReasons, Delivery, Resident, Risk, Role, Slot } from 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
 const ACK_MS = DEMO_MODE ? 30_000 : 10 * 60_000;
 const MAX_RESENDS = 3;
+// Still unacknowledged at this re-send: the coordinators are told too.
+const COORDINATORS_AT_RESEND = 2;
 // A help request nobody has taken is passed to the coordinators after this long.
 const REQUEST_WAIT_MS = DEMO_MODE ? 30_000 : 2 * 60 * 60_000;
 
@@ -15,6 +17,8 @@ const link = (resident: Resident) =>
   process.env.APP_URL ? `\n${process.env.APP_URL}/residents/${resident.id}` : "";
 
 const ACK_BUTTON = "確認しました";
+const ackButton = (resident: Resident, callId: string) =>
+  buttons(`${resident.name}さんの件を確認したら押してください。`, [{ label: ACK_BUTTON, data: `ack:${callId}` }]);
 
 // She was told to phone an ambulance herself, and may not manage it: whoever reads this does it for her.
 // We hold no street address, so they give the one they know.
@@ -44,11 +48,7 @@ async function sendAlert(
     const urgent = reasons.some((r) => r.startsWith(EMERGENCY)) ? callForThem(resident) : "";
     const body = `${label}${resident.name}さん — ${reasons.join("、")}${urgent}${link(resident)}`;
     const messages: object[] = [text(body)];
-    if (ack) {
-      messages.push(
-        buttons(`${resident.name}さんの件を確認したら押してください。`, [{ label: ACK_BUTTON, data: `ack:${ack.callId}` }]),
-      );
-    }
+    if (ack) messages.push(ackButton(resident, ack.callId));
     return deliver(resident, role, body, messages, { reasons, button: ack ? ACK_BUTTON : undefined });
   }));
 }
@@ -82,7 +82,32 @@ export async function recheckAlert({ resident_id, call_id: callId = "", round = 
   // Book the next round first, so a failure below can't end the chain.
   if (round < MAX_RESENDS) await scheduleRecheck(resident_id, callId, round + 1, recipients);
   await sendAlert(resident, recipients, { callId, resend: round });
-  await updateCall(callId, () => ({ alert_rounds: round }));
+  // The record as it is now: someone may have tapped the button while the re-send was going out.
+  const now = await updateCall(callId, () => ({ alert_rounds: round }));
+  if (now?.handled || now?.acknowledged_by) return;
+  // Each coordinator once: those reached are noted on the call, so a later round tries only the rest.
+  // With no call record there is nowhere to note it, so that case gets the one round.
+  if (now ? round >= COORDINATORS_AT_RESEND : round === COORDINATORS_AT_RESEND) {
+    await tellCoordinators(resident, callId, Object.keys(recipients) as Role[], now?.coordinators_told ?? []);
+  }
+}
+
+/**
+ * Tells the coordinators that nobody has answered a red alert. No reasons: an alert about thoughts
+ * of dying goes to the helper alone, so the detail stays off other phones.
+ */
+async function tellCoordinators(resident: Resident, callId: string, alreadySent: Role[], told: string[]) {
+  const has = new Set(alreadySent.map((role) => resident[role].line_id));
+  const coordinators = (await listPeople()).filter((p) => p.coordinator && p.line_id && !has.has(p.line_id) && !told.includes(p.id));
+  const body = `【未確認・要確認】${resident.name}さんの緊急の通知に、まだ誰も応答していません。${link(resident)}`;
+  const sent = await Promise.all(coordinators.map((p) => push(p.line_id, [text(body), ackButton(resident, callId)])));
+  const reached = coordinators.filter((_, i) => sent[i]).map((p) => p.id);
+  if (!reached.length) return;
+  const at = new Date().toISOString();
+  await updateCall(callId, (c) => ({
+    coordinators_told_at: c.coordinators_told_at ?? at,
+    coordinators_told: [...(c.coordinators_told ?? []), ...reached],
+  }));
 }
 
 /** Asks the person for this kind of help, with a button for each half-day they could come. */

@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEASURES } from "@/lib/measures";
 import type { Extraction, Observations } from "@/lib/types";
 
@@ -610,6 +610,129 @@ describe("red alerts must be acknowledged", () => {
     lineCalls.length = 0;
     await after(200);
     expect(about("高橋")).toEqual([]);
+  });
+
+  describe("when nobody acknowledges", () => {
+    let coordinatorId: string;
+    const start = async (id: string) => {
+      await elevenlabs(signedElevenLabs(fixture.replace("conv_slip", id).replace('"resident_id": "sato"', '"resident_id": "takahashi"')));
+      lineCalls.length = 0;
+    };
+    // The coordinator also hears about the snow request nobody took; only the alert message counts here.
+    const UNSEEN = "まだ誰も応答していません";
+    const toCoordinator = () => pushes().filter((p) => p.to === "U_coordinator" && p.messages[0].text.includes(UNSEEN));
+
+    beforeEach(async () => {
+      coordinatorId ??= (await store.addPerson("社協 鈴木")).id;
+      await store.updatePerson(coordinatorId, (p) => ({ ...p, coordinator: true, line_id: "U_coordinator" }));
+    });
+    afterEach(async () => {
+      for (const id of [coordinatorId, "p_tanaka"]) await store.updatePerson(id, (p) => ({ ...p, coordinator: undefined }));
+    });
+
+    it("tells the coordinators at the second re-send, once, and keeps re-sending to the others", async () => {
+      await start("conv_esc");
+      await after(31);
+      expect(toCoordinator()).toEqual([]);
+      expect((await store.getCall("conv_esc"))!.coordinators_told_at).toBeUndefined();
+
+      await after(62);
+      const [told] = toCoordinator();
+      expect(told.messages[0].text).toContain("高橋さん");
+      expect(told.messages[1].template.actions[0].data).toBe("ack:conv_esc");
+      expect((await store.getCall("conv_esc"))!.coordinators_told_at).toBeTruthy();
+
+      lineCalls.length = 0;
+      await after(93);
+      expect(toCoordinator()).toEqual([]);
+      expect(about("高橋").map((p) => p.to).sort()).toEqual(["U_family", "U_helper"]);
+    });
+
+    it("does not tell them when someone acknowledged or the call was marked handled", async () => {
+      await start("conv_esc_seen");
+      await after(31);
+      await tap("ack:conv_esc_seen", "U_family");
+      await start("conv_esc_handled");
+      await store.updateCall("conv_esc_handled", () => ({ handled: true }));
+      for (const seconds of [62, 93, 124]) await after(seconds);
+      expect(toCoordinator()).toEqual([]);
+    });
+
+    it("stops the re-sends when a coordinator taps, and tells a later tapper who has it", async () => {
+      await start("conv_esc_tap");
+      await after(31);
+      await after(62);
+      await tap("ack:conv_esc_tap", "U_coordinator");
+      expect((await store.getCall("conv_esc_tap"))!.acknowledged_by).toBe("社協 鈴木");
+      lineCalls.length = 0;
+      await tap("ack:conv_esc_tap", "U_helper");
+      expect(lineCalls.at(-1)!.body.messages[0].text).toBe("社協 鈴木さんが確認済みです。");
+      lineCalls.length = 0;
+      await after(93);
+      expect(pushes()).toEqual([]);
+    });
+
+    it("tries the next round when LINE took none of the coordinators' messages", async () => {
+      await start("conv_esc_retry");
+      await after(31);
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+      await after(62);
+      expect((await store.getCall("conv_esc_retry"))!.coordinators_told_at).toBeUndefined();
+      vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+        lineCalls.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response("{}");
+      }));
+      await after(93);
+      expect(toCoordinator()).toHaveLength(1);
+    });
+
+    it("tries again only the coordinator LINE refused, and keeps the first time", async () => {
+      const second = await store.addPerson("社協 佐々木");
+      await store.updatePerson(second.id, (p) => ({ ...p, coordinator: true, line_id: "U_coordinator2" }));
+      const unseenTo = () => pushes().filter((p) => p.messages[0].text.includes(UNSEEN)).map((p) => p.to);
+      await start("conv_esc_partial");
+      await after(31);
+      vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        if (body.to === "U_coordinator2") return new Response("{}", { status: 500 });
+        lineCalls.push({ url, body });
+        return new Response("{}");
+      }));
+      await after(62);
+      expect(unseenTo()).toEqual(["U_coordinator"]);
+      const { coordinators_told_at } = (await store.getCall("conv_esc_partial"))!;
+
+      lineCalls.length = 0;
+      vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+        lineCalls.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response("{}");
+      }));
+      await after(93);
+      expect(unseenTo()).toEqual(["U_coordinator2"]);
+      expect((await store.getCall("conv_esc_partial"))!.coordinators_told_at).toBe(coordinators_told_at);
+      await store.deletePerson(second.id);
+    });
+
+    it("gives the coordinators no reasons, and skips one who was already sent the alert", async () => {
+      const signals = { ...extraction.signals, self_harm: true, fall_recent: false, pain: false, snowed_in: false };
+      extract.mockResolvedValueOnce({ ...extraction, signals });
+      await start("conv_esc_private");
+      const { reasons } = (await store.getCall("conv_esc_private"))!;
+      expect(reasons).toEqual(["死にたい気持ちの訴え"]);
+      await after(31);
+      lineCalls.length = 0;
+      await after(62);
+      expect(about("高橋").map((p) => p.to).sort()).toEqual(["U_coordinator", "U_helper"]);
+      for (const m of toCoordinator()[0].messages) expect(JSON.stringify(m)).not.toContain(reasons[0]);
+
+      // The helper doubles as a coordinator: the re-send already reached her.
+      await store.updatePerson(coordinatorId, (p) => ({ ...p, coordinator: undefined }));
+      await store.updatePerson("p_tanaka", (p) => ({ ...p, coordinator: true }));
+      await start("conv_esc_same");
+      await after(31);
+      await after(62);
+      expect(pushes().filter((p) => p.messages[0].text.includes(UNSEEN))).toEqual([]);
+    });
   });
 
   it("re-sends the in-call emergency alert and the missed-call alert too", async () => {
