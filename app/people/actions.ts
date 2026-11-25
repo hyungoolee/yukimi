@@ -55,38 +55,47 @@ export async function removePerson(formData: FormData) {
 }
 
 /**
- * Who holds each of a resident's three roles, and who is asked to clear snow after the first person.
- * An empty choice leaves the post vacant.
+ * Who holds a resident's roles, and who is asked to clear snow after the first person (snow_next_<place>).
+ * Only the roles and places in the form change, so a page open since before someone else filled a post
+ * doesn't clear it. An empty choice leaves the post vacant.
+ * Returns whether it saved, since the menus save on change and have no button to show a failure.
  */
 export async function assignRoles(formData: FormData) {
   await requireAccess();
   const resident = await getResident(field(formData, "resident_id"));
-  if (!resident) return;
+  if (!resident) return false;
   const roles: Record<string, string> = {};
   for (const role of ROLES) {
+    if (!formData.has(role)) continue;
     const id = field(formData, role);
     const person = id ? await getPerson(id) : null;
-    if (id && !(person && eligible(person, role, resident))) return;
+    if (id && !(person && eligible(person, role, resident))) return false;
     roles[role] = id;
   }
-  // The resident's own page chooses the three roles only: the rest of the snow line is left as it is.
-  if (!formData.has("snow_line")) {
+  // A place in the snow line that changed: that place only, the rest kept as stored. Then in order,
+  // each person once, never the one first in line, and only someone who could hold the snow role for
+  // this resident (not another resident's family). An empty choice empties the place.
+  const places = Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => `snow_next_${i}`).filter((name) => formData.has(name));
+  if (!places.length) {
     await assign(resident.id, roles);
     revalidatePath("/", "layout");
-    return;
+    return true;
   }
-  // In the order chosen, each person once, never the one already first in line, and only someone
-  // who could hold the snow role for this resident (not another resident's family).
-  const snow_next: string[] = [];
-  for (const raw of formData.getAll("snow_next").slice(0, SNOW_NEXT_SLOTS)) {
-    const id = String(raw).normalize("NFKC").trim().slice(0, 60);
-    if (!id || id === roles.snow_volunteer || snow_next.includes(id)) continue;
-    const person = await getPerson(id);
-    if (!(person && eligible(person, "snow_volunteer", resident))) return;
-    snow_next.push(id);
+  const line = Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => resident.snow_next?.[i]?.id ?? "");
+  const chosen = roles.snow_volunteer ? [roles.snow_volunteer] : [];
+  for (const name of places) {
+    const id = field(formData, name);
+    const person = id ? await getPerson(id) : null;
+    if (id && !(person && eligible(person, "snow_volunteer", resident))) return false;
+    line[Number(name.slice("snow_next_".length))] = id;
+    if (id) chosen.push(id);
   }
-  await assign(resident.id, { ...roles, snow_next });
+  const first = roles.snow_volunteer ?? resident.snow_volunteer.id ?? "";
+  const snow_next = line.filter((id, i) => id && id !== first && line.indexOf(id) === i);
+  // Only who was chosen in this save counts as agreed to as paid help (lib/store.ts assign).
+  await assign(resident.id, { ...roles, snow_next }, chosen);
   revalidatePath("/", "layout");
+  return true;
 }
 
 export async function newCode(formData: FormData) {
