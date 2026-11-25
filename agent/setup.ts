@@ -75,6 +75,7 @@ const agentConfig = {
           weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
           winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
           help_status: "なし",
+          call_length: "ふつう",
         },
       },
       prompt: {

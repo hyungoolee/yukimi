@@ -34,6 +34,7 @@ const variables = {
   weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
   winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
   help_status: "なし",
+  call_length: "ふつう",
 };
 
 const base = "あなたは北海道で一人暮らしをしている80歳の佐藤さんです。見守り電話に出ています。話し言葉で、一度に1〜2文だけ短く答えてください。聞かれたことに答え、自分からは話を広げすぎないでください。";
@@ -87,6 +88,12 @@ const scenarios: Record<string, Scenario> = {
   demo: {
     expectTool: false,
     persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物も薬も灯油もある。孫の健太は模試がよくできた。`,
+  },
+  // The same story with the short demo-mode call: every required question must still be asked.
+  "demo-short": {
+    expectTool: false,
+    variables: { call_length: "短く" },
+    persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物も薬も灯油もある。`,
   },
   "chest-pain": {
     expectTool: "emergency",
