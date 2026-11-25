@@ -1,9 +1,10 @@
+import { placeNewsCall } from "./elevenlabs";
 import { DEMO_MODE } from "./env";
 import { buttons, push, text } from "./line";
 import { EMERGENCY } from "./rules";
-import { openRequests, REQUESTS, slotChoices, slotLabel, type RequestKind } from "./requests";
-import { getCall, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
-import type { Action, AlertReasons, Delivery, Resident, Risk, Role, Slot } from "./types";
+import { japanHour, openRequests, passed, REQUESTS, san, slotChoices, slotLabel, type OpenRequest, type RequestKind } from "./requests";
+import { callsInProgress, getCall, getLadder, getResident, listCalls, listPeople, schedule, updateCall, type Task } from "./store";
+import type { Action, AlertReasons, Delivery, Resident, Risk, Role, Slot, Told } from "./types";
 
 // A red alert that nobody acknowledges is sent again, this often and this many times.
 const ACK_MS = DEMO_MODE ? 30_000 : 10 * 60_000;
@@ -134,7 +135,62 @@ export async function acceptRequest(callId: string, kind: RequestKind, name: str
       : null,
   );
   const request = (saved ?? (await getCall(callId)))?.actions.find(isIt);
+  // Only the first to accept passes the news on; a failure here must not lose the accept itself.
+  if (saved) await announce(saved.resident_id, callId, kind, name, slot).catch((e) => console.error("Could not pass on the accept", e));
   return { mine: !!saved, request };
+}
+
+/** Someone has said they will come: phone the resident with the news, and for snow, tell the family too. */
+async function announce(residentId: string, callId: string, kind: RequestKind, name: string, slot?: Slot) {
+  await schedule({ kind: "news_call", resident_id: residentId, call_id: callId, request_kind: kind, due: Date.now() });
+  // For supplies the family is the one who accepted.
+  const resident = await getResident(residentId);
+  if (kind === "snow" && resident) {
+    await push(resident.second_contact.line_id, [text(`${san(name)}が${slot ? `${slotLabel(slot)}、` : ""}${resident.name}さん宅の雪かきに伺います。`)]);
+  }
+}
+
+// News calls are made in the day only, Japan time.
+const NEWS_FROM = 8;
+const NEWS_UNTIL = 20;
+const WAIT_MS = 10 * 60_000;
+
+/** The next NEWS_FROM o'clock in Japan (UTC+9, no daylight saving), as epoch ms. */
+function nextMorning(now: Date) {
+  const japan = new Date(now.getTime() + 9 * 3600_000);
+  const morning = Date.UTC(japan.getUTCFullYear(), japan.getUTCMonth(), japan.getUTCDate(), NEWS_FROM) - 9 * 3600_000;
+  return morning > now.getTime() ? morning : morning + 24 * 3600_000;
+}
+
+/** What the resident hears: 「山本さんが今日の午後に雪かきに伺います。」 */
+export const newsText = (request: OpenRequest, now = new Date()) =>
+  `${san(request.who)}が${request.slot ? `${slotLabel(request.slot, now)}に` : ""}${REQUESTS[request.kind].news}。`;
+
+/** Saves how the news reached the resident on the request it was about. */
+export const recordTold = (callId: string, kind: string, told: Told) =>
+  updateCall(callId, (call) => ({
+    actions: call.actions.map((a) => (a.type === "request" && a.kind === kind ? { ...a, told } : a)),
+  }));
+
+/**
+ * Scheduled step: phone the resident that someone is coming. Skipped once the request is closed, the
+ * time has passed, or she has been told; put off at night, and while another call to her is going on.
+ */
+export async function newsStep({ resident_id, call_id, request_kind: kind }: Pick<Task, "resident_id" | "call_id" | "request_kind">, now = new Date()) {
+  const resident = await getResident(resident_id);
+  if (!resident || resident.active === false || !call_id || !kind) return;
+  const request = openRequests(resident, await listCalls(resident_id), now).find((r) => r.kind === kind && r.callId === call_id);
+  if (!request || request.status !== "accepted" || request.told || (request.slot && passed(request.slot, now))) return;
+  const later = (due: number) => schedule({ kind: "news_call", resident_id, call_id, request_kind: kind, due });
+  const hour = japanHour(now);
+  if (hour < NEWS_FROM || hour >= NEWS_UNTIL) return later(nextMorning(now));
+  // On the phone, or in the missed-call steps, whose retry must not find her line busy.
+  if ((await callsInProgress(now.getTime(), resident_id)) > 0 || (await getLadder(resident_id))) return later(now.getTime() + WAIT_MS);
+  if (!resident.phone) return recordTold(call_id, kind, { at: now.toISOString(), result: "no_phone" });
+  await placeNewsCall(resident, newsText(request, now), { call_id, request_kind: kind }).catch((e) => {
+    console.error(e);
+    return recordTold(call_id, kind, { at: now.toISOString(), result: "failed" });
+  });
 }
 
 const scheduleCheck = (residentId: string, requestId: string, kind: RequestKind, wait: number, round = 1) =>

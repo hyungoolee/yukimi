@@ -60,7 +60,12 @@ export async function placeDailyCalls(now = new Date()) {
     if (!resident || resident.active === false || !resident.phone) continue;
     // Already being looked after today: on the phone now, in the missed-call steps, or spoken to earlier.
     const spoken = (await listCalls(id)).some((c) => c.kind === "call" && japanDate(new Date(c.at)) === today);
-    if (spoken || (await getLadder(id)) || (await callsInProgress(now.getTime(), id)) > 0) continue;
+    if (spoken || (await getLadder(id))) continue;
+    // On another call (a news call, or one placed by hand): back in the queue, to be called once it ends.
+    if ((await callsInProgress(now.getTime(), id)) > 0) {
+      await updateResident(id, (fresh) => ({ ...fresh, call_queued: true }));
+      continue;
+    }
 
     // If the phone service refuses, the family is not told "no answer": that would be false, and in an
     // outage it would go to every family in town. It is noted for the coordinator instead.

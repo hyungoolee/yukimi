@@ -114,7 +114,38 @@ const agent = agentId
   ? await call("PATCH", `/agents/${agentId}`, agentConfig)
   : await call("POST", "/agents/create", agentConfig);
 
+// The news agent: a short call telling the resident that someone has said when they will come
+// (lib/actions.ts newsStep). A separate agent rather than overrides on the check-in agent, whose
+// browser-call token must not be able to replace its instructions. Same voice, tool and webhook.
+const newsConfig = {
+  ...agentConfig,
+  name: scratch ? "Yukimi news (scratch)" : "Yukimi news",
+  conversation_config: {
+    ...agentConfig.conversation_config,
+    agent: {
+      ...agentConfig.conversation_config.agent,
+      first_message: "もしもし、{{name}}さんですか。見守り電話です。お知らせがあって、お電話しました。{{news}}",
+      dynamic_variables: {
+        dynamic_variable_placeholders: {
+          resident_id: "test",
+          name: "佐藤",
+          news: "山本さんが今日の午後に雪かきに伺います。",
+          purpose: "news",
+          call_id: "test",
+          request_kind: "snow",
+        },
+      },
+      prompt: { ...agentConfig.conversation_config.agent.prompt, prompt: readFileSync(new URL("./news.md", import.meta.url), "utf8") },
+    },
+  },
+};
+const newsId = scratch ? process.env.SCRATCH_NEWS_AGENT_ID : process.env.ELEVENLABS_NEWS_AGENT_ID;
+const news = newsId
+  ? await call("PATCH", `/agents/${newsId}`, newsConfig)
+  : await call("POST", "/agents/create", newsConfig);
+
 // A copy's ids are printed under their own names, so they are never pasted into .env as the live ones.
 const prefix = scratch ? "SCRATCH" : "ELEVENLABS";
 console.log(`${prefix}_TOOL_ID=${tool.id}`);
 console.log(`${prefix}_AGENT_ID=${agent.agent_id}`);
+console.log(`${prefix}_NEWS_AGENT_ID=${news.agent_id}`);
