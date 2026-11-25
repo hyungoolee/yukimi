@@ -8,9 +8,9 @@ import type { Fact, FollowUp, MemoryChange, Resident, Turn } from "./types";
 // The model proposes (lib/curate.ts); the functions here decide what is actually stored,
 // and every change to the facts is written to the resident's memory log.
 
-const MAX_OPEN = 5;
-const MAX_NEW_PER_CALL = 3;
-const MAX_DAYS = 14;
+// Checks and threads have caps of their own, so neither kind can crowd out the other. A thread lasts
+// at most a week: it is small talk, and an old one would keep opening the call.
+const LIMITS = { check: { open: 5, perCall: 3, days: 14 }, thread: { open: 2, perCall: 2, days: 7 } } as const;
 const MAX_LENGTH = 80;
 // What the model writes (follow-ups and facts) is placed in tomorrow's agent prompt, so it must stay a
 // plain one-line note: nothing that reads as prompt structure, and nothing about money, whoever said
@@ -52,8 +52,15 @@ function logged(resident: Resident, by: string, entries: Omit<MemoryChange, "at"
 export const openFollowUps = (resident: Resident, today: string): FollowUp[] =>
   (resident.follow_ups ?? []).filter((f) => f.expires >= today);
 
-export const followUpsLine = (resident: Resident, today = japanDate()) =>
-  openFollowUps(resident, today).map((f) => `・${f.text}`).join(" ") || "なし";
+const kindOf = (f: Pick<FollowUp, "kind">) => f.kind ?? "check";
+const lineOf = (resident: Resident, today: string, kind: "check" | "thread") =>
+  openFollowUps(resident, today).filter((f) => kindOf(f) === kind).map((f) => `・${f.text}`).join(" ") || "なし";
+
+/** The checks the caller must make (「前回からの確認」). */
+export const followUpsLine = (resident: Resident, today = japanDate()) => lineOf(resident, today, "check");
+
+/** Light topics the caller may pick up (「話のつづき」). */
+export const threadsLine = (resident: Resident, today = japanDate()) => lineOf(resident, today, "thread");
 
 export const factsLine = (resident: Resident) => resident.facts.map((f) => f.text).join("、") || "なし";
 
@@ -66,14 +73,16 @@ function applyFollowUps(resident: Resident, proposed: Curation, today: string): 
   const kept = openFollowUps(resident, today).filter((f) => !settled.has(f.id));
   const known = new Set(kept.map((f) => f.text));
   const added: FollowUp[] = [];
-  for (const { text, days } of proposed.new_follow_ups) {
+  for (const { text, days, kind: proposedKind } of proposed.new_follow_ups) {
+    const kind = proposedKind === "thread" ? "thread" : "check";
     const t = clean(text);
     // Full is full: a new item never pushes out one that is still open.
-    if (added.length === MAX_NEW_PER_CALL || kept.length + added.length >= MAX_OPEN) break;
+    const count = (list: FollowUp[]) => list.filter((f) => kindOf(f) === kind).length;
+    if (count(added) === LIMITS[kind].perCall || count(kept) + count(added) >= LIMITS[kind].open) continue;
     if (!fits(t) || known.has(t) || NOT_A_NOTE.test(t)) continue;
     known.add(t);
-    const lasts = Math.min(MAX_DAYS, Math.max(1, Math.round(Number(days) || 1)));
-    added.push({ id: newId(), text: t, created: today, expires: daysBefore(today, -lasts) });
+    const lasts = Math.min(LIMITS[kind].days, Math.max(1, Math.round(Number(days) || 1)));
+    added.push({ id: newId(), text: t, created: today, expires: daysBefore(today, -lasts), kind });
   }
   return { ...resident, follow_ups: [...kept, ...added] };
 }
