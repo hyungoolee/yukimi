@@ -35,8 +35,17 @@ export function distanceKm(a: LatLng, b: LatLng) {
 export type SnowRequest = {
   residentId: string;
   status: "not_sent" | "sent" | "accepted";
+  /** Who took it, or else who the request has got to in the line. Empty once the line has run out. */
   volunteer: string;
   business: boolean;
+  /** The family is deciding whether `volunteer`, a business, may be asked: the message went to them, not to the business. */
+  awaitingConsent: boolean;
+  /** Who is deciding, when `awaitingConsent`. */
+  family: string;
+  /** Everyone in line has had their turn and nobody took it. */
+  exhausted: boolean;
+  /** The coordinators have been told that nobody has taken it. */
+  escalated: boolean;
   from?: LatLng;
   to?: LatLng;
   km?: number;
@@ -49,13 +58,18 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   const from = resident.location;
   // Whoever took it, or else whoever the request has got to in the line.
   const line = helpers(resident, "snow");
-  const who = (request.status === "accepted" && line.find((c) => c.name === request.who)) || line[request.asked] || resident.snow_volunteer;
-  const to = who.location;
+  const who = request.status === "accepted" ? line.find((c) => c.name === request.who) : line[request.asked];
+  // No line is drawn once everyone has been tried: nobody is on their way or being waited on.
+  const to = who?.location;
   return {
     residentId: resident.id,
     status: request.status,
-    volunteer: who.name,
-    business: who.kind === "business",
+    volunteer: request.who,
+    business: request.business,
+    awaitingConsent: request.awaitingConsent,
+    family: resident.second_contact.name,
+    exhausted: request.exhausted,
+    escalated: request.escalated,
     from,
     to,
     km: from && to ? distanceKm(from, to) : undefined,

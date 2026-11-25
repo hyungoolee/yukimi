@@ -1,4 +1,5 @@
 import { MEASURES } from "./measures";
+import type { SnowRequest } from "./dashboard";
 import { REQUESTS, slotLabel, type OpenRequest } from "./requests";
 import { SHORT_OF_SUPPLIES, UNCONFIRMED } from "./rules";
 import type { Resident, Weather } from "./types";
@@ -24,7 +25,7 @@ const ja = {
   badge: { red: "すぐ確認", yellow: "訪問リスト", green: "問題なし", none: "通話なし" },
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
-      r.status === "not_sent" ? "送信できていません" : r.awaitingConsent ? `${r.who}（有料）に頼んでよいか、家族に確認中` : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
+      r.status === "not_sent" ? "送信できていません" : r.exhausted ? "順番の全員に頼みましたが、引き受け手がいません" : r.awaitingConsent ? `${r.who}（有料）に頼んでよいか、家族に確認中` : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
     }${r.status === "accepted" ? "" : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
   messagesSent: "送ったメッセージ",
@@ -109,8 +110,14 @@ const ja = {
   noLocation: "この方の位置はまだ登録されていません。",
   placeHome: "自宅を地図で登録",
   openPerson: "詳しく見る",
-  requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted", business = false) =>
-    `${volunteer}${business ? "" : "さん"}へ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
+  requestStatus: (r: SnowRequest) =>
+    r.status === "not_sent"
+      ? "除雪のお願い：送信できていません"
+      : r.exhausted
+        ? `除雪のお願い：順番の全員に頼みましたが、引き受け手がいません（${r.escalated ? "コーディネーターに連絡済み" : "コーディネーターには未連絡"}）`
+        : r.awaitingConsent
+          ? `${r.family}さん（家族）へ：${r.volunteer}（有料）に頼んでよいか確認中。${r.volunteer}にはまだ頼んでいません`
+          : `${r.volunteer}${r.business ? "" : "さん"}へ：${{ sent: "送信済み・返事待ち", accepted: "引き受け済み" }[r.status]}`,
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
@@ -174,7 +181,7 @@ const en: typeof ja = {
   badge: { red: "Check now", yellow: "Visit list", green: "All fine", none: "No calls" },
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
-      r.status === "not_sent" ? "request could not be sent" : r.awaitingConsent ? `asking the family before ${r.who} (paid) is asked` : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
+      r.status === "not_sent" ? "request could not be sent" : r.exhausted ? "everyone in line was asked and nobody took it" : r.awaitingConsent ? `asking the family before ${r.who} (paid) is asked` : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
     }${r.status === "accepted" ? "" : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
   messagesSent: "Messages sent",
@@ -259,8 +266,14 @@ const en: typeof ja = {
   noLocation: "This resident has no location yet.",
   placeHome: "Place their home",
   openPerson: "Open their page",
-  requestStatus: (volunteer, status) =>
-    `${volunteer}: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
+  requestStatus: (r) =>
+    r.status === "not_sent"
+      ? "Snow clearing: request could not be sent"
+      : r.exhausted
+        ? `Snow clearing: everyone in line was asked and nobody took it (${r.escalated ? "coordinator told" : "coordinator not told yet"})`
+        : r.awaitingConsent
+          ? `Family (${r.family}) asked whether ${r.volunteer} (paid) may be asked; ${r.volunteer} has not been asked yet`
+          : `${r.volunteer}: ${{ sent: "asked, waiting for a reply", accepted: "accepted" }[r.status]}`,
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
   home: "Home",
   volunteer: () => "Snow volunteer",
