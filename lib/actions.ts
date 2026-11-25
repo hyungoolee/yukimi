@@ -211,6 +211,19 @@ export async function acceptRequest(callId: string, kind: RequestKind, name: str
   return { mine: !!saved, request };
 }
 
+/**
+ * A business has taken the request: the family is told who is coming and when, since they will be
+ * paying. Kept with the request's other messages. Nothing is sent for a volunteer.
+ */
+export async function tellFamilyAccepted(resident: Resident, callId: string, kind: RequestKind, who: Contact, slot?: Slot) {
+  if (!tellsFamily(kind, who)) return;
+  const body = `【有料の${REQUESTS[kind].label.ja}】${resident.name}さんの件、${who.name}（有料）が${slot ? `${slotLabel(slot)}に伺います` : "引き受けました"}。費用は先方と直接ご相談ください。`;
+  const told = await deliver(resident, "second_contact", body, [text(body)], {});
+  await updateCall(callId, (c) => ({
+    actions: c.actions.map((a) => (isRequest(kind)(a) ? { ...a, deliveries: [...(a.deliveries ?? []), told] } : a)),
+  }));
+}
+
 const scheduleCheck = (residentId: string, requestId: string, kind: RequestKind, due: number, record?: string, stage?: string, round = 1) =>
   schedule({
     kind: "request_check", resident_id: residentId, call_id: requestId, request_kind: kind, round, due,
