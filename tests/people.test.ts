@@ -1,9 +1,10 @@
-import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = { value: "ok" as "ok" | "denied" };
+vi.mock("node:fs/promises", { spy: true });
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); } }));
@@ -57,19 +58,33 @@ describe("people in the store", () => {
     await store.assign("sato", { helper: "p_tanaka" });
   });
 
-  it("gives the seed's family contacts their resident on a disk seeded before family_of existed", async () => {
+  it("backfills family metadata once across store copies and preserves the latest LINE registration", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "yukimi-family-"));
     await cp(path.join(process.cwd(), "data/seed"), dir, { recursive: true });
     const file = path.join(dir, "people", "p_yuki.json");
     const old = JSON.parse(await readFile(file, "utf8"));
     delete old.family_of;
-    await writeFile(file, JSON.stringify({ ...old, line_id: "U_yuki" }));
+    await writeFile(file, JSON.stringify({ ...old, code: "12345678" }));
 
-    vi.resetModules();
     vi.stubEnv("DATA_DIR", dir);
-    const fresh = await import("@/lib/store");
-    expect(await fresh.getPerson("p_yuki")).toMatchObject({ family_of: "sato", line_id: "U_yuki" });
-    vi.unstubAllEnvs();
+    try {
+      vi.resetModules();
+      const reader = await import("@/lib/store");
+      vi.resetModules();
+      const writer = await import("@/lib/store");
+
+      const [person] = await Promise.all([
+        reader.getPerson("p_yuki"),
+        writer.updatePerson("p_yuki", (p) => ({ ...p, line_id: "U_yuki", code: undefined })),
+      ]);
+      expect(person?.family_of).toBe("sato");
+      const saved = await reader.getPerson("p_yuki");
+      expect(saved).toMatchObject({ family_of: "sato", line_id: "U_yuki" });
+      expect(saved?.code).toBeUndefined();
+      expect(vi.mocked(readdir).mock.calls.filter(([at]) => at === path.join(dir, "residents"))).toHaveLength(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("gives a disk from before people had files its people from the seed, once, keeping everything else", async () => {
@@ -153,6 +168,30 @@ describe("managing people", () => {
 
     await store.assign("sato", { second_contact: "p_yuki" });
     for (const p of [husband, daughter]) await store.deletePerson(p.id);
+  });
+
+  it("keeps a family assignment saved while a new contact is being created", async () => {
+    await store.assign("sato", { second_contact: "" });
+    const started = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const addPerson = store.addPerson;
+    using create = vi.spyOn(store, "addPerson").mockImplementationOnce(async (...args) => {
+      started.resolve();
+      await resume.promise;
+      return addPerson(...args);
+    });
+
+    const creation = expect(actions.createFamily(form({ resident_id: "sato", name: "New family contact" })))
+      .rejects.toThrow("redirect:/people/p_");
+    await started.promise;
+    try {
+      await actions.assignRoles(form({ resident_id: "sato", helper: "p_tanaka", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" }));
+    } finally {
+      resume.resolve();
+    }
+    await creation;
+    expect(create).toHaveBeenCalledWith("New family contact", undefined, "sato");
+    expect((await store.getResident("sato"))?.second_contact.id).toBe("p_yuki");
   });
 
   it("removes a LINE registration and hands out a fresh code", async () => {

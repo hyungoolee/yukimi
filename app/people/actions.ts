@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { eligible, ROLES } from "@/lib/coverage";
 import { dashboardAccess } from "@/lib/env";
 import { push, text } from "@/lib/line";
-import { addPerson, assign, deletePerson, getPerson, getResident, listResidents, renewCode, updatePerson } from "@/lib/store";
+import { addPerson, assign, assignFamilyIfVacant, deletePerson, getPerson, getResident, listResidents, renewCode, updatePerson } from "@/lib/store";
 
 const TEST_MESSAGE = "【テスト】見守り電話からのテストメッセージです。対応は不要です。";
 
@@ -31,7 +31,7 @@ export async function createFamily(formData: FormData) {
   const resident = await getResident(field(formData, "resident_id"));
   if (!name || !resident) return;
   const person = await addPerson(name, undefined, resident.id);
-  if (!resident.second_contact.id) await assign(resident.id, { second_contact: person.id });
+  await assignFamilyIfVacant(resident.id, person.id);
   redirect(`/people/${person.id}`);
 }
 
