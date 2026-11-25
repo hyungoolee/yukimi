@@ -223,7 +223,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint, enterToSave: t.enterToSave, unset: t.picker.unset }}
       />
       <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
-      {/* The same save as on the People page. Each menu is keyed on who holds the role, so a change made elsewhere shows. */}
+      {/* The one place a resident's roles are set. Each menu is keyed on who holds the role, so a change made elsewhere shows. */}
       <SaveOnChange
         action={assignRoles}
         labels={{ saving: t.saving, saved: t.saved, failed: t.saveFailed }}
