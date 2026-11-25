@@ -88,8 +88,17 @@ const agentConfig = {
         timezone: "Asia/Tokyo",
       },
     },
-    // Japanese needs one of the multilingual voice models.
-    tts: { voice_id: need("ELEVENLABS_VOICE_ID"), model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5" },
+    // v3 conversational: expressive, and its first audio came as fast as flash v2.5's (about 0.3 s) in a test.
+    // Slower and steadier than the default suits older listeners; chosen by ear from samples (Hiyori voice).
+    tts: {
+      voice_id: need("ELEVENLABS_VOICE_ID"),
+      model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_v3_conversational",
+      speed: 0.9,
+      stability: 0.4,
+      // On: the agent may add audio tags such as [warmly]. They are kept out of say_exactly (agent/prompt.md,
+      // agent/news.md) and taken out of transcripts and captions (lib/audio-tags.ts).
+      expressive_mode: true,
+    },
     // Seconds of silence before the agent prompts the resident again.
     turn: {
       turn_timeout: 10,
