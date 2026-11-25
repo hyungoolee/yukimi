@@ -95,9 +95,9 @@ describe("managing people", () => {
     await actions.editPerson(form({ person_id: sasaki.id, name: "  " })); // a name is required
     expect((await store.getPerson(sasaki.id))!.name).toBe("佐々木 花");
 
-    await actions.assignRoles(form({ resident_id: "suzuki", helper: "p_tanaka", second_contact: sasaki.id, snow_volunteer: "" }));
+    await actions.assignRoles(form({ resident_id: "suzuki", helper: sasaki.id, second_contact: "p_takada", snow_volunteer: "" }));
     const suzuki = (await store.getResident("suzuki"))!;
-    expect([suzuki.helper.id, suzuki.second_contact.id, suzuki.snow_volunteer.name]).toEqual(["p_tanaka", sasaki.id, ""]);
+    expect([suzuki.helper.id, suzuki.second_contact.id, suzuki.snow_volunteer.name]).toEqual([sasaki.id, "p_takada", ""]);
     expect(suzuki.facts.length).toBeGreaterThan(0); // the rest of the file is untouched
 
     await actions.removePerson(form({ person_id: sasaki.id })); // serves Suzuki-san: refused
@@ -112,6 +112,39 @@ describe("managing people", () => {
     expect((await store.getResident("sato"))!.helper.id).toBe("p_tanaka");
   });
 
+  it("offers a family contact only for their own resident's family post", async () => {
+    const before = (await store.getResident("sato"))!;
+    // Suzuki-san's family (p_takada) can't become Sato-san's family or helper; someone else's helper can't be family.
+    for (const roles of [
+      { helper: "p_tanaka", second_contact: "p_takada", snow_volunteer: "p_yamamoto" },
+      { helper: "p_takada", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" },
+      { helper: "p_tanaka", second_contact: "p_yamamoto", snow_volunteer: "p_yamamoto" },
+    ]) await actions.assignRoles(form({ resident_id: "sato", ...roles }));
+    const sato = (await store.getResident("sato"))!;
+    expect([sato.helper.id, sato.second_contact.id]).toEqual([before.helper.id, before.second_contact.id]);
+  });
+
+  it("adds a family contact tied to one resident, filling the family post only when it is vacant", async () => {
+    await expect(actions.createFamily(form({ resident_id: "sato", name: "ゆきの夫" }))).rejects.toThrow("redirect:/people/p_");
+    const husband = (await store.listPeople()).find((p) => p.name === "ゆきの夫")!;
+    expect(husband).toMatchObject({ family_of: "sato", code: expect.stringMatching(/^\d{8}$/) });
+    expect((await store.getResident("sato"))!.second_contact.id).toBe("p_yuki"); // already held: unchanged
+
+    await store.assign("sato", { second_contact: "" });
+    await expect(actions.createFamily(form({ resident_id: "sato", name: "ゆきの娘" }))).rejects.toThrow("redirect:/people/p_");
+    const daughter = (await store.listPeople()).find((p) => p.name === "ゆきの娘")!;
+    expect((await store.getResident("sato"))!.second_contact.id).toBe(daughter.id);
+
+    await store.assign("sato", { second_contact: "p_yuki" });
+    for (const p of [husband, daughter]) await store.deletePerson(p.id);
+  });
+
+  it("gives seeded family their resident on a demo reset, for a disk seeded before family_of existed", async () => {
+    await store.updatePerson("p_yuki", (p) => ({ ...p, family_of: undefined }));
+    await store.resetDemoData();
+    expect((await store.getPerson("p_yuki"))!.family_of).toBe("sato");
+  });
+
   it("removes a LINE registration and hands out a fresh code", async () => {
     await actions.unregister(form({ person_id: "p_tanaka" }));
     const tanaka = (await store.getPerson("p_tanaka"))!;
@@ -124,7 +157,7 @@ describe("managing people", () => {
   it("refuses every change without the dashboard password", async () => {
     auth.value = "denied";
     const f = form({ person_id: "p_tanaka", name: "x", resident_id: "sato" });
-    for (const action of [actions.createPerson, actions.editPerson, actions.removePerson, actions.assignRoles, actions.newCode, actions.unregister]) {
+    for (const action of [actions.createPerson, actions.createFamily, actions.editPerson, actions.removePerson, actions.assignRoles, actions.newCode, actions.unregister]) {
       await expect(action(f)).rejects.toThrow("Unauthorized");
     }
     await expect(actions.sendTestMessage(undefined, f)).rejects.toThrow("Unauthorized");

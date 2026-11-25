@@ -80,8 +80,8 @@ export const listPeople = async () => (await readAll<Person>("people")).sort((a,
 export const deletePerson = (id: string) => rm(file("people", id), { force: true });
 const newCode = () => String(randomInt(1e8)).padStart(8, "0");
 /** A new person, with the code they register on LINE with. */
-export async function addPerson(name: string, phone?: string) {
-  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, code: newCode() };
+export async function addPerson(name: string, phone?: string, family_of?: string) {
+  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, family_of, code: newCode() };
   await write("people", person.id, person);
   return person;
 }
@@ -247,7 +247,13 @@ export async function resetDemoData() {
     JSON.parse(await readFile(path.join(/* turbopackIgnore: true */ SEED_DIR, dir, `${id}.json`), "utf8").catch(() => "null")) as T | null;
   for (const { id } of await readAll<Person>("people")) {
     const seed = await seedFile<Person>("people", id);
-    if (seed?.location) await updatePerson(id, (p) => (p.location ? null : { ...p, location: seed.location }));
+    // A disk seeded before family_of existed gets it here, so each family is offered only for their resident.
+    if (seed) {
+      await updatePerson(id, (p) =>
+        (p.location || !seed.location) && (p.family_of || !seed.family_of)
+          ? null
+          : { ...p, location: p.location ?? seed.location, family_of: p.family_of ?? seed.family_of });
+    }
   }
   for (const current of await readAll<Stored>("residents")) {
     const seed = await seedFile<Stored>("residents", current.id);

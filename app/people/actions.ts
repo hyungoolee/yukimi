@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ROLES } from "@/lib/coverage";
+import { eligible, ROLES } from "@/lib/coverage";
 import { dashboardAccess } from "@/lib/env";
 import { push, text } from "@/lib/line";
-import { addPerson, assign, deletePerson, getPerson, listResidents, renewCode, updatePerson } from "@/lib/store";
+import { addPerson, assign, deletePerson, getPerson, getResident, listResidents, renewCode, updatePerson } from "@/lib/store";
 
 const TEST_MESSAGE = "【テスト】見守り電話からのテストメッセージです。対応は不要です。";
 
@@ -21,6 +21,17 @@ export async function createPerson(formData: FormData) {
   const name = field(formData, "name");
   if (!name) return;
   const person = await addPerson(name, field(formData, "phone") || undefined);
+  redirect(`/people/${person.id}`);
+}
+
+/** A family contact belongs to one resident, and fills that resident's family post if it is vacant. */
+export async function createFamily(formData: FormData) {
+  await requireAccess();
+  const name = field(formData, "name");
+  const resident = await getResident(field(formData, "resident_id"));
+  if (!name || !resident) return;
+  const person = await addPerson(name, undefined, resident.id);
+  if (!resident.second_contact.id) await assign(resident.id, { second_contact: person.id });
   redirect(`/people/${person.id}`);
 }
 
@@ -45,13 +56,16 @@ export async function removePerson(formData: FormData) {
 /** Who holds each of a resident's three roles. An empty choice leaves the post vacant. */
 export async function assignRoles(formData: FormData) {
   await requireAccess();
+  const resident = await getResident(field(formData, "resident_id"));
+  if (!resident) return;
   const roles: Record<string, string> = {};
   for (const role of ROLES) {
     const id = field(formData, role);
-    if (id && !(await getPerson(id))) return;
+    const person = id ? await getPerson(id) : null;
+    if (id && !(person && eligible(person, role, resident))) return;
     roles[role] = id;
   }
-  await assign(field(formData, "resident_id"), roles);
+  await assign(resident.id, roles);
   revalidatePath("/", "layout");
 }
 

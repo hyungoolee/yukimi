@@ -12,6 +12,8 @@ export type Person = {
   location?: LatLng;
   /** Told when a help request reaches nobody or goes unanswered, or a red alert goes unacknowledged (lib/actions.ts). */
   coordinator?: boolean;
+  /** The resident they are family to. Offered only as that resident's family contact. */
+  family_of?: string;
   /** Their LINE registration code, until they use it. */
   code?: string;
 };
