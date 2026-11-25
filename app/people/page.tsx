@@ -11,7 +11,7 @@ import { TestMessage } from "./test-message";
 
 const DOT: Record<Reach, string> = { registered: "bg-emerald-600", unregistered: "bg-red-600", none: "bg-red-600" };
 
-/** For the coordinator: who would be told for each resident, and where an alert would reach nobody. */
+/** For the coordinator: everyone who can be told, and the residents an alert would reach nobody for. */
 export default async function PeoplePage() {
   await connection(); // read the files on every request
   const { t } = await getStrings();
