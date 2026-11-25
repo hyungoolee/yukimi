@@ -22,7 +22,7 @@ async function callVariables(resident: Resident, attempt: number) {
     follow_ups: followUpsLine(resident),
     briefing: calls ? briefingLine(calls) : "なし",
     help_status: calls ? helpLine(resident, calls) : "なし",
-    // A demo runs the same checks in about a minute (agent/prompt.md, 電話の長さ).
+    // A demo runs the same checks in a minute or two (agent/prompt.md, 電話の長さ).
     call_length: DEMO_MODE ? "短く" : "ふつう",
     ...describeWeather(await getWeather(resident.amedas_station)),
   };
