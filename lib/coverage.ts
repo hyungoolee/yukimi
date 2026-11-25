@@ -20,7 +20,8 @@ const CRITICAL: Gap[] = ["red_reaches_nobody", "helper_unreachable"];
 
 /**
  * What registration alone says. Whether the app can send on LINE at all (LINE_READY) is one separate,
- * app-wide fact, shown once, so that a missing LINE setup doesn't hide who still needs to register.
+ * app-wide fact. People can register before it is set (the webhook needs only the secret), so pages
+ * keep showing each resident's gaps without it, and drop only totals that assume sending works.
  */
 export function coverage(resident: Resident) {
   const can = (role: Role) => reach(resident[role]) === "registered";
