@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls, listPeople } from "@/lib/store";
-import { coverage, reach, ROLES } from "@/lib/coverage";
+import { coverage, eligible, reach, ROLES } from "@/lib/coverage";
 import { assignRoles } from "../../people/actions";
+import { AddFamily } from "../../people/add-family";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
@@ -232,7 +233,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               className="w-48 rounded border border-zinc-300 bg-white px-2 py-1"
             >
               <option value="">{t.vacant}</option>
-              {everyone.map((person) => (
+              {everyone.filter((person) => eligible(person, role, resident)).map((person) => (
                 <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
               ))}
             </select>
@@ -253,6 +254,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </ul>
         )}
       </form>
+      <AddFamily residentId={resident.id} t={t} />
       <LocationPicker
         residentId={resident.id}
         who="snow_volunteer"
