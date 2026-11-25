@@ -7,7 +7,7 @@ import { AddFamily } from "../../people/add-family";
 import { DEMO_MODE } from "@/lib/env";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { acceptDemo, deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
+import { acceptDemo, deleteFollowUp, restartLine, setActive, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-card";
@@ -17,7 +17,7 @@ import { LocationPicker } from "./location-picker";
 import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { rankedRows } from "@/lib/dashboard";
-import { REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
+import { REQUESTS, restartable, slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -102,6 +102,14 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                   <SubmitButton pending={t.saving}>{t.acceptDemo(r, slotLabel(nextSlot, new Date(), lang))}</SubmitButton>
                 </form>
               ))}
+          {/* Who is in line is fixed for a request under way; this makes a change on 連絡体制 count for it now. */}
+          {requests.filter(restartable).map((r) => (
+            <form key={`restart-${r.kind}`} action={restartLine}>
+              <input type="hidden" name="resident_id" value={resident.id} />
+              <input type="hidden" name="kind" value={r.kind} />
+              <SubmitButton pending={t.saving}>{t.restartLine(r)}</SubmitButton>
+            </form>
+          ))}
           <MarkHandledButton call={current} t={t} />
         </div>
       </section>

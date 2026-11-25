@@ -38,8 +38,8 @@ describe("open requests", () => {
   it("is the newest request of each kind, with who was asked or who took it", () => {
     const older = call([request("snow", { sent: false })]);
     const newer = call([request("snow"), request("supplies", { accepted_by: "ゆき", slot: slotChoices(morning)[1] })]);
-    // The first person in line, nobody further down.
-    const first = { residentId: "sato", asked: 0, stage: "0::", exhausted: false, askedId: undefined, stepDue: undefined, tried: undefined, acceptedAt: undefined, business: false };
+    // Records from before runs: the role holder had it.
+    const first = { residentId: "sato", run: undefined, runCallId: newer.id, askedId: undefined, stage: "", exhausted: false, acceptedAt: undefined, business: false };
     expect(openRequests(sato, [newer, older])).toEqual([
       { ...first, kind: "snow", requestId: newer.id, callId: newer.id, since: newer.at, escalated: false, status: "sent", who: "山本", slot: undefined },
       { ...first, kind: "supplies", requestId: newer.id, callId: newer.id, since: newer.at, escalated: false, status: "accepted", who: "ゆき", slot: { date: "2026-11-26", part: "pm" } },

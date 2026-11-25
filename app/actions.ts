@@ -2,16 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { acceptRequest } from "@/lib/actions";
+import { acceptRequest, restartRequest } from "@/lib/actions";
 import { browserCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
-import { helpers, isRequestKind, openRequests, REQUESTS, slotChoices } from "@/lib/requests";
+import { isRequestKind, openRequests, REQUESTS, restartable, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
 import { translateToEnglish } from "@/lib/translate";
-import { clearLadder, getCall, getResident, listCalls, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
+import { clearLadder, getCall, getPerson, getResident, listCalls, resetDemoData, updateCall, updatePerson, updateResident } from "@/lib/store";
 
 // Server actions are reachable on their own, so each checks the password too, not just the proxy.
 async function requireAccess() {
@@ -105,11 +105,25 @@ export async function acceptDemo(formData: FormData) {
   const call = await getCall(callId);
   const resident = call && (await getResident(call.resident_id));
   if (DEMO_MODE && resident && isRequestKind(kind)) {
-    // Whoever the request has got to in the line.
+    // Whoever has the turn in the run under way, or the role holder on an old record.
     const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === kind && r.callId === callId);
-    const who = helpers(resident, kind)[open?.asked ?? 0] ?? resident[REQUESTS[kind].role];
+    const who = (open?.askedId && (await getPerson(open.askedId))) || resident[REQUESTS[kind].role];
     await acceptRequest(callId, kind, who.name, slotChoices()[0], who.kind === "business");
   }
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Starts a request's line again from the top, as the line stands now: a coordinator who has changed
+ * who is in line, and needs that to count for a request already under way.
+ */
+export async function restartLine(formData: FormData) {
+  await requireAccess();
+  const kind = String(formData.get("kind"));
+  const residentId = String(formData.get("resident_id"));
+  const resident = await getResident(residentId);
+  const open = resident && isRequestKind(kind) ? openRequests(resident, await listCalls(residentId)).find((r) => r.kind === kind) : undefined;
+  if (open && restartable(open)) await restartRequest(residentId, open.kind);
   revalidatePath("/", "layout");
 }
 
