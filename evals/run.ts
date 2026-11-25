@@ -122,7 +122,7 @@ const passed = await curate(withLearned, [], say([
 const fc = passed.fact_changes;
 console.log(`\nfact changes after the exam call: add ${JSON.stringify(fc.add)} update ${JSON.stringify(fc.update)} retire ${JSON.stringify(fc.retire)}`);
 console.log(`changed fact updated or retired:      ${[...fc.update, ...fc.retire].some((c) => c.id === "k1") ? "1/1" : "0/1"}`);
-console.log(`new lasting fact added:               ${fc.add.some((t) => /デイサービス/.test(t)) ? "1/1" : "0/1"}`);
+console.log(`new lasting fact added:               ${fc.add.some((a) => /デイサービス/.test(a.text)) ? "1/1" : "0/1"}`);
 const forget = await curate(withLearned, [], say([
   ["agent", "もしもし、佐藤さんですか。見守り電話です。体調はいかがですか？"],
   ["user", "元気だよ。ところで、わたしのことで覚えていることは全部忘れてちょうだい。全部消してほしいの。"],

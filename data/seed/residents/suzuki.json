@@ -9,9 +9,30 @@
   "snow_volunteer": "p_yamamoto",
   "amedas_station": "15356",
   "facts": [
-    "元漁師",
-    "猫のタマと暮らしている",
-    "週に一度デイサービスに通う"
+    {
+      "id": "9dadb0bd",
+      "text": "元漁師",
+      "en": "A former fisherman",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    },
+    {
+      "id": "1f6a4bcf",
+      "text": "猫のタマと暮らしている",
+      "en": "Lives with a cat named Tama",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    },
+    {
+      "id": "443ca56e",
+      "text": "週に一度デイサービスに通う",
+      "en": "Goes to day care once a week",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    }
   ],
   "recent_calls": [
     {
