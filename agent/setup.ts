@@ -95,6 +95,8 @@ const agentConfig = {
       model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_v3_conversational",
       speed: 0.9,
       stability: 0.4,
+      // Off: the voice was chosen without audio tags, and a tag inside say_exactly would break "read it word for word".
+      expressive_mode: false,
     },
     // Seconds of silence before the agent prompts the resident again.
     turn: {
