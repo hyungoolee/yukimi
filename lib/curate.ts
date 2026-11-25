@@ -22,13 +22,12 @@ You get today's date, the facts remembered about the resident and the follow-ups
 
 resolved: the ids of open follow-ups that this call settled. Close one only when the resident said plainly that it is over: the pain is gone, the exam result is in, the heater was fixed. "Better", "a little easier" or a brush-off such as 「大丈夫」 is not over: older people often play pain down, so leave it open. If it was not discussed, leave it open.
 
-new_follow_ups: up to three things from this call worth asking about on a later day. Good follow-ups are specific to this person and have a natural end:
-- a health problem that should be checked again (a fall, pain, a cough, a wound);
-- something that was arranged or promised (they will see the doctor on Thursday, their son is visiting at the weekend);
-- an event they are waiting on (a grandchild's exam result, a visit from family).
-- a topic the resident raised that the agent said it would like to hear about again ("また今度、聞かせてください"): give it 3 days, so one missed call does not lose it.
-List health problems first: only the first three are kept.
-Do not add the questions asked on every call (meals, sleep, heating, going out): those are tracked separately. Never add a follow-up about snow or getting out of the door, food or medicine running short, or kerosene and heating, even when the resident was snowed in or running out today: the winter checks ask about these every morning, and an open snow or supplies request is followed up on its own. If snow led to a health problem, write the health problem (「転んだ腰の痛みはその後どうか」), not the snow. Do not add anything about money, bank accounts or cards, even if it came up. Do not repeat something that is already open. Return an empty list when nothing qualifies, which is common.
+new_follow_ups: what the caller should bring up on a later call. The caller reads this list as 「前回からの確認」, and the family sees it as "To ask on the next call". Separately, the caller is already given the checks it makes every morning (meals, sleep, heating, getting out, food, medicine and kerosene) and the status of any snow or supplies help that was arranged. So this list holds only what it would otherwise forget: what a friend who remembered this call would ask about next time. Usually that is:
+- a health problem to check again (a fall, pain, a cough, a wound);
+- a plan or promise (they will see the doctor on Thursday, their son is visiting at the weekend);
+- an event they are waiting on (a grandchild's exam result);
+- a topic the agent said it would like to hear about again ("また今度、聞かせてください"): give it 3 days, so one missed call does not lose it.
+List health problems first: only the first three are kept. If snow or running short led to a health problem, the follow-up is the health problem (「転んだ腰の痛みはその後どうか」), not the snow. Do not add anything about money, bank accounts or cards, even if it came up. Do not repeat something that is already open. An empty list is common.
 
 Write each text in Japanese as a short note of what to ask, for example 「腰の痛みはその後どうか」 or 「健太さんの受験の結果（金曜に発表）」. days is how many days from today it stays worth asking, from 1 to 14: a few days for something that should pass quickly, longer for a dated event.
 

@@ -94,8 +94,8 @@ const stuck = await curate(sato, [], say([
   ["agent", "それは寒いですね。食べるものとお薬は足りていますか？"],
   ["user", "食べ物ももうほとんどないし、血圧の薬も今朝の分でおしまい。それに、きのうから腰が痛くてね。"],
 ]), today);
-console.log(`follow-ups after the snowed-in, out-of-supplies call: ${stuck.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
 console.log(`\nfollow-ups after the slip-on-ice call: ${first.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
+console.log(`follow-ups after the snowed-in, out-of-supplies call: ${stuck.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
 const open = [{ id: "hip", text: "腰の痛みはその後どうか", created: today, expires: today }];
 const nextDay = [
   ["agent", "もしもし、佐藤さんですか。見守り電話です。きのうは腰が痛いとのことでしたが、その後いかがですか？"],
