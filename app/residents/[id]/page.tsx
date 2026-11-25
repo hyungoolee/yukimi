@@ -243,7 +243,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               id={`role-${role}`}
               name={role}
               defaultValue={resident[role].id ?? ""}
-              className="w-48 rounded border border-zinc-300 bg-white px-2 py-1"
+              className="w-48 rounded border border-zinc-300 bg-white py-1 pr-8 pl-2"
             >
               <option value="">{t.vacant}</option>
               {everyone.filter((person) => eligible(person, role, resident)).map((person) => (
