@@ -1,7 +1,7 @@
 import { MEASURES } from "./measures";
 import { REQUESTS, slotLabel, type OpenRequest } from "./requests";
 import { SHORT_OF_SUPPLIES, UNCONFIRMED } from "./rules";
-import type { Resident, Weather } from "./types";
+import type { Resident } from "./types";
 
 export type Lang = "ja" | "en";
 
@@ -28,7 +28,19 @@ const ja = {
   switchTo: "English",
   title: "見守りリスト",
   back: "← 見守りリスト",
-  weather: (w: Weather) => `今朝の最低気温は${w.low_c}℃、この24時間の降雪は${w.snowfall_24h_cm}センチ、積雪は${w.snow_depth_cm}センチ`,
+  weather: {
+    title: "天気",
+    live: (station: string, time: string) => `ライブ・気象庁アメダス ${station}・${time}時点`,
+    demo: (date: string) => `デモ用の天気（保存したシナリオ・${date}）`,
+    fallback: "ライブの天気を取得できません。保存したデータを表示しています",
+    now: "現在",
+    low: "今日の最低",
+    snowfall: "24時間の降雪",
+    depth: "積雪",
+    mark: (value: string) => `目安 ${value}`,
+    winterOn: "今日の電話は冬の確認あり（暖房・玄関・食料・薬・灯油）",
+    winterOff: "今日の電話は天気の話を軽くするだけ",
+  },
   name: (r: Resident) => `${r.name}さん`,
   last: (time: string) => `最終 ${time}`,
   daily: (time: string) => `毎日 ${time}`,
@@ -174,7 +186,19 @@ const en: typeof ja = {
   switchTo: "日本語",
   title: "Check-in list",
   back: "← Check-in list",
-  weather: (w) => `This morning: low ${w.low_c}°C, ${w.snowfall_24h_cm} cm of snow in 24 hours, ${w.snow_depth_cm} cm on the ground`,
+  weather: {
+    title: "Weather",
+    live: (station, time) => `Live · JMA AMeDAS ${station} · as of ${time}`,
+    demo: (date) => `Demo weather (saved scenario, ${date})`,
+    fallback: "Live weather unavailable, showing saved data",
+    now: "Now",
+    low: "Today's low",
+    snowfall: "Snow, 24 h",
+    depth: "On the ground",
+    mark: (value) => `threshold ${value}`,
+    winterOn: "Winter check on today's calls (heating, door, food, medicine, kerosene)",
+    winterOff: "Light weather chat only on today's calls",
+  },
   // Seed residents have no romanized name; their ID is the family name in romaji.
   name: (r) => `${r.id.charAt(0).toUpperCase()}${r.id.slice(1)}-san`,
   last: (time) => `Last call ${time}`,
