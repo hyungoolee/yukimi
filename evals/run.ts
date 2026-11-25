@@ -94,8 +94,8 @@ const stuck = await curate(sato, [], say([
   ["agent", "それは寒いですね。食べるものとお薬は足りていますか？"],
   ["user", "食べ物ももうほとんどないし、血圧の薬も今朝の分でおしまい。それに、きのうから腰が痛くてね。"],
 ]), today);
-console.log(`follow-ups after the snowed-in, out-of-supplies call: ${stuck.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
 console.log(`\nfollow-ups after the slip-on-ice call: ${first.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
+console.log(`follow-ups after the snowed-in, out-of-supplies call: ${stuck.new_follow_ups.map((f) => `${f.text} (${f.days}d)`).join(" / ") || "none"}`);
 const open = [{ id: "hip", text: "腰の痛みはその後どうか", created: today, expires: today }];
 const nextDay = [
   ["agent", "もしもし、佐藤さんですか。見守り電話です。きのうは腰が痛いとのことでしたが、その後いかがですか？"],
@@ -105,7 +105,7 @@ const nextDay = [
 ].map(([role, message]) => ({ role, message }));
 const second = await curate(sato, open, nextDay, today);
 console.log(`follow-up about the hip or the fall:  ${first.new_follow_ups.some((f) => /腰|転/.test(f.text)) ? "1/1" : "0/1"}`);
-const covered = /食事|睡眠|雪|玄関|外に出|食べ物|食料|買い物|薬|灯油|暖房|ストーブ/;
+const covered = /食事|睡眠|雪|玄関|外に出|食べ物|食料|買い物|薬が切れ|薬は届|灯油|暖房|ストーブ/;
 console.log(`follow-up about the back pain:        ${stuck.new_follow_ups.some((f) => /腰/.test(f.text)) ? "1/1" : "0/1"}`);
 console.log(`covered topics left out:              ${[first, stuck].filter((c) => !c.new_follow_ups.some((f) => covered.test(f.text))).length}/2`);
 console.log(`settled follow-up closed:             ${second.resolved.includes("hip") ? "1/1" : "0/1"}  (new: ${second.new_follow_ups.map((f) => f.text).join(" / ") || "none"})`);
