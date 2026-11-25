@@ -96,14 +96,21 @@ describe("follow-ups", () => {
 
 describe("facts proposed by the model", () => {
   const withFacts = (facts: Fact[]) => ({ ...resident([]), facts });
-  const propose = (r: Resident, fact_changes: Partial<Curation["fact_changes"]>) =>
-    applyCuration(r, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, ...fact_changes } }, TODAY, "call:conv_1");
+  // Facts as the model proposes them, English left out unless a test is about it.
+  type Proposed = { add?: string[]; update?: { id: string; text: string }[]; retire?: Curation["fact_changes"]["retire"] };
+  const propose = (r: Resident, { add = [], update = [], retire = [] }: Proposed) =>
+    applyCuration(
+      r,
+      { resolved: [], new_follow_ups: [], fact_changes: { add: add.map((text) => ({ text, en: "" })), update: update.map((u) => ({ ...u, en: "" })), retire } },
+      TODAY,
+      "call:conv_1",
+    );
   const factTexts = (r: Resident) => r.facts.map((f) => f.text);
   const ops = (r: Resident) => (r.memory_log ?? []).map((e) => e.op);
 
   it("adds a new fact, unlocked, and logs which call it came from", () => {
     const out = propose(withFacts([]), { add: [" 毎週木曜にデイサービスに通う "] });
-    expect(out.facts).toEqual([{ id: expect.any(String), text: "毎週木曜にデイサービスに通う", since: TODAY, source: "call" }]);
+    expect(out.facts).toEqual([{ id: expect.any(String), text: "毎週木曜にデイサービスに通う", en: "", since: TODAY, source: "call" }]);
     expect(out.memory_log).toEqual([{ at: expect.any(String), by: "call:conv_1", op: "add", fact: out.facts[0].id, text: "毎週木曜にデイサービスに通う" }]);
   });
 
@@ -210,7 +217,7 @@ describe("facts edited by the helper", () => {
 
   it("locks whatever the helper adds or edits", () => {
     const added = addFact(base, "夫は去年亡くなった", TODAY);
-    expect(added.facts[1]).toEqual({ id: expect.any(String), text: "夫は去年亡くなった", since: TODAY, source: "helper", locked: true });
+    expect(added.facts[1]).toEqual({ id: expect.any(String), text: "夫は去年亡くなった", en: "", since: TODAY, source: "helper", locked: true });
     const edited = editFact(added, "k", "孫の健太は北大に合格した");
     expect(edited.facts[0]).toMatchObject({ text: "孫の健太は北大に合格した", source: "call", locked: true });
     expect((edited.memory_log ?? []).map((e) => [e.by, e.op])).toEqual([["helper", "add"], ["helper", "update"]]);
@@ -240,7 +247,7 @@ describe("facts edited by the helper", () => {
 
     // A wording that was once refused, then added, edited and deleted leaves nothing either.
     const full = { ...resident([]), facts: Array.from({ length: MAX_FACTS }, (_, i) => fact(`f${i}`, `事実${i}`)) };
-    let r = applyCuration(full, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, add: ["書道を習っている"] } }, TODAY);
+    let r = applyCuration(full, { resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, add: [{ text: "書道を習っている", en: "" }] } }, TODAY);
     r = addFact(retireFact(r, "f0", TODAY), "書道を習っている", TODAY);
     const id = r.facts.at(-1)!.id;
     r = deleteFact(retireFact(editFact(r, id, "書道を30年習っている"), id, TODAY), id);
@@ -280,7 +287,7 @@ describe("resident files from before facts were objects", () => {
 
 describe("review fixes for the editor", () => {
   const withFacts = (facts: Fact[]): Resident => ({ ...resident([]), facts });
-  const adding = (text: string): Curation => ({ resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, add: [text] } });
+  const adding = (text: string): Curation => ({ resolved: [], new_follow_ups: [], fact_changes: { ...noFacts, add: [{ text, en: "" }] } });
 
   it("keeps the wording a helper corrected from coming back as a new fact", () => {
     const edited = editFact(withFacts([fact("k", "木曜にデイサービス")]), "k", "金曜にデイサービス");
@@ -315,5 +322,30 @@ describe("review fixes for the editor", () => {
     const kept = r.facts[0].id;
     r = deleteFact(retireFact(r, kept, TODAY), kept);
     expect(JSON.stringify(r.memory_log)).not.toContain("猫");
+  });
+});
+
+describe("English for the dashboard's English view", () => {
+  it("is stored with the text, by the model and by the helper, and follows the fact", () => {
+    const learned = applyCuration(
+      { ...resident([]), facts: [fact("k", "孫の健太が大学受験中", { en: "Grandson Kenta is taking exams" })] },
+      { resolved: [], new_follow_ups: [], fact_changes: {
+        add: [{ text: "庭でバラを育てている", en: "Grows roses" }],
+        update: [{ id: "k", text: "孫の健太は北大に合格した", en: "Grandson Kenta got into Hokkaido University" }],
+        retire: [],
+      } },
+      TODAY,
+    );
+    expect(learned.facts.map((f) => f.en)).toEqual(["Grandson Kenta got into Hokkaido University", "Grows roses"]);
+
+    const k = learned.facts[0].id;
+    // A helper's edit replaces the English too: blank when the translation failed, never the old wording's.
+    expect(editFact(learned, k, "孫の健太は札幌で一人暮らし").facts[0].en).toBe("");
+    expect(addFact(learned, "猫を飼っている", TODAY, "Has a cat").facts.at(-1)!.en).toBe("Has a cat");
+    expect(restoreFact(retireFact(learned, k, TODAY), k).facts.find((f) => f.id === k)!.en).toBe("Grandson Kenta got into Hokkaido University");
+
+    const noted = setCareNotes(learned, "耳が遠い", "Hard of hearing");
+    expect(noted.care_notes_en).toBe("Hard of hearing");
+    expect(setCareNotes(noted, "", "x").care_notes_en).toBe("");
   });
 });

@@ -90,11 +90,11 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
   const removedByHelper = { has: (text: string) => isBlocked(resident, text) };
   const alreadyRefused = new Set((resident.memory_log ?? []).filter((e) => e.op === "refuse").map((e) => e.text));
 
-  for (const { id, text } of changes.update.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
+  for (const { id, text, en } of changes.update.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const fact = editable(id);
     const t = clean(text);
     if (!fact || !fits(t) || has(t) || NOT_A_NOTE.test(t) || removedByHelper.has(t)) continue;
-    facts = facts.map((f) => (f.id === id ? { ...f, text: t } : f));
+    facts = facts.map((f) => (f.id === id ? { ...f, text: t, en: clean(en) } : f));
     log.push({ op: "update", fact: id, text: t, before: fact.text });
   }
   for (const { id, reason } of changes.retire.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
@@ -104,7 +104,7 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
     retired.push({ ...fact, retired: today, reason: clean(reason).slice(0, MAX_LENGTH) });
     log.push({ op: "retire", fact: id, text: fact.text });
   }
-  for (const text of changes.add.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
+  for (const { text, en } of changes.add.slice(0, MAX_FACT_CHANGES_PER_CALL)) {
     const t = clean(text);
     if (!fits(t) || has(t) || NOT_A_NOTE.test(t) || removedByHelper.has(t)) continue;
     if (facts.length >= MAX_FACTS) {
@@ -113,7 +113,7 @@ function applyFactChanges(resident: Resident, changes: Curation["fact_changes"],
       alreadyRefused.add(t);
       continue;
     }
-    const added: Fact = { id: newId(), text: t, since: today, source: "call" };
+    const added: Fact = { id: newId(), text: t, en: clean(en), since: today, source: "call" };
     facts.push(added);
     log.push({ op: "add", fact: added.id, text: t });
   }
@@ -154,18 +154,20 @@ export const removeFollowUp = (resident: Resident, id: string): Resident => ({
   follow_ups: (resident.follow_ups ?? []).filter((f) => f.id !== id),
 });
 
-export function addFact(resident: Resident, text: string, today: string): Resident {
+// `en` is the text's English (lib/translate.ts), or "" when that failed.
+
+export function addFact(resident: Resident, text: string, today: string, en = ""): Resident {
   const t = clean(text);
   if (!fits(t) || resident.facts.some((f) => f.text === t) || resident.facts.length >= MAX_FACTS) return resident;
-  const fact: Fact = { id: newId(), text: t, since: today, source: "helper", locked: true };
+  const fact: Fact = { id: newId(), text: t, en, since: today, source: "helper", locked: true };
   return logged(unblock({ ...resident, facts: [...resident.facts, fact] }, t), "helper", [{ op: "add", fact: fact.id, text: t }]);
 }
 
-export function editFact(resident: Resident, id: string, text: string): Resident {
+export function editFact(resident: Resident, id: string, text: string, en = ""): Resident {
   const fact = resident.facts.find((f) => f.id === id);
   const t = clean(text);
   if (!fact || !fits(t) || t === fact.text) return resident;
-  const facts = resident.facts.map((f) => (f.id === id ? { ...f, text: t, locked: true } : f));
+  const facts = resident.facts.map((f) => (f.id === id ? { ...f, text: t, en, locked: true } : f));
   // A correction takes the old wording out, so the model can't learn it again as a new fact.
   return logged(unblock(block({ ...resident, facts }, fact.text), t), "helper", [{ op: "update", fact: id, text: t, before: fact.text }]);
 }
@@ -198,7 +200,7 @@ export function restoreFact(resident: Resident, id: string): Resident {
         ...resident,
         facts: twin
           ? resident.facts.map((f) => (f === twin ? { ...f, locked: true } : f))
-          : [...resident.facts, { id: fact.id, text: fact.text, since: fact.since, source: fact.source, locked: true }],
+          : [...resident.facts, { id: fact.id, text: fact.text, en: fact.en, since: fact.since, source: fact.source, locked: true }],
         retired_facts: (resident.retired_facts ?? []).filter((f) => f.id !== id),
       },
       fact.text,
@@ -236,9 +238,9 @@ export function deleteFact(resident: Resident, id: string): Resident {
   );
 }
 
-export function setCareNotes(resident: Resident, text: string): Resident {
+export function setCareNotes(resident: Resident, text: string, en = ""): Resident {
   const t = clean(text).slice(0, MAX_CARE_NOTES);
   if (t === clean(resident.care_notes)) return resident;
   // The log records that the notes changed, not what they said: clearing them must leave nothing behind.
-  return logged({ ...resident, care_notes: t }, "helper", [{ op: "care_notes" }]);
+  return logged({ ...resident, care_notes: t, care_notes_en: t ? en : "" }, "helper", [{ op: "care_notes" }]);
 }

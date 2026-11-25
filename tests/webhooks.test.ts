@@ -21,6 +21,9 @@ vi.mock("@/lib/extract", () => ({ extract }));
 const curate = vi.fn<typeof import("@/lib/curate").curate>(async () => ({ fact_changes: noFacts, resolved: [], new_follow_ups: [] }));
 const noFacts: import("@/lib/curate").Curation["fact_changes"] = { add: [], update: [], retire: [] };
 vi.mock("@/lib/curate", () => ({ curate }));
+// English for what the helper writes: marked, so a test can see it was stored, and gone once the fact is.
+const translateNote = vi.fn(async (japanese: string) => `en:${japanese}`);
+vi.mock("@/lib/translate", () => ({ translateNote, translateToEnglish: vi.fn() }));
 const placeCall = vi.fn(async () => "conv_retry");
 const placeNewsCall = vi.fn<(resident: { id: string }, news: string, request: { call_id: string; request_kind: string }) => Promise<string>>(async () => "conv_news");
 vi.mock("@/lib/elevenlabs", async (original) => ({ ...(await original<typeof import("@/lib/elevenlabs")>()), placeCall, placeNewsCall }));
@@ -553,7 +556,7 @@ describe("demo reset", () => {
     await store.saveResident({ ...(await store.getResident("takahashi"))!, location: { lat: 43.3, lng: 141.9 } });
     expect((await store.listCalls()).length).toBeGreaterThan(0);
     await store.updateResident("sato", (r) => ({
-      ...r, care_notes: "夫の話はしない", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
+      ...r, care_notes: "夫の話はしない", care_notes_en: "Don't bring up her husband", facts: [...r.facts, { id: "x", text: "通話で覚えた事実", since: "2026-11-25", source: "call" }],
     }));
 
     await resetDemo();
@@ -562,7 +565,7 @@ describe("demo reset", () => {
     expect(await store.getLadder("sato")).toBeNull();
     const sato = (await store.getResident("sato"))!;
     expect(sato.facts.map((f) => f.text)).toEqual(["孫の健太が大学受験中", "庭でバラを育てている", "ひざが少し悪い"]);
-    expect([sato.care_notes, sato.retired_facts, sato.memory_log]).toEqual(["", [], []]);
+    expect([sato.care_notes, sato.care_notes_en, sato.retired_facts, sato.memory_log]).toEqual(["", "", [], []]);
     expect(sato.recent_calls[0].date).toBe("2026-11-25");
     expect(sato.phone).toBe("+819011112222");
     expect(sato.helper.line_id).toBe("U_helper");
@@ -797,7 +800,7 @@ describe("red alerts must be acknowledged", () => {
 describe("live captions", () => {
   it("returns the translation, or an empty caption when translating fails", async () => {
     const translateToEnglish = vi.fn(async () => "Is your heater on?");
-    vi.doMock("@/lib/translate", () => ({ translateToEnglish }));
+    vi.doMock("@/lib/translate", () => ({ translateNote, translateToEnglish }));
     vi.resetModules();
     const { translateCaption } = await import("@/app/actions");
     expect(await translateCaption("暖房はついていますか。")).toBe("Is your heater on?");
@@ -1075,10 +1078,10 @@ describe("the helper's memory edits", () => {
     const facts = async () => (await store.getResident("suzuki"))!;
     await actions.addFactAction(form({ resident_id: "suzuki", text: "毎週木曜に書道教室に通う" }));
     const added = (await facts()).facts.at(-1)!;
-    expect(added).toMatchObject({ text: "毎週木曜に書道教室に通う", source: "helper", locked: true });
+    expect(added).toMatchObject({ text: "毎週木曜に書道教室に通う", en: "en:毎週木曜に書道教室に通う", source: "helper", locked: true });
 
     await actions.editFactAction(form({ resident_id: "suzuki", fact_id: added.id, text: "毎週金曜に書道教室に通う" }));
-    expect((await facts()).facts.at(-1)!.text).toBe("毎週金曜に書道教室に通う");
+    expect((await facts()).facts.at(-1)).toMatchObject({ text: "毎週金曜に書道教室に通う", en: "en:毎週金曜に書道教室に通う" });
 
     await actions.retireFactAction(form({ resident_id: "suzuki", fact_id: added.id }));
     expect((await facts()).facts.map((f) => f.id)).not.toContain(added.id);
@@ -1090,7 +1093,7 @@ describe("the helper's memory edits", () => {
     expect(JSON.stringify(await facts())).not.toContain("書道教室"); // neither wording survives, in the log either
 
     await actions.saveCareNotes(form({ resident_id: "suzuki", text: "奥さんの話はこちらからしない" }));
-    expect((await facts()).care_notes).toBe("奥さんの話はこちらからしない");
+    expect((await facts())).toMatchObject({ care_notes: "奥さんの話はこちらからしない", care_notes_en: "en:奥さんの話はこちらからしない" });
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ token: "tok_test" }))));
     expect(variablesOf(await actions.startBrowserCall("suzuki"))).toMatchObject({
       care_notes: "奥さんの話はこちらからしない", facts: "元漁師、猫のタマと暮らしている、週に一度デイサービスに通う",
