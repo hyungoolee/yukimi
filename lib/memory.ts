@@ -8,9 +8,9 @@ import type { Fact, FollowUp, MemoryChange, Resident, Turn } from "./types";
 // The model proposes (lib/curate.ts); the functions here decide what is actually stored,
 // and every change to the facts is written to the resident's memory log.
 
-// Checks and threads have caps of their own, so neither kind can crowd out the other.
-const LIMITS = { check: { open: 5, perCall: 3 }, thread: { open: 2, perCall: 2 } } as const;
-const MAX_DAYS = 14;
+// Checks and threads have caps of their own, so neither kind can crowd out the other. A thread lasts
+// at most a week: it is small talk, and an old one would keep opening the call.
+const LIMITS = { check: { open: 5, perCall: 3, days: 14 }, thread: { open: 2, perCall: 2, days: 7 } } as const;
 const MAX_LENGTH = 80;
 // What the model writes (follow-ups and facts) is placed in tomorrow's agent prompt, so it must stay a
 // plain one-line note: nothing that reads as prompt structure, and nothing about money, whoever said
@@ -81,7 +81,7 @@ function applyFollowUps(resident: Resident, proposed: Curation, today: string): 
     if (count(added) === LIMITS[kind].perCall || count(kept) + count(added) >= LIMITS[kind].open) continue;
     if (!fits(t) || known.has(t) || NOT_A_NOTE.test(t)) continue;
     known.add(t);
-    const lasts = Math.min(MAX_DAYS, Math.max(1, Math.round(Number(days) || 1)));
+    const lasts = Math.min(LIMITS[kind].days, Math.max(1, Math.round(Number(days) || 1)));
     added.push({ id: newId(), text: t, created: today, expires: daysBefore(today, -lasts), kind });
   }
   return { ...resident, follow_ups: [...kept, ...added] };

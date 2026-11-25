@@ -59,6 +59,11 @@ describe("follow-ups", () => {
     expect(texts(full)).toEqual(texts(out));
   });
 
+  it("keeps a thread for a week at most", () => {
+    const out = applyCuration(resident([]), { fact_changes: noFacts, resolved: [], new_follow_ups: [{ text: "話題", days: 14, kind: "thread" }] }, TODAY);
+    expect(out.follow_ups![0].expires).toBe("2026-12-03");
+  });
+
   it("drops settled and expired ones, and ignores ids it does not know", () => {
     const r = resident([followUp("a", "腰", "2026-11-30"), followUp("b", "受験", "2026-11-30"), followUp("c", "古い", "2026-11-20")]);
     const out = applyCuration(r, { fact_changes: noFacts, resolved: ["a", "zzz"], new_follow_ups: [] }, TODAY);
