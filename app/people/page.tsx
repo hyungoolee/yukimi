@@ -53,19 +53,21 @@ export default async function PeoplePage() {
       <h1 className="mt-2 text-2xl font-semibold">{t.people}</h1>
       <p className="mt-1 text-sm text-zinc-600">{t.peopleIntro}</p>
 
-      {!LINE_READY && (
+      {/* Without LINE nobody can register, so every other warning here follows from this one: show it alone. */}
+      {!LINE_READY ? (
         <p className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800">{t.lineNotReady}</p>
+      ) : (
+        <p className={`mt-3 rounded-lg border p-3 text-sm font-medium ${
+          critical > 0 ? "border-red-300 bg-red-50 text-red-800" : "border-emerald-300 bg-emerald-50 text-emerald-800"
+        }`}>
+          {critical > 0 ? t.coverageBanner(critical) : t.coverageOk}
+        </p>
       )}
-      <p className={`mt-3 rounded-lg border p-3 text-sm font-medium ${
-        critical > 0 ? "border-red-300 bg-red-50 text-red-800" : "border-emerald-300 bg-emerald-50 text-emerald-800"
-      }`}>
-        {critical > 0 ? t.coverageBanner(critical) : t.coverageOk}
-      </p>
 
       {/* Told about the whole town, not about one resident, so they are listed apart from everyone else. */}
       <h2 className="mt-6 font-medium">{t.coordinatorShort}</h2>
       <p className="mt-1 text-sm text-zinc-600">{t.coordinatorsIntro}</p>
-      {!coordinators.some((person) => person.line_id) && (
+      {LINE_READY && !coordinators.some((person) => person.line_id) && (
         <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-800">{t.noCoordinator}</p>
       )}
       {coordinators.length > 0 && (
@@ -77,13 +79,13 @@ export default async function PeoplePage() {
         {rows.map(({ resident, redAlertReaches, gaps, level }) => (
           <li
             key={resident.id}
-            className={`rounded-lg border p-4 ${level === "critical" ? "border-red-400 bg-red-50/50" : "border-zinc-200"}`}
+            className={`rounded-lg border p-4 ${LINE_READY && level === "critical" ? "border-red-400 bg-red-50/50" : "border-zinc-200"}`}
           >
             <div className="flex flex-wrap items-baseline gap-x-3">
               <Link href={`/residents/${resident.id}`} className="text-lg font-medium hover:underline">
                 {t.name(resident)}
               </Link>
-              <span className={`text-sm ${redAlertReaches === 0 ? "font-medium text-red-700" : "text-zinc-600"}`}>
+              <span className={`text-sm ${LINE_READY && redAlertReaches === 0 ? "font-medium text-red-700" : "text-zinc-600"}`}>
                 {t.redReaches(redAlertReaches)}
               </span>
             </div>
