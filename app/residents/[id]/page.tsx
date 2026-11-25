@@ -16,6 +16,7 @@ import { japanTime, RiskBadge, riskEdge } from "../../ui";
 import { LocationPicker } from "./location-picker";
 import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
+import { SaveOnChange } from "../../save-on-change";
 import { rankedRows } from "@/lib/dashboard";
 import { REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
@@ -219,16 +220,25 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
       <PhoneForm
         residentId={resident.id}
         phone={resident.phone}
-        labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint }}
+        labels={{ phone: t.phone, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint, enterToSave: t.enterToSave, unset: t.picker.unset }}
       />
       <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
-      {/* The same save as on the People page. Keyed on who holds the roles, so the menus show a saved change. */}
-      <form key={ROLES.map((role) => resident[role].id).join()} action={assignRoles} className="mt-2 space-y-2 text-sm">
+      {/* The same save as on the People page. Each menu is keyed on who holds the role, so a change made elsewhere shows. */}
+      <SaveOnChange
+        action={assignRoles}
+        labels={{ saving: t.saving, saved: t.saved, failed: t.saveFailed }}
+        className="mt-2 space-y-2 text-sm"
+        footer={{
+          className: "flex flex-wrap items-center gap-3 sm:pl-34",
+          extra: <Link href="/people" className="text-zinc-500 hover:underline">{t.people}</Link>,
+        }}
+      >
         <input type="hidden" name="resident_id" value={resident.id} />
         {ROLES.map((role) => (
           <div key={role} className="flex flex-wrap items-center gap-2">
             <label htmlFor={`role-${role}`} className="w-32 text-zinc-500">{t.role[role]}</label>
             <select
+              key={resident[role].id ?? ""}
               id={`role-${role}`}
               name={role}
               defaultValue={resident[role].id ?? ""}
@@ -244,18 +254,14 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             </span>
           </div>
         ))}
-        <div className="flex flex-wrap items-center gap-3 sm:pl-34">
-          <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
-          <Link href="/people" className="text-zinc-500 hover:underline">{t.people}</Link>
-        </div>
-        {gaps.length > 0 && (
-          <ul className={`list-disc pl-5 ${level === "critical" ? "font-medium text-red-700" : "text-zinc-700"}`}>
-            {gaps.map((gap) => (
-              <li key={gap}>{t.gap[gap]}</li>
-            ))}
-          </ul>
-        )}
-      </form>
+      </SaveOnChange>
+      {gaps.length > 0 && (
+        <ul className={`mt-2 list-disc pl-5 text-sm ${level === "critical" ? "font-medium text-red-700" : "text-zinc-700"}`}>
+          {gaps.map((gap) => (
+            <li key={gap}>{t.gap[gap]}</li>
+          ))}
+        </ul>
+      )}
       <AddFamily residentId={resident.id} t={t} />
       <LocationPicker
         residentId={resident.id}

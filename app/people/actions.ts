@@ -54,19 +54,21 @@ export async function removePerson(formData: FormData) {
 }
 
 /** Who holds each of a resident's three roles. An empty choice leaves the post vacant. */
+/** Returns whether it saved, since the menus save on change and have no button to show a failure. */
 export async function assignRoles(formData: FormData) {
   await requireAccess();
   const resident = await getResident(field(formData, "resident_id"));
-  if (!resident) return;
+  if (!resident) return false;
   const roles: Record<string, string> = {};
   for (const role of ROLES) {
     const id = field(formData, role);
     const person = id ? await getPerson(id) : null;
-    if (id && !(person && eligible(person, role, resident))) return;
+    if (id && !(person && eligible(person, role, resident))) return false;
     roles[role] = id;
   }
   await assign(resident.id, roles);
   revalidatePath("/", "layout");
+  return true;
 }
 
 export async function newCode(formData: FormData) {
