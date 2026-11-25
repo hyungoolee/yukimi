@@ -1,11 +1,17 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { DEMO_MODE, env } from "./env";
 import { briefingLine } from "./briefing";
-import { careNotesLine, factsLine, followUpsLine } from "./memory";
+import { careNotesLine, factsLine, followUpsLine, threadsLine } from "./memory";
 import { helpLine } from "./requests";
 import { listCalls, savePending } from "./store";
 import type { Resident } from "./types";
 import { describeWeather, getWeather } from "./weather";
+
+/** The greeting for the time of day in Japan, said in the agent's first line. */
+export function greeting(d = new Date()) {
+  const hour = Number(d.toLocaleString("en-US", { timeZone: "Asia/Tokyo", hour: "numeric", hourCycle: "h23" }));
+  return hour < 11 ? "おはようございます" : hour < 18 ? "こんにちは" : "こんばんは";
+}
 
 /** What the agent is told about this call: who it is, what we remember, and this morning's weather. */
 async function callVariables(resident: Resident, attempt: number) {
@@ -18,12 +24,13 @@ async function callVariables(resident: Resident, attempt: number) {
     introducer: resident.introducer,
     facts: factsLine(resident),
     care_notes: careNotesLine(resident),
-    recent_calls: resident.recent_calls.map((c) => `${c.date}：${c.summary}`).join(" / ") || "なし",
     follow_ups: followUpsLine(resident),
+    threads: threadsLine(resident),
     briefing: calls ? briefingLine(calls) : "なし",
     help_status: calls ? helpLine(resident, calls) : "なし",
     // A demo runs the same checks in a minute or two (agent/prompt.md, 電話の長さ).
     call_length: DEMO_MODE ? "短く" : "ふつう",
+    greeting: greeting(),
     ...describeWeather(await getWeather(resident.amedas_station)),
   };
 }

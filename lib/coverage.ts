@@ -6,7 +6,7 @@ import type { Contact, Person, Resident, Role } from "./types";
 
 export const ROLES: Role[] = ["helper", "second_contact", "snow_volunteer"];
 
-/** How many people can be put in line for snow clearing after the first (the 連絡体制 page shows this many menus). */
+/** How many people can be put in line for snow clearing after the first (the resident's settings show this many menus). */
 export const SNOW_NEXT_SLOTS = 2;
 /** Everyone who could be asked to clear snow, in order. */
 export const snowLine = (resident: Resident): Contact[] => [resident.snow_volunteer, ...(resident.snow_next ?? [])];

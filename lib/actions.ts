@@ -139,7 +139,7 @@ async function sendRequest(resident: Resident, callId: string, request: RequestA
 
 /**
  * Tells the family that a business, which charges, has been asked. They are told, not asked: putting
- * the business in this resident's line (the 連絡体制 page) is the agreement. The price is between the two of them.
+ * the business in this resident's line (the resident's settings) is the agreement. The price is between the two of them.
  */
 function tellFamily(resident: Resident, kind: RequestKind, business: Contact): Promise<Delivery> {
   const body = `【有料の${REQUESTS[kind].label.ja}】${resident.name}さんの件で、${business.name}（有料）にお願いしました。費用は先方と直接ご相談ください。`;

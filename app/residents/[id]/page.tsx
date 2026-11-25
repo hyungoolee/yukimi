@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getResident, listCalls, listPeople } from "@/lib/store";
-import { coverage, eligible, reach, ROLES } from "@/lib/coverage";
+import { coverage, eligible, reach, ROLES, SNOW_NEXT_SLOTS } from "@/lib/coverage";
 import { assignRoles } from "../../people/actions";
 import { AddFamily } from "../../people/add-family";
 import { DEMO_MODE } from "@/lib/env";
@@ -87,7 +87,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               waiting: t.captionWaiting,
             }}
           />
-          {/* Who is in line is fixed for a request under way; this makes a change on 連絡体制 count for it now. */}
+          {/* Who is in line is fixed for a request under way; this makes a change to the line count for it now. */}
           {requests.filter(restartable).map((r) => (
             <form key={`restart-${r.kind}`} action={restartLine}>
               <input type="hidden" name="resident_id" value={resident.id} />
@@ -125,6 +125,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           <ul className="mt-2 space-y-1 text-sm">
             {openFollowUps(resident, japanDate()).map((f) => (
               <li key={f.id} className="flex items-center gap-3">
+                {f.kind === "thread" && <span className="rounded bg-zinc-100 px-1.5 text-xs text-zinc-600">{t.followUpThread}</span>}
                 <span>{f.text}</span>
                 <span className="text-zinc-500">{t.followUpUntil(f.expires)}</span>
                 <form action={deleteFollowUp}>
@@ -231,7 +232,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         labels={{ phone: t.phone, save: t.save, saving: t.saving, saved: t.saved, invalid: t.phoneInvalid, hint: t.phoneHint, enterToSave: t.enterToSave, unset: t.picker.unset }}
       />
       <LocationPicker residentId={resident.id} who="home" label={t.home} initial={resident.location} labels={t.picker} />
-      {/* The same save as on the People page. Each menu is keyed on who holds the role, so a change made elsewhere shows. */}
+      {/* The one place a resident's roles are set. Each menu is keyed on who holds the role, so a change made elsewhere shows. */}
       <SaveOnChange
         action={assignRoles}
         labels={{ saving: t.saving, saved: t.saved, failed: t.saveFailed }}
@@ -250,7 +251,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               id={`role-${role}`}
               name={role}
               defaultValue={resident[role].id ?? ""}
-              className="w-48 rounded border border-zinc-300 bg-white px-2 py-1"
+              className="w-48 rounded border border-zinc-300 bg-white py-1 pr-8 pl-2"
             >
               <option value="">{t.vacant}</option>
               {everyone.filter((person) => eligible(person, role, resident)).map((person) => (
@@ -262,6 +263,32 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             </span>
           </div>
         ))}
+        {/* Who is asked to clear snow when the first person doesn't take it, in order. Each place saves on its own. */}
+        {Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => {
+          const next = resident.snow_next?.[i];
+          return (
+            <div key={`snow_next_${i}`} className="flex flex-wrap items-center gap-2">
+              <label htmlFor={`snow_next_${i}`} className="w-32 text-zinc-500">{t.snowNext(i + 2)}</label>
+              <select
+                key={next?.id ?? ""}
+                id={`snow_next_${i}`}
+                name={`snow_next_${i}`}
+                defaultValue={next?.id ?? ""}
+                className="w-48 rounded border border-zinc-300 bg-white py-1 pr-8 pl-2"
+              >
+                <option value="">{t.vacant}</option>
+                {/* Not whoever is first in line already: they would be asked twice. */}
+                {everyone.filter((person) => person.id !== resident.snow_volunteer.id && eligible(person, "snow_volunteer", resident)).map((person) => (
+                  <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
+                ))}
+              </select>
+              {next && (
+                <span className={reach(next) === "registered" ? "text-zinc-500" : "text-red-700"}>{t.reach[reach(next)]}</span>
+              )}
+            </div>
+          );
+        })}
+        <p className="text-zinc-500 sm:pl-34">{t.snowLineHelp}</p>
       </SaveOnChange>
       {gaps.length > 0 && (
         <ul className={`mt-2 list-disc pl-5 text-sm ${level === "critical" ? "font-medium text-red-700" : "text-zinc-700"}`}>

@@ -1,19 +1,17 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { coverage, criticalCount, eligible, reach, ROLES, served, SNOW_NEXT_SLOTS, type Reach } from "@/lib/coverage";
+import { coverage, criticalCount, reach, served, type Reach } from "@/lib/coverage";
 import { LINE_READY } from "@/lib/env";
 import { listPeople, listResidents } from "@/lib/store";
 import type { Person } from "@/lib/types";
 import { getStrings } from "../lang";
 import { SubmitButton } from "../submit-button";
-import { SaveOnChange } from "../save-on-change";
-import { assignRoles, createPerson } from "./actions";
-import { AddFamily } from "./add-family";
+import { createPerson } from "./actions";
 import { TestMessage } from "./test-message";
 
 const DOT: Record<Reach, string> = { registered: "bg-emerald-600", unregistered: "bg-red-600", none: "bg-red-600" };
 
-/** For the coordinator: who would be told for each resident, and where an alert would reach nobody. */
+/** For the coordinator: everyone who can be told, and the residents an alert would reach nobody for. */
 export default async function PeoplePage() {
   await connection(); // read the files on every request
   const { t } = await getStrings();
@@ -78,77 +76,39 @@ export default async function PeoplePage() {
         <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm">{coordinators.map(personRow)}</ul>
       )}
 
-      <h2 className="mt-8 font-medium">{t.residentsHeading}</h2>
-      <p className="mt-1 text-sm text-zinc-600">{t.snowLineHelp}</p>
-      <ul className="mt-2 space-y-3">
-        {rows.map(({ resident, redAlertReaches, gaps, level }) => (
-          <li
-            key={resident.id}
-            className={`rounded-lg border p-4 ${LINE_READY && level === "critical" ? "border-red-400 bg-red-50/50" : "border-zinc-200"}`}
-          >
-            <div className="flex flex-wrap items-baseline gap-x-3">
-              <Link href={`/residents/${resident.id}`} className="text-lg font-medium hover:underline">
-                {t.name(resident)}
-              </Link>
-              {/* "Reaches 2 people" is false while LINE can't send. */}
-              {LINE_READY && (
-                <span className={`text-sm ${redAlertReaches === 0 ? "font-medium text-red-700" : "text-zinc-600"}`}>
-                  {t.redReaches(redAlertReaches)}
-                </span>
-              )}
-            </div>
-            {/* Each menu is keyed on who holds the role, so a change made elsewhere (adding family) shows. */}
-            <SaveOnChange
-              action={assignRoles}
-              labels={{ saving: t.saving, saved: t.saved, failed: t.saveFailed }}
-              className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2 text-sm"
-              footer={{ className: "py-1" }}
-            >
-              <input type="hidden" name="resident_id" value={resident.id} />
-              {ROLES.map((role) => {
-                const state = reach(resident[role]);
-                return (
-                  <label key={role} className="flex flex-col gap-0.5">
-                    <span className="text-zinc-500">
-                      <span className={`mr-1.5 inline-block size-2 rounded-full ${DOT[state]}`} />
-                      {t.role[role]}（{t.reach[state]}）
-                    </span>
-                    <select key={resident[role].id ?? ""} name={role} defaultValue={resident[role].id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
-                      <option value="">{t.vacant}</option>
-                      {everyone.filter((person) => eligible(person, role, resident)).map(option)}
-                    </select>
-                  </label>
-                );
-              })}
-              {/* Who is asked to clear snow when the first person doesn't take it, in order. Each place saves on its own. */}
-              {Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => {
-                const current = resident.snow_next?.[i];
-                return (
-                  <label key={i} className="flex flex-col gap-0.5">
-                    <span className="text-zinc-500">
-                      {current && <span className={`mr-1.5 inline-block size-2 rounded-full ${DOT[reach(current)]}`} />}
-                      {t.snowNext(i + 2)}{current ? `（${t.reach[reach(current)]}）` : ""}
-                    </span>
-                    <select key={current?.id ?? ""} name={`snow_next_${i}`} defaultValue={current?.id ?? ""} className="rounded border border-zinc-300 bg-white px-2 py-1">
-                      <option value="">{t.vacant}</option>
-                      {/* Not whoever is first in line already: they would be asked twice. */}
-                      {everyone.filter((person) => person.id !== resident.snow_volunteer.id && eligible(person, "snow_volunteer", resident)).map(option)}
-                    </select>
-                  </label>
-                );
-              })}
-            </SaveOnChange>
-            <AddFamily residentId={resident.id} t={t} />
-            {gaps.length > 0 && (
-              <ul className="mt-2 list-disc pl-5 text-sm text-zinc-700">
-                {gaps.map((gap) => (
-                  <li key={gap}>{t.gap[gap]}</li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-      </ul>
+      {/* Only who needs fixing, each with a link to where it's fixed: roles and family are set on the resident's page. */}
+      {rows.some((row) => row.gaps.length > 0) && (
+        <>
+          <h2 className="mt-8 font-medium">{t.residentsWithGaps}</h2>
+          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm">
+            {rows
+              .filter((row) => row.gaps.length > 0)
+              .map(({ resident, redAlertReaches, gaps, level }) => (
+                <li key={resident.id} className="p-3">
+                  <div className="flex flex-wrap items-baseline gap-x-3">
+                    <Link href={`/residents/${resident.id}`} className="font-medium hover:underline">
+                      {t.name(resident)}
+                    </Link>
+                    {/* "Reaches 2 people" is false while LINE can't send. */}
+                    {LINE_READY && (
+                      <span className={redAlertReaches === 0 ? "font-medium text-red-700" : "text-zinc-600"}>
+                        {t.redReaches(redAlertReaches)}
+                      </span>
+                    )}
+                    <Link href={`/residents/${resident.id}#settings`} className="ml-auto text-zinc-500 hover:underline">
+                      {t.fixInSettings} →
+                    </Link>
+                  </div>
+                  <ul className={`mt-1 list-disc pl-5 ${LINE_READY && level === "critical" ? "text-red-700" : "text-zinc-700"}`}>
+                    {gaps.map((gap) => (
+                      <li key={gap}>{t.gap[gap]}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+          </ul>
+        </>
+      )}
 
       <h2 className="mt-8 font-medium">{t.peopleList}</h2>
       <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm">
