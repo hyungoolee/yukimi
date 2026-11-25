@@ -54,7 +54,9 @@ export async function POST(request: Request) {
         // Someone who was sent the red alert says they've seen it: stop sending it again.
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
-        const who = resident && [resident.helper, resident.second_contact].find((c) => userId && c.line_id === userId);
+        // The resident's own people, or a coordinator: they are told when nobody else has answered.
+        const who = resident && userId && [resident.helper, resident.second_contact, ...(await listPeople()).filter((p) => p.coordinator)]
+          .find((c) => c.line_id === userId);
         if (call && who) {
           // The first person to tap is recorded; anyone after is told who already has it.
           const mine = await updateCall(id, (c) => (c.acknowledged_by ? null : { acknowledged_by: who.name }));
