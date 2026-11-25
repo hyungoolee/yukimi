@@ -151,6 +151,8 @@ export type RequestState = {
   asked_id?: string;
   /** When whoever is being asked now runs out of time. Epoch ms. */
   step_due?: number;
+  /** Everyone sent this request on this run of the line, by person id, in order. Not asked again on it. */
+  tried?: string[];
   /** The one who took it is a business, so the agent names it without さん. */
   accepted_business?: boolean;
   /** How the news that someone is coming reached the resident (lib/actions.ts newsStep). */

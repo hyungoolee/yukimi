@@ -59,7 +59,9 @@ describe("what was sent, per recipient", () => {
     const [snow] = await runActions(sato, "call_4", "yellow", ["雪で玄関から出られない"], [{ type: "request", kind: "snow", to: ["snow_volunteer"] }]);
     expect(snow.sent).toBe(false);
     expect(snow.deliveries).toMatchObject([{ role: "snow_volunteer", sent: false, registered: true }]);
-    expect(snow.deliveries[0].button!.split(" / ")).toHaveLength(3);
+    // What is left of today, then a way to say no.
+    const { choicesFor, slotLabel } = await import("@/lib/requests");
+    expect(snow.deliveries[0].button!.split(" / ")).toEqual([...choicesFor("snow").map((s) => slotLabel(s)), "行けません"]);
     expect(snow).toMatchObject({ type: "request", kind: "snow" });
   });
 });

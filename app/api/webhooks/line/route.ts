@@ -1,8 +1,8 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
-import { acceptRequest } from "@/lib/actions";
+import { acceptRequest, declineRequest } from "@/lib/actions";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { askedHelpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
+import { askedHelpers, helpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
 import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
@@ -52,6 +52,24 @@ export async function POST(request: Request) {
               mine ? `${resident.name}さん宅、${when}承りました。ありがとうございます。` : "すでに引き受け済みです。ありがとうございます。",
             );
           }
+        }
+      } else if (kind === "decline" && isRequestKind(rest[0])) {
+        // "decline:<request>:<kind>": the person asked can't come. Only theirs to say while it is their turn.
+        const call = await getCall(id);
+        const resident = call && (await getResident(call.resident_id));
+        if (resident && userId) {
+          const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === rest[0] && r.requestId === id);
+          const current = open && !open.exhausted ? helpers(resident, open.kind)[open.asked] : undefined;
+          const theirs = !!current && current.line_id === userId && (!open!.askedId || current.id === open!.askedId);
+          const passed = theirs && open!.status === "sent" && (await declineRequest(resident, open!));
+          await reply(
+            event.replyToken,
+            passed
+              ? "承知しました。ほかの方にお願いします。ありがとうございます。"
+              : open?.status === "accepted"
+                ? "すでに引き受け手が決まっています。ありがとうございます。"
+                : "この件はもう済んでいます。ありがとうございます。",
+          );
         }
       } else if (kind === "ack") {
         // Someone who was sent the red alert says they've seen it: stop sending it again.

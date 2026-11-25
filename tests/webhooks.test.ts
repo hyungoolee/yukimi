@@ -1162,9 +1162,14 @@ describe("help requests", () => {
 
     await heard("conv_h1", true, true);
     expect(await store.getCall("conv_h1")).toMatchObject({ risk: "yellow", reasons: ["雪で玄関から出られない", "食料・薬・灯油が足りない"] });
-    // The snow helper and the family are each asked, with three half-days to choose from.
+    // The snow helper and the family are each asked: the half-days they could come, and a way to say no.
+    // Snow is offered for today only; bringing supplies, for the next three half-days.
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_volunteer"]);
-    expect(pushes()[0].messages[0].template.actions).toHaveLength(3);
+    const { choicesFor } = await import("@/lib/requests");
+    const labels = (to: string) => pushes().find((p) => p.to === to)!.messages.at(-1)!.template.actions.map((a) => (a as { label?: string }).label);
+    expect(labels("U_volunteer")).toHaveLength(choicesFor("snow").length + 1);
+    expect(labels("U_family")).toHaveLength(4);
+    expect(labels("U_volunteer").at(-1)).toBe("行けません");
     expect(await helpStatus()).toContain("引き受ける人がまだ決まっていない");
 
     await tap(`accept:conv_h1:supplies:${first.date}:${first.part}`, "U_volunteer"); // the family's to take, not theirs

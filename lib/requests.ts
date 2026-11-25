@@ -75,7 +75,33 @@ export const tellsFamily = (kind: RequestKind, who: Contact) => who.kind === "bu
  * Place in line, as a value a booked check carries. A check booked for an earlier one is out of
  * date: the request has moved on since, and whatever moved it booked its own.
  */
-export const stageKey = (s: Pick<RequestState, "asked">) => String(s.asked ?? 0);
+export const stageKey = (s: Pick<RequestState, "asked" | "asked_id" | "step_due">) => `${s.asked ?? 0}:${s.asked_id ?? ""}:${s.step_due ?? ""}`;
+
+/**
+ * Where in the line to go on from when the person asked has had their turn (or said they can't come).
+ * Found by who they are, not by their old place: people may have been added, removed or reordered
+ * since. Still in line: whoever is after them. Taken out: the first person not yet sent this request.
+ */
+export function nextFrom(resident: Resident, request: Pick<OpenRequest, "kind" | "asked" | "askedId" | "tried">) {
+  const line = helpers(resident, request.kind);
+  if (!request.askedId) return request.asked + 1; // a record from before people were tracked by id
+  const at = line.findIndex((c) => c.id === request.askedId);
+  if (at >= 0) return at + 1;
+  const tried = new Set(request.tried ?? []);
+  const next = line.findIndex((c) => !c.id || !tried.has(c.id));
+  return next >= 0 ? next : line.length;
+}
+
+/**
+ * The half-days a helper is offered. Snow means she can't get out now, so only what is left of today;
+ * anyone who can't come today says so, and the request goes on to someone who can.
+ */
+export function choicesFor(kind: RequestKind, now = new Date()): Slot[] {
+  const all = slotChoices(now);
+  if (kind !== "snow") return all;
+  const today = all.filter((slot) => slot.date === japanDate(now));
+  return today.length ? today : all.slice(0, 1);
+}
 
 /**
  * Who may answer a request's buttons: whoever holds the role, and anyone further down the line the
@@ -149,6 +175,8 @@ export type OpenRequest = {
   exhausted: boolean;
   /** When whoever is being asked now runs out of time (epoch ms). Absent on requests from before this was kept. */
   stepDue?: number;
+  /** Everyone sent this request on this run of the line, by person id. */
+  tried?: string[];
   /** See stageKey. */
   stage: string;
   slot?: Slot;
@@ -189,6 +217,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         exhausted: action.accepted_by === undefined && !current,
         stage: stageKey(action),
         stepDue: action.step_due,
+        tried: action.tried,
         business: action.accepted_by !== undefined ? !!action.accepted_business : current?.kind === "business",
         since: records.at(-1)?.at ?? call.at,
         escalated: records.some((r) => r.a.escalated_at),
