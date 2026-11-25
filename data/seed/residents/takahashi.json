@@ -9,9 +9,30 @@
   "snow_volunteer": "p_yamamoto",
   "amedas_station": "15356",
   "facts": [
-    "編み物が趣味",
-    "毎朝ラジオ体操をする",
-    "血圧の薬を飲んでいる"
+    {
+      "id": "a6e77c1f",
+      "text": "編み物が趣味",
+      "en": "Enjoys knitting",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    },
+    {
+      "id": "eeb6bb73",
+      "text": "毎朝ラジオ体操をする",
+      "en": "Does radio calisthenics every morning",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    },
+    {
+      "id": "ca8d111b",
+      "text": "血圧の薬を飲んでいる",
+      "en": "Takes blood pressure medication",
+      "since": "",
+      "source": "intake",
+      "locked": true
+    }
   ],
   "recent_calls": [
     {

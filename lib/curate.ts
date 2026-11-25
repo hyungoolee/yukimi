@@ -7,8 +7,8 @@ const CurationSchema = z.object({
   resolved: z.array(z.string()),
   new_follow_ups: z.array(z.object({ text: z.string(), days: z.number() })),
   fact_changes: z.object({
-    add: z.array(z.string()),
-    update: z.array(z.object({ id: z.string(), text: z.string() })),
+    add: z.array(z.object({ text: z.string(), en: z.string() })),
+    update: z.array(z.object({ id: z.string(), text: z.string(), en: z.string() })),
     retire: z.array(z.object({ id: z.string(), reason: z.string() })),
   }),
 });
@@ -35,8 +35,9 @@ Write each text in Japanese as a short note of what to ask, for example 「腰�
 
 Facts are lasting details that will still be true next month: family and the people in their life, pets, hobbies and routines, long-term health conditions, what they used to do for work. Something that will pass in days (today's pain, this week's weather, an upcoming appointment) is a follow-up or nothing, not a fact.
 
-fact_changes.add: new lasting details the resident stated in this call that no existing fact covers. One short Japanese sentence each. Most calls add nothing.
+fact_changes.add: new lasting details the resident stated in this call that no existing fact covers. One short Japanese sentence each as text. Most calls add nothing.
 fact_changes.update: an existing fact, by id, that this call shows has changed or can be made more exact (「孫の健太が大学受験中」 becomes 「孫の健太は北大に合格した」). Give the full new text.
+For each added or updated fact, en is a faithful English translation of its text, adding nothing, keeping names with their honorific (Kenta-san).
 fact_changes.retire: an existing fact, by id, that the resident said is no longer true and has nothing to replace it, with a short reason in Japanese.
 Facts marked (locked) were given by the family or written by the welfare volunteer. Do not update or retire them, even if the resident seems to contradict one; add a new fact beside it if needed. When the fact list is nearly full, prefer updating an existing fact to adding one.
 

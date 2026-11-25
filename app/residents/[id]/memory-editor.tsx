@@ -11,6 +11,8 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
   const id = <input type="hidden" name="resident_id" value={resident.id} />;
   const retired = resident.retired_facts ?? [];
   const log = [...(resident.memory_log ?? [])].reverse();
+  // English view: the Japanese stays (it is what Yukimi reads and what the helper edits), with English under it.
+  const gloss = (en?: string) => lang === "en" && en && <span className="block text-xs text-zinc-500">{en}</span>;
 
   return (
     <section className="mt-6 text-sm">
@@ -18,14 +20,18 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
       <ul className="mt-2 space-y-1">
         {resident.facts.map((fact) => (
           <li key={fact.id} className="group flex items-start gap-2">
-            <InlineText
-              action={editFactAction}
-              fields={{ resident_id: resident.id, fact_id: fact.id }}
-              value={fact.text}
-              empty=""
-              label={t.editFact}
-              maxLength={80}
-            />
+            {/* Once open, the field takes the row, as it did before the English line wrapped it. */}
+            <div className="min-w-0 has-[form]:flex-1">
+              <InlineText
+                action={editFactAction}
+                fields={{ resident_id: resident.id, fact_id: fact.id }}
+                value={fact.text}
+                empty=""
+                label={t.editFact}
+                maxLength={80}
+              />
+              {gloss(fact.en)}
+            </div>
             {/* Facts the model learned on a call are the ones to check, so their label stands out, with the day. */}
             <span className={`shrink-0 pt-0.5 text-xs ${fact.source === "call" && !fact.locked ? "text-amber-700" : "text-zinc-400"}`}>
               {t.factSource[fact.source]}
@@ -65,6 +71,7 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
           multiline
         />
       </div>
+      {gloss(resident.care_notes_en)}
 
       {retired.length > 0 && (
         <details className="mt-3">
@@ -72,7 +79,7 @@ export function MemoryEditor({ resident, t, lang }: { resident: Resident; t: Str
           <ul className="mt-1 space-y-1">
             {retired.map((fact) => (
               <li key={fact.id} className="flex items-center gap-2">
-                <span className="flex-1 text-zinc-600">{fact.text}</span>
+                <span className="flex-1 text-zinc-600">{fact.text}{gloss(fact.en)}</span>
                 <span className="text-xs text-zinc-500">{fact.retired}</span>
                 <form action={restoreFactAction}>
                   {id}

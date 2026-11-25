@@ -13,3 +13,22 @@ export async function translateToEnglish(japanese: string): Promise<string> {
   });
   return response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("").trim();
 }
+
+/** English for a note the helper wrote about a resident, stored beside it. "" if the translation fails. */
+export async function translateNote(japanese: string): Promise<string> {
+  if (!japanese) return "";
+  try {
+    const response = await new Anthropic().messages.create({
+      model: "claude-haiku-5-5",
+      max_tokens: 1024,
+      output_config: { effort: "low" },
+      system:
+        "You translate a short note a check-in service keeps about an older person living alone in Hokkaido, from Japanese into plain English. Keep names as they are with their honorific, such as Sato-san. Reply with the English translation only, adding nothing.",
+      messages: [{ role: "user", content: japanese }],
+    });
+    return response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("").trim();
+  } catch (e) {
+    console.error("Note translation failed", e);
+    return "";
+  }
+}
