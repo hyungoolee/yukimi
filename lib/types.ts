@@ -155,5 +155,6 @@ export type CallRecord = {
   handled?: boolean;
   acknowledged_by?: string; // who tapped "確認しました" on a red alert
   alert_rounds?: number; // how many times an unacknowledged red alert was sent again
-  coordinators_told_at?: string; // ISO time the coordinators were told nobody had acknowledged it
+  coordinators_told_at?: string; // ISO time a coordinator was first told nobody had acknowledged it
+  coordinators_told?: string[]; // ids of the coordinators that message reached
 };

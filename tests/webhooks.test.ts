@@ -675,6 +675,33 @@ describe("red alerts must be acknowledged", () => {
       expect(toCoordinator()).toHaveLength(1);
     });
 
+    it("tries again only the coordinator LINE refused, and keeps the first time", async () => {
+      const second = await store.addPerson("社協 佐々木");
+      await store.updatePerson(second.id, (p) => ({ ...p, coordinator: true, line_id: "U_coordinator2" }));
+      const unseenTo = () => pushes().filter((p) => p.messages[0].text.includes(UNSEEN)).map((p) => p.to);
+      await start("conv_esc_partial");
+      await after(31);
+      vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body));
+        if (body.to === "U_coordinator2") return new Response("{}", { status: 500 });
+        lineCalls.push({ url, body });
+        return new Response("{}");
+      }));
+      await after(62);
+      expect(unseenTo()).toEqual(["U_coordinator"]);
+      const { coordinators_told_at } = (await store.getCall("conv_esc_partial"))!;
+
+      lineCalls.length = 0;
+      vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+        lineCalls.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response("{}");
+      }));
+      await after(93);
+      expect(unseenTo()).toEqual(["U_coordinator2"]);
+      expect((await store.getCall("conv_esc_partial"))!.coordinators_told_at).toBe(coordinators_told_at);
+      await store.deletePerson(second.id);
+    });
+
     it("gives the coordinators no reasons, and skips one who was already sent the alert", async () => {
       const signals = { ...extraction.signals, self_harm: true, fall_recent: false, pain: false, snowed_in: false };
       extract.mockResolvedValueOnce({ ...extraction, signals });
