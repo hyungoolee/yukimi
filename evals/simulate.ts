@@ -27,7 +27,7 @@ const variables = {
   attempt: "1",
   name: "佐藤",
   introducer: "娘のゆきさん",
-  facts: "孫の健太が大学受験中、庭でバラを育てている、ひざが少し悪い",
+  facts: "孫の健太がいる、高校3年生、庭でバラを育てている、ひざが少し悪い",
   follow_ups: "なし",
   threads: "なし",
   care_notes: "なし",
