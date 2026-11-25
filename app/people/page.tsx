@@ -53,7 +53,7 @@ export default async function PeoplePage() {
       <h1 className="mt-2 text-2xl font-semibold">{t.people}</h1>
       <p className="mt-1 text-sm text-zinc-600">{t.peopleIntro}</p>
 
-      {/* Without LINE nobody can register, so every other warning here follows from this one: show it alone. */}
+      {/* Without LINE no alert reaches anyone, so the totals below don't matter yet. Each resident's gaps still show who needs to register. */}
       {!LINE_READY ? (
         <p className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800">{t.lineNotReady}</p>
       ) : (
@@ -85,9 +85,12 @@ export default async function PeoplePage() {
               <Link href={`/residents/${resident.id}`} className="text-lg font-medium hover:underline">
                 {t.name(resident)}
               </Link>
-              <span className={`text-sm ${LINE_READY && redAlertReaches === 0 ? "font-medium text-red-700" : "text-zinc-600"}`}>
-                {t.redReaches(redAlertReaches)}
-              </span>
+              {/* "Reaches 2 people" is false while LINE can't send. */}
+              {LINE_READY && (
+                <span className={`text-sm ${redAlertReaches === 0 ? "font-medium text-red-700" : "text-zinc-600"}`}>
+                  {t.redReaches(redAlertReaches)}
+                </span>
+              )}
             </div>
             {/* Keyed on who holds the roles, so the menus show a saved change instead of what they held before. */}
             <form

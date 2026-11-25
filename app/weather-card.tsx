@@ -49,6 +49,7 @@ export function WeatherCard({ weather: w, lang, t, compact }: { weather: Weather
         <span>{s.snowfall} {w.snowfall_24h_cm} cm</span>
         <span>{s.depth} {w.snow_depth_cm} cm</span>
         {winter && <span className="font-medium text-red-800">{s.winterOn}</span>}
+        {w.source === "demo" && <span className="text-sky-800">{s.demo(w.date)}</span>}
         {w.source === "fallback" && <span className="text-amber-900">⚠ {s.fallback}</span>}
       </p>
     );
