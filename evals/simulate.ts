@@ -10,6 +10,7 @@
 // SIM_AGENT_ID=<id> runs them against another agent (a scratch copy: SCRATCH=1 pnpm agent:setup).
 // SIM_RUNS=3 repeats the set: the simulated resident is a model too, so one run is noisy.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spokenTurns } from "../lib/audio-tags.ts";
 import { extract } from "../lib/extract.ts";
 import { unanswered } from "../lib/measures.ts";
 import { applyRules, UNCONFIRMED } from "../lib/rules.ts";
@@ -233,7 +234,7 @@ const misses: string[] = [];
 
 /** What the app would flag on this transcript as a required question left unanswered. */
 async function unconfirmed(turns: Turn[], winter: boolean) {
-  const transcript = turns.filter((t) => t.message).map((t) => ({ role: t.role === "user" ? ("user" as const) : ("agent" as const), message: t.message! }));
+  const transcript = spokenTurns(turns).map((t) => ({ role: t.role === "user" ? ("user" as const) : ("agent" as const), message: t.message }));
   const { signals, observations } = await extract({ name: variables.name } as Resident, transcript);
   const rules = applyRules(signals, weather, unanswered(observations ?? {}, winter), observations?.has_supplies === "no");
   return rules.reasons.find((r) => r.startsWith(UNCONFIRMED));
@@ -253,7 +254,7 @@ for (let round = 1; round <= (Number(process.env.SIM_RUNS) || 1); round++) {
   for (const [id, s] of chosen) {
     const run = runs.find((r) => r.test_id === ids[id]);
     const turns = run?.agent_responses ?? [];
-    const agentSaid = turns.filter((t) => t.role !== "user" && t.message).map((t) => t.message!);
+    const agentSaid = spokenTurns(turns.filter((t) => t.role !== "user")).map((t) => t.message);
     // The greeting names the service; the opener is the first thing the agent says after it.
     const opener = agentSaid.find((m) => !m.includes("見守り電話")) ?? "";
     const winter = { ...variables, ...s.variables }.winter_check.startsWith("必要");
@@ -269,7 +270,7 @@ for (let round = 1; round <= (Number(process.env.SIM_RUNS) || 1); round++) {
       .flatMap((t) => t.tool_calls ?? [])
       .filter((c) => c.tool_name === "report_emergency")
       .map((c) => JSON.parse(c.params_as_json || "{}").kind);
-    const said = !s.expectSay || turns.some((t) => t.role !== "user" && t.message?.includes(s.expectSay!));
+    const said = !s.expectSay || agentSaid.some((m) => m.includes(s.expectSay!));
     // A run with no transcript proves nothing, so it is never a pass.
     const ok = turns.length > 0 && (s.expectTool === false ? kinds.length === 0 : kinds.includes(s.expectTool)) && said && problems.length === 0;
     if (!ok) misses.push(`${id} (run ${round})`);

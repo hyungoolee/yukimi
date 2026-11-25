@@ -14,6 +14,8 @@ export type Person = {
   coordinator?: boolean;
   /** A business that charges for the work, not a volunteer: the family is told when it is asked (lib/actions.ts). */
   kind?: "business";
+  /** The resident they are family to. Offered only as that resident's family contact. */
+  family_of?: string;
   /** Their LINE registration code, until they use it. */
   code?: string;
 };
@@ -83,7 +85,12 @@ export type Weather = {
   snowfall_24h_cm: number;
   snow_depth_cm: number;
   low_c: number;
+  temp_c?: number; // the latest reading; live data only
+  observed_at?: string; // ISO time of the latest reading; live data only
 };
+
+/** live: JMA. demo: WEATHER_SOURCE=saved. fallback: the live fetch failed, so the saved data stands in. */
+export type WeatherReading = Weather & { source: "live" | "demo" | "fallback" };
 
 export type Signals = {
   emergency: boolean;

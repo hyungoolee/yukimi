@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { recordTold, runActions } from "@/lib/actions";
+import { spokenTurns } from "@/lib/audio-tags";
 import { toldToRunWinterChecks, verifySignature } from "@/lib/elevenlabs";
 import { env } from "@/lib/env";
 import { missed } from "@/lib/ladder";
@@ -31,10 +32,11 @@ export async function POST(request: Request) {
   if (residentId === "test") return Response.json({ received: true });
   // A news call (lib/actions.ts newsStep) is not a check-in: it never counts as today's call or starts the
   // missed-call steps. How it went is kept on the request it was about.
+  // Built once: the error record below keeps the same, tag-free text.
+  const transcript: Turn[] = spokenTurns(data.transcript);
   const news = variables?.purpose === "news" && variables.call_id ? { call_id: String(variables.call_id), request_kind: String(variables.request_kind) } : pending?.news;
   if (news) {
     after(async () => {
-      const transcript: Turn[] = (data.transcript ?? []).filter((t: Turn) => t.message).map((t: Turn) => ({ role: t.role, message: t.message }));
       const answered = type === "post_call_transcription" && transcript.some((t) => t.role === "user");
       await recordTold(news.call_id, news.request_kind, {
         at: new Date().toISOString(),
@@ -54,9 +56,6 @@ export async function POST(request: Request) {
       if (type === "call_initiation_failure") {
         await missed(residentId, attempt);
       } else if (type === "post_call_transcription") {
-        const transcript: Turn[] = (data.transcript ?? [])
-          .filter((t: Turn) => t.message)
-          .map((t: Turn) => ({ role: t.role, message: t.message }));
         // Nobody spoke: a silent pickup counts as a missed call.
         if (!transcript.some((t) => t.role === "user")) {
           if (byPhone) await missed(residentId, attempt);
@@ -81,7 +80,7 @@ export async function POST(request: Request) {
           risk: rules.risk,
           reasons: rules.reasons,
           actions: resident ? await runActions(resident, id, rules.risk, rules.reasons, rules.actions) : [],
-          transcript: data.transcript,
+          transcript,
         });
       } catch (again) {
         console.error("Could not record the failed call", again);

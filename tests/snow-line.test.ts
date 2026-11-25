@@ -46,7 +46,7 @@ const to = () => pushed.map((p) => p.to);
 
 beforeAll(async () => {
   second = (await store.addPerson("佐々木")).id;
-  business = (await store.addPerson("北野除雪", undefined, "business")).id;
+  business = (await store.addPerson("北野除雪", undefined, undefined, "business")).id;
   await store.updatePerson(second, (p) => ({ ...p, line_id: "U_second" }));
   await store.updatePerson(business, (p) => ({ ...p, line_id: "U_business", location: { lat: 43.21, lng: 141.78 } }));
   await store.updatePerson("p_tanaka", (p) => ({ ...p, line_id: "U_coordinator", coordinator: true }));

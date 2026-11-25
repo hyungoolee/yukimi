@@ -12,6 +12,7 @@ import { getStrings } from "./lang";
 import { riskEdge } from "./ui";
 import { MapView } from "./map-view";
 import { ResidentCard } from "./resident-card";
+import { WeatherCard } from "./weather-card";
 
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 const linkClass = "self-center text-sm text-zinc-500 hover:underline";
@@ -43,7 +44,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
       <h1 className="text-2xl font-semibold">{t.title}</h1>
-      {weather && <p className="mt-1 text-sm text-zinc-600">{t.weather(weather)}</p>}
+      {weather && <WeatherCard weather={weather} lang={lang} t={t} />}
       <p className="mt-3 flex flex-wrap gap-2 text-sm">
         {counts.map(({ label, n, className }) => (
           <span key={label} className={`rounded px-2 py-0.5 ${n > 0 ? `font-medium ${className}` : "bg-zinc-100 text-zinc-400"}`}>

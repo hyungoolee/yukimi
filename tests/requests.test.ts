@@ -106,3 +106,13 @@ describe("the supplies rule", () => {
     expect(applyRules(none, weather, [], false).risk).toBe("green");
   });
 });
+
+describe("audio tags", () => {
+  it("are taken out of what was said, and nothing else is", async () => {
+    const { stripAudioTags } = await import("@/lib/audio-tags");
+    expect(stripAudioTags("[warmly] あら、それは痛かったでしょう。[sighs] 腰はどうですか？")).toBe("あら、それは痛かったでしょう。 腰はどうですか？");
+    expect(stripAudioTags("「いちいちきゅう番」に電話してください。")).toBe("「いちいちきゅう番」に電話してください。");
+    const { spokenTurns } = await import("@/lib/audio-tags");
+    expect(spokenTurns([{ role: "agent", message: "[laughs]" }, { role: "user", message: "はい" }])).toEqual([{ role: "user", message: "はい" }]);
+  });
+});

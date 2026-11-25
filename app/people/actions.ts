@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ROLES, serves, SNOW_NEXT_SLOTS } from "@/lib/coverage";
+import { eligible, ROLES, serves, SNOW_NEXT_SLOTS } from "@/lib/coverage";
 import { dashboardAccess } from "@/lib/env";
 import { push, text } from "@/lib/line";
-import { addPerson, assign, deletePerson, getPerson, listResidents, renewCode, updatePerson } from "@/lib/store";
+import { addPerson, assign, assignFamilyIfVacant, deletePerson, getPerson, getResident, listResidents, renewCode, updatePerson } from "@/lib/store";
 
 const TEST_MESSAGE = "【テスト】見守り電話からのテストメッセージです。対応は不要です。";
 
@@ -20,7 +20,18 @@ export async function createPerson(formData: FormData) {
   await requireAccess();
   const name = field(formData, "name");
   if (!name) return;
-  const person = await addPerson(name, field(formData, "phone") || undefined, formData.get("business") === "on" ? "business" : undefined);
+  const person = await addPerson(name, field(formData, "phone") || undefined, undefined, formData.get("business") === "on" ? "business" : undefined);
+  redirect(`/people/${person.id}`);
+}
+
+/** A family contact belongs to one resident, and fills that resident's family post if it is vacant. */
+export async function createFamily(formData: FormData) {
+  await requireAccess();
+  const name = field(formData, "name");
+  const resident = await getResident(field(formData, "resident_id"));
+  if (!name || !resident) return;
+  const person = await addPerson(name, undefined, resident.id);
+  await assignFamilyIfVacant(resident.id, person.id);
   redirect(`/people/${person.id}`);
 }
 
@@ -49,27 +60,32 @@ export async function removePerson(formData: FormData) {
  */
 export async function assignRoles(formData: FormData) {
   await requireAccess();
+  const resident = await getResident(field(formData, "resident_id"));
+  if (!resident) return;
   const roles: Record<string, string> = {};
   for (const role of ROLES) {
     const id = field(formData, role);
-    if (id && !(await getPerson(id))) return;
+    const person = id ? await getPerson(id) : null;
+    if (id && !(person && eligible(person, role, resident))) return;
     roles[role] = id;
   }
   // The resident's own page chooses the three roles only: the rest of the snow line is left as it is.
   if (!formData.has("snow_line")) {
-    await assign(field(formData, "resident_id"), roles);
+    await assign(resident.id, roles);
     revalidatePath("/", "layout");
     return;
   }
-  // In the order chosen, each person once, and never the one already first in line.
+  // In the order chosen, each person once, never the one already first in line, and only someone
+  // who could hold the snow role for this resident (not another resident's family).
   const snow_next: string[] = [];
   for (const raw of formData.getAll("snow_next").slice(0, SNOW_NEXT_SLOTS)) {
     const id = String(raw).normalize("NFKC").trim().slice(0, 60);
     if (!id || id === roles.snow_volunteer || snow_next.includes(id)) continue;
-    if (!(await getPerson(id))) return;
+    const person = await getPerson(id);
+    if (!(person && eligible(person, "snow_volunteer", resident))) return;
     snow_next.push(id);
   }
-  await assign(field(formData, "resident_id"), { ...roles, snow_next });
+  await assign(resident.id, { ...roles, snow_next });
   revalidatePath("/", "layout");
 }
 
