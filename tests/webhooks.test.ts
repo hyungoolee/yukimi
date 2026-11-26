@@ -1397,4 +1397,15 @@ describe("help requests", () => {
     expect("snow_accepted" in call).toBe(false);
     expect((await store.listCalls("suzuki")).find((c) => c.id === "conv_old")!.actions[0].type).toBe("request");
   });
+
+  it("reads a request saved under the snow helper's old role name", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const old = { id: "conv_oldrole", resident_id: "suzuki", at: "2026-11-21T00:00:00.000Z", kind: "call", risk: "yellow", reasons: [],
+      actions: [{ type: "request", kind: "snow", to: ["snow_volunteer"], sent: true,
+        deliveries: [{ role: "snow_volunteer", text: "x", sent: true, registered: true }] }] };
+    writeFileSync(`${process.env.DATA_DIR}/calls/conv_oldrole.json`, JSON.stringify(old));
+    const [action] = (await store.listCalls("suzuki")).find((c) => c.id === "conv_oldrole")!.actions;
+    expect(action.to).toEqual(["snow_helper"]);
+    expect(action.deliveries![0].role).toBe("snow_helper");
+  });
 });

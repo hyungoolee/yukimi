@@ -58,7 +58,8 @@ async function seed() {
     const old = await json<Stored & { snow_volunteer?: unknown }>(path.join(DATA_DIR, "residents", name));
     if (!old || !("snow_volunteer" in old)) continue;
     const { snow_volunteer, ...rest } = old;
-    await write("residents", name.slice(0, -5), { ...rest, snow_helper: snow_volunteer });
+    // Both keys: an older release ran on this disk after this one and filled the old key in from the seed.
+    await write("residents", name.slice(0, -5), { ...rest, snow_helper: typeof old.snow_helper === "string" ? old.snow_helper : snow_volunteer });
   }
   for (const name of existing.filter((n) => /^[\w-]+\.json$/.test(n))) {
     // A file that can't be read is left alone, as before: that resident is missing, the rest still work.

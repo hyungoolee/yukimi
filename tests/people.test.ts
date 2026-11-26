@@ -131,6 +131,21 @@ describe("people in the store", () => {
     expect("snow_volunteer" in saved).toBe(false);
     vi.unstubAllEnvs();
   });
+
+  it("keeps the snow helper when an older release has since added the old name from the seed", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "yukimi-rollback-"));
+    await cp(path.join(process.cwd(), "data/seed"), dir, { recursive: true });
+    const file = path.join(dir, "residents", "sato.json");
+    const stored = JSON.parse(await readFile(file, "utf8"));
+    await writeFile(file, JSON.stringify({ ...stored, snow_helper: "p_tanaka", snow_volunteer: "p_yamamoto" }));
+
+    vi.resetModules();
+    vi.stubEnv("DATA_DIR", dir);
+    const fresh = await import("@/lib/store");
+    expect((await fresh.getResident("sato"))!.snow_helper.id).toBe("p_tanaka");
+    expect("snow_volunteer" in JSON.parse(await readFile(file, "utf8"))).toBe(false);
+    vi.unstubAllEnvs();
+  });
 });
 
 describe("managing people", () => {
