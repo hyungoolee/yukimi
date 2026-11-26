@@ -1,3 +1,4 @@
+import { JAPAN_TZ } from "./env";
 import { MEASURES } from "./measures";
 import type { SnowRequest } from "./dashboard";
 import { REQUESTS, san, slotLabel, type OpenRequest } from "./requests";
@@ -17,7 +18,7 @@ function waited(r: OpenRequest, lang: "ja" | "en") {
 /** How the news that someone is coming reached the resident (lib/actions.ts newsStep). */
 function told(r: OpenRequest, lang: "ja" | "en") {
   if (!r.told) return "";
-  const time = new Date(r.told.at).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
+  const time = new Date(r.told.at).toLocaleTimeString("ja-JP", { timeZone: JAPAN_TZ, hour: "2-digit", minute: "2-digit" });
   const text = {
     ja: { placed: "お知らせの電話をかけています", answered: `${time}に電話でお伝えしました`, no_answer: "お知らせの電話に出ませんでした", no_phone: "電話番号がないためお知らせしていません", failed: "お知らせの電話をかけられませんでした", check_in: `${time}の見守りの電話でお伝えしました` },
     en: { placed: "calling with the news", answered: `told by phone ${time}`, no_answer: "news call not answered", no_phone: "not told: no phone number", failed: "news call could not be placed", check_in: `told on the check-in call ${time}` },

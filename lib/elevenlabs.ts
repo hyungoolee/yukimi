@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { DEMO_MODE, env } from "./env";
+import { DEMO_MODE, env, JAPAN_TZ } from "./env";
 import { briefingLine } from "./briefing";
 import { DEMO_CALL, NORMAL_CALL } from "./call-length";
 import { careNotesLine, factsLine, followUpsLine, threadsLine } from "./memory";
@@ -10,7 +10,7 @@ import { describeWeather, getWeather } from "./weather";
 
 /** The greeting for the time of day in Japan, said in the agent's first line. */
 export function greeting(d = new Date()) {
-  const hour = Number(d.toLocaleString("en-US", { timeZone: "Asia/Tokyo", hour: "numeric", hourCycle: "h23" }));
+  const hour = Number(d.toLocaleString("en-US", { timeZone: JAPAN_TZ, hour: "numeric", hourCycle: "h23" }));
   return hour < 11 ? "おはようございます" : hour < 18 ? "こんにちは" : "こんばんは";
 }
 
