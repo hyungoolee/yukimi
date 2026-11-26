@@ -93,6 +93,7 @@ const ja = {
   ladderStage: (stage: "retry" | "second_contact", contact: string) =>
     stage === "retry" ? "電話に出ませんでした。もう一度かけます" : `電話に2回出ませんでした。${contact ? `${contact}さん` : "家族"}に様子を確認中`,
   resetDemo: "デモをリセット",
+  storyDemo: "佐藤さんの冬（デモの導入）",
   callLog: "通話の記録",
   noCalls: "まだ通話がありません",
   summary: "まとめ",
@@ -271,6 +272,7 @@ const en: typeof ja = {
   ladderStage: (stage, contact) =>
     stage === "retry" ? "No answer; calling again" : `No answer twice; asking ${contact || "family"} how they are`,
   resetDemo: "Reset demo",
+  storyDemo: "Sato-san's winter (demo opening)",
   callLog: "Call log",
   noCalls: "No calls yet",
   summary: "Summary",

@@ -10,3 +10,20 @@
     background-size: 1rem;
   }
 }
+
+/* The demo story's falling snow (app/story/page.tsx). Still for anyone who asks for less motion. */
+@keyframes snowfall {
+  to {
+    transform: translate3d(2rem, 105svh, 0);
+  }
+}
+.snowflake {
+  opacity: 0.9;
+  animation: snowfall linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .snowflake {
+    animation: none;
+    display: none;
+  }
+}

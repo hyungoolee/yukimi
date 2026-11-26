@@ -80,6 +80,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <Link href="/people" className={linkClass}>
           {t.people}
         </Link>
+        {DEMO_MODE && (
+          <Link href="/story" className={linkClass}>
+            {t.storyDemo}
+          </Link>
+        )}
       </div>
 
       {view === "list" ? (

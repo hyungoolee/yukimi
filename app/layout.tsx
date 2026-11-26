@@ -14,7 +14,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={lang} className="h-full antialiased">
       <body className="min-h-full bg-white text-zinc-900">
-        <form action={setLanguage} className="absolute right-4 top-4">
+        <form action={setLanguage} className="absolute right-4 top-4 z-10">
           <input type="hidden" name="lang" value={lang === "ja" ? "en" : "ja"} />
           <button className="rounded border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-50">
             {t.switchTo}
