@@ -83,6 +83,15 @@ beforeEach(async () => {
 describe("a second volunteer in line", () => {
   beforeEach(() => store.assign("sato", { snow_next: [second] }));
 
+  it("can still take it after being taken out of the line during their turn", async () => {
+    await raise();
+    await after(25);
+    expect(to()).toEqual(["U_volunteer", "U_second"]);
+    await store.assign("sato", { snow_next: [] });
+    await tap(pushed[1].data[0], "U_second");
+    expect(await open()).toMatchObject({ status: "accepted", who: "佐々木" });
+  });
+
   it("is asked when the first doesn't take it, and the coordinators hear only after both", async () => {
     const id = await raise();
     expect(to()).toEqual(["U_volunteer"]);
@@ -93,7 +102,7 @@ describe("a second volunteer in line", () => {
     expect(to()).toEqual(["U_volunteer", "U_second"]);
     expect(await open()).toMatchObject({ askedId: second, run: { at: 1 }, who: "佐々木", escalated: false });
     const sato = (await store.getResident("sato"))!;
-    expect(askedHelpers(sato, await store.listCalls("sato"), "snow", id).map((c) => c.name)).toEqual(["山本", "佐々木"]);
+    expect(askedHelpers(sato, await store.listCalls("sato"), "snow", id, await store.listPeople()).map((c) => c.name)).toEqual(["山本", "佐々木"]);
 
     await after(50);
     expect(to()).toEqual(["U_volunteer", "U_second", "U_coordinator"]);

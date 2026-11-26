@@ -5,7 +5,7 @@
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
 import { daysBefore, japanDate } from "./trends.ts";
-import type { CallRecord, Contact, RequestRun, Resident, Role, Slot, Told } from "./types";
+import type { CallRecord, Contact, Person, RequestRun, Resident, Role, Slot, Told } from "./types";
 
 type RequestDef = {
   /** Who is asked. */
@@ -96,10 +96,11 @@ export function choicesFor(kind: RequestKind, now = new Date()): Slot[] {
 }
 
 /**
- * Who may answer a request's buttons: whoever holds the role, and anyone further down the line the
- * request has actually been sent to. `calls` are the resident's records.
+ * Who may answer a request's buttons: whoever holds the role, and anyone the request has actually been
+ * sent to, found among `people` by id: a run's line is fixed, so they may have left the roster since.
+ * `calls` are the resident's records.
  */
-export function askedHelpers(resident: Resident, calls: CallRecord[], kind: RequestKind, requestId: string): Contact[] {
+export function askedHelpers(resident: Resident, calls: CallRecord[], kind: RequestKind, requestId: string, people: Person[]): Contact[] {
   const reached = new Set(
     calls.flatMap((c) =>
       c.actions.flatMap((a) =>
@@ -109,8 +110,8 @@ export function askedHelpers(resident: Resident, calls: CallRecord[], kind: Requ
       ),
     ),
   );
-  const [first, ...rest] = helpers(resident, kind);
-  return [first, ...rest.filter((c) => reached.has(c.id!))];
+  const holder = resident[REQUESTS[kind].role];
+  return [holder, ...people.filter((p) => reached.has(p.id) && p.id !== holder.id)];
 }
 
 /** 「山本さん」: some names are saved with their さん already (「隣の高田さん」). */
