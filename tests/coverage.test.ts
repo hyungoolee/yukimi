@@ -9,7 +9,7 @@ const on = (name: string, id = `U_${name}`): Contact => ({ id: name, name, line_
 const off = (name: string): Contact => ({ id: name, name });
 const resident = (id: string, extra: Partial<Resident> = {}): Resident => ({
   id, name: id, phone: "+819000000000", call_time: "09:00", introducer: "", amedas_station: "15356", facts: [],
-  recent_calls: [], helper: on("tanaka"), second_contact: on(`family-${id}`), snow_volunteer: on("yamamoto"), ...extra,
+  recent_calls: [], helper: on("tanaka"), second_contact: on(`family-${id}`), snow_helper: on("yamamoto"), ...extra,
 });
 
 describe("reach", () => {
@@ -39,7 +39,7 @@ describe("coverage", () => {
     expect(coverage(resident("a", { second_contact: off("yuki") }))).toEqual({
       redAlertReaches: 1, gaps: ["family_unreachable"], level: "warning",
     });
-    expect(coverage(resident("a", { snow_volunteer: off("yamamoto") }))).toMatchObject({
+    expect(coverage(resident("a", { snow_helper: off("yamamoto") }))).toMatchObject({
       gaps: ["snow_unreachable"], level: "warning",
     });
   });
@@ -79,7 +79,7 @@ describe("coverage agrees with what the alert code sends", () => {
 
   it("matches for the snow helper", async () => {
     for (const snow of [on("s"), off("s")]) {
-      const r = resident("a", { snow_volunteer: snow });
+      const r = resident("a", { snow_helper: snow });
       expect((await sent(r, { snowed_in: true })).request).toBe(!coverage(r).gaps.includes("snow_unreachable"));
     }
   });
@@ -87,9 +87,9 @@ describe("coverage agrees with what the alert code sends", () => {
 
 describe("served", () => {
   it("gives the roles a person holds and everyone they serve", () => {
-    const all = [resident("a"), resident("b", { helper: off("other") }), resident("c", { snow_volunteer: { id: "tanaka", name: "tanaka" } })];
+    const all = [resident("a"), resident("b", { helper: off("other") }), resident("c", { snow_helper: { id: "tanaka", name: "tanaka" } })];
     const { roles, residents } = served({ id: "tanaka", name: "tanaka" }, all);
-    expect(roles).toEqual(["helper", "snow_volunteer"]);
+    expect(roles).toEqual(["helper", "snow_helper"]);
     expect(residents.map((r) => r.id)).toEqual(["a", "c"]);
     expect(served({ id: "nobody", name: "x" }, all)).toEqual({ roles: [], residents: [] });
   });

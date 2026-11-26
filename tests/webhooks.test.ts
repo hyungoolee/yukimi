@@ -123,7 +123,7 @@ describe("LINE roles", () => {
     expect(await store.getPerson("p_tanaka")).toMatchObject({ line_id: "U_helper" });
     expect((await store.getPerson("p_tanaka"))!.code).toBeUndefined();
     const sato = await store.getResident("sato");
-    expect([sato!.helper.line_id, sato!.second_contact.line_id, sato!.snow_volunteer.line_id])
+    expect([sato!.helper.line_id, sato!.second_contact.line_id, sato!.snow_helper.line_id])
       .toEqual(["U_helper", "U_family", "U_volunteer"]);
     expect((await store.getResident("takahashi"))!.second_contact).toMatchObject({ id: "p_masaru", line_id: "U_family" });
     expect(lineCalls.at(-1)!.body.messages[0].text).toBe("登録しました（まさるさん）");
@@ -150,7 +150,7 @@ describe("after a call", () => {
     expect(call).toMatchObject({ risk: "red", kind: "call", reasons: ["転倒・痛みあり", "雪で玄関から出られない"] });
     expect(call!.actions).toMatchObject([
       { type: "alert", to: ["helper", "second_contact"], sent: true },
-      { type: "request", kind: "snow", to: ["snow_volunteer"], sent: true },
+      { type: "request", kind: "snow", to: ["snow_helper"], sent: true },
     ]);
 
     const sent = pushes();
@@ -446,10 +446,10 @@ describe("locations", () => {
 
   it("moves a shared volunteer's pin for every resident they serve", async () => {
     const { saveLocation } = await import("@/app/actions");
-    await saveLocation(form({ resident_id: "sato", who: "snow_volunteer", lat: "43.3", lng: "141.9" }));
+    await saveLocation(form({ resident_id: "sato", who: "snow_helper", lat: "43.3", lng: "141.9" }));
     for (const r of await store.listResidents()) {
-      expect(r.snow_volunteer.location).toEqual({ lat: 43.3, lng: 141.9 });
-      expect(r.snow_volunteer.line_id).toBe("U_volunteer");
+      expect(r.snow_helper.location).toEqual({ lat: 43.3, lng: 141.9 });
+      expect(r.snow_helper.line_id).toBe("U_volunteer");
     }
   });
 });
@@ -584,7 +584,7 @@ describe("demo reset", () => {
     // The unplaced demo resident gets the seed's made-up pins; a pin placed by hand is kept.
     const placed = (await store.getResident("suzuki"))!;
     expect(placed.location).toEqual({ lat: 43.189, lng: 141.792 });
-    expect(placed.snow_volunteer.location).toEqual({ lat: 43.1975, lng: 141.779 });
+    expect(placed.snow_helper.location).toEqual({ lat: 43.1975, lng: 141.779 });
     expect((await store.getResident("takahashi"))!.location).toEqual({ lat: 43.3, lng: 141.9 });
   });
 });
@@ -1393,7 +1393,7 @@ describe("help requests", () => {
       actions: [{ type: "snow_request", to: ["snow_volunteer"], sent: true }], snow_accepted: true };
     writeFileSync(`${process.env.DATA_DIR}/calls/conv_old.json`, JSON.stringify(old));
     const call = (await store.getCall("conv_old"))!;
-    expect(call.actions).toEqual([{ type: "request", kind: "snow", to: ["snow_volunteer"], sent: true, accepted_by: "" }]);
+    expect(call.actions).toEqual([{ type: "request", kind: "snow", to: ["snow_helper"], sent: true, accepted_by: "" }]);
     expect("snow_accepted" in call).toBe(false);
     expect((await store.listCalls("suzuki")).find((c) => c.id === "conv_old")!.actions[0].type).toBe("request");
   });

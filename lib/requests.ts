@@ -25,7 +25,7 @@ type RequestDef = {
 
 export const REQUESTS = {
   snow: {
-    role: "snow_volunteer",
+    role: "snow_helper",
     doneField: "can_get_out",
     label: { ja: "除雪のお願い", en: "Snow clearing" },
     message: (name) => `【除雪のお願い】${name}さん宅の玄関前。雪で外に出られません。行ける時間を押してください。`,

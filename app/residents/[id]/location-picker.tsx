@@ -17,7 +17,7 @@ export function LocationPicker({
   labels,
 }: {
   residentId: string;
-  who: "home" | "snow_volunteer";
+  who: "home" | "snow_helper";
   label: string;
   initial?: LatLng;
   labels: { set: string; unset: string; place: string; change: string; save: string; saving: string; hint: string };

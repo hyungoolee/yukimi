@@ -130,7 +130,7 @@ describe("adding trends to today's result", () => {
   it("keeps an acute reason with its recipient when the trend adds recipients", () => {
     const red: RulesOutput = {
       risk: "red", reasons: ["死にたい気持ちの訴え"],
-      actions: [{ type: "alert", to: ["helper"] }, { type: "request", kind: "snow", to: ["snow_volunteer"] }],
+      actions: [{ type: "alert", to: ["helper"] }, { type: "request", kind: "snow", to: ["snow_helper"] }],
     };
     const out = withTrends(red, [
       { ...mealTrend, fires: true },
@@ -142,7 +142,7 @@ describe("adding trends to today's result", () => {
         type: "alert", to: ["helper", "second_contact"],
         reasonsByRole: { helper: ["死にたい気持ちの訴え", mealTrend.reason], second_contact: [mealTrend.reason] },
       },
-      { type: "request", kind: "snow", to: ["snow_volunteer"] },
+      { type: "request", kind: "snow", to: ["snow_helper"] },
     ]);
   });
 });

@@ -45,11 +45,11 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   const request = openRequests(resident, calls).find((r) => r.kind === "snow");
   if (!request) return undefined;
   const from = resident.location;
-  const to = resident.snow_volunteer.location;
+  const to = resident.snow_helper.location;
   return {
     residentId: resident.id,
     status: request.status,
-    volunteer: resident.snow_volunteer.name,
+    volunteer: resident.snow_helper.name,
     from,
     to,
     km: from && to ? distanceKm(from, to) : undefined,
@@ -72,7 +72,7 @@ export type MapData = {
 export function mapData(rows: Row[], calls: CallRecord[]): MapData {
   const volunteers = new Map<string, MapData["volunteers"][number]>();
   for (const { resident } of rows) {
-    const v = resident.snow_volunteer;
+    const v = resident.snow_helper;
     // The same volunteer sits in several residents' profiles: one pin each.
     if (v.location) volunteers.set(volunteerKey(v), { key: volunteerKey(v), id: v.id, name: v.name, location: v.location });
   }

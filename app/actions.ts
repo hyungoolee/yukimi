@@ -66,9 +66,9 @@ export async function saveLocation(formData: FormData) {
   const inJapan = location.lat > 20 && location.lat < 46 && location.lng > 122 && location.lng < 154;
   if (!resident || !inJapan) return;
 
-  if (formData.get("who") === "snow_volunteer") {
+  if (formData.get("who") === "snow_helper") {
     // The pin belongs to the person, so it moves for every resident they help.
-    if (resident.snow_volunteer.id) await updatePerson(resident.snow_volunteer.id, (p) => ({ ...p, location }));
+    if (resident.snow_helper.id) await updatePerson(resident.snow_helper.id, (p) => ({ ...p, location }));
   } else {
     await updateResident(resident.id, (fresh) => ({ ...fresh, location }));
   }

@@ -53,6 +53,13 @@ async function seed() {
   // A disk from before people had their own files holds names inside each resident. Nobody had
   // registered for real then, so such a resident takes its three people from the seed data.
   const json = <T>(at: string) => readFile(at, "utf8").then((raw) => JSON.parse(raw) as T).catch(() => null);
+  // A disk from before the snow helper's role was renamed. First, so the step below doesn't take it for a missing role.
+  for (const name of existing.filter((n) => /^[\w-]+\.json$/.test(n))) {
+    const old = await json<Stored & { snow_volunteer?: unknown }>(path.join(DATA_DIR, "residents", name));
+    if (!old || !("snow_volunteer" in old)) continue;
+    const { snow_volunteer, ...rest } = old;
+    await write("residents", name.slice(0, -5), { ...rest, snow_helper: snow_volunteer });
+  }
   for (const name of existing.filter((n) => /^[\w-]+\.json$/.test(n))) {
     // A file that can't be read is left alone, as before: that resident is missing, the rest still work.
     const old = await json<Stored>(path.join(DATA_DIR, "residents", name));
@@ -143,9 +150,9 @@ async function withPeople(stored: Stored): Promise<Resident> {
     delete contact.code; // the registration code stays on the person's own page
     return contact;
   };
-  const [helper, second_contact, snow_volunteer] = await Promise.all(ROLES.map((role) => contact(stored[role])));
+  const [helper, second_contact, snow_helper] = await Promise.all(ROLES.map((role) => contact(stored[role])));
   // Facts are brought to today's shape on every read (lib/resident.ts).
-  return normalizeResident({ ...stored, helper, second_contact, snow_volunteer });
+  return normalizeResident({ ...stored, helper, second_contact, snow_helper });
 }
 
 export async function getResident(id: string) {
@@ -196,16 +203,19 @@ export async function listResidents() {
 
 // Records from before help requests had kinds: a snow request with its own "accepted" flag.
 type OldCall = { snow_accepted?: boolean; actions: { type: string }[] };
+// Records from before the snow helper's role was renamed.
+const role = (r: string) => (r === "snow_volunteer" ? "snow_helper" : r) as Role;
 function normalizeCall(raw: CallRecord): CallRecord {
   const { snow_accepted, ...call } = raw as CallRecord & OldCall;
-  if (!(call.actions as OldCall["actions"]).some((a) => a.type === "snow_request")) return call;
   return {
     ...call,
-    actions: call.actions.map((a) =>
-      (a.type as string) === "snow_request"
+    actions: call.actions.map((a) => ({
+      ...((a.type as string) === "snow_request"
         ? { ...a, type: "request", kind: "snow", ...(snow_accepted ? { accepted_by: "" } : {}) }
-        : a,
-    ),
+        : a),
+      to: a.to.map(role),
+      ...(a.deliveries && { deliveries: a.deliveries.map((d) => ({ ...d, role: role(d.role) })) }),
+    })),
   };
 }
 

@@ -12,7 +12,7 @@ const noFacts: Curation["fact_changes"] = { add: [], update: [], retire: [] };
 const followUp = (id: string, text: string, expires: string): FollowUp => ({ id, text, created: "2026-11-24", expires });
 const resident = (follow_ups?: FollowUp[]): Resident => ({
   id: "sato", name: "佐藤", phone: "", call_time: "09:00", introducer: "娘のゆきさん", amedas_station: "15356",
-  second_contact: { name: "ゆき" }, helper: { name: "田中" }, snow_volunteer: { name: "山本" },
+  second_contact: { name: "ゆき" }, helper: { name: "田中" }, snow_helper: { name: "山本" },
   facts: [], recent_calls: [], follow_ups,
 });
 const fact = (id: string, text: string, extra: Partial<Fact> = {}): Fact => ({ id, text, since: "2026-11-01", source: "call", ...extra });

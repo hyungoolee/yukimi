@@ -3,7 +3,7 @@ import type { Contact, Person, Resident, Role } from "./types";
 // Who would be told if something went wrong with a resident, and whether each of them can be reached.
 // Read-only: this describes what the alert code would do today; it sends nothing.
 
-export const ROLES: Role[] = ["helper", "second_contact", "snow_volunteer"];
+export const ROLES: Role[] = ["helper", "second_contact", "snow_helper"];
 
 /** none: nobody on file. unregistered: a name, but no way to message them. registered: on LINE. */
 export type Reach = "none" | "unregistered" | "registered";
@@ -32,7 +32,7 @@ export function coverage(resident: Resident) {
   if (redAlertReaches === 0) gaps.push("red_reaches_nobody");
   else if (!can("helper")) gaps.push("helper_unreachable");
   else if (!can("second_contact")) gaps.push("family_unreachable");
-  if (!can("snow_volunteer")) gaps.push("snow_unreachable");
+  if (!can("snow_helper")) gaps.push("snow_unreachable");
 
   const level = gaps.some((g) => CRITICAL.includes(g)) ? "critical" : gaps.length ? "warning" : "ok";
   return { redAlertReaches, gaps, level } as const;

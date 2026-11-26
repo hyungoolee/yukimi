@@ -19,7 +19,7 @@ export type Person = {
 };
 /** A person as they appear in a resident's role. No id and an empty name: the post is vacant. */
 export type Contact = Omit<Person, "id" | "code"> & { id?: string };
-export type Role = "helper" | "second_contact" | "snow_volunteer";
+export type Role = "helper" | "second_contact" | "snow_helper";
 
 /**
  * A lasting detail about the resident. Intake facts (given by family or the 社協 at sign-up) and
@@ -67,7 +67,7 @@ export type Resident = {
   introducer: string;
   second_contact: Contact;
   helper: Contact;
-  snow_volunteer: Contact;
+  snow_helper: Contact;
   amedas_station: string; // JMA station code
   location?: LatLng; // home, shown on the coordinator's map
   facts: Fact[]; // older files hold plain strings; lib/resident.ts converts them on read

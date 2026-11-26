@@ -269,9 +269,9 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
       <AddFamily residentId={resident.id} t={t} />
       <LocationPicker
         residentId={resident.id}
-        who="snow_volunteer"
+        who="snow_helper"
         label={t.volunteerLocation}
-        initial={resident.snow_volunteer.location}
+        initial={resident.snow_helper.location}
         labels={t.picker}
       />
       <form action={setActive} className="mt-4 flex flex-wrap items-center gap-3 text-sm">

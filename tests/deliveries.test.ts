@@ -56,16 +56,16 @@ describe("what was sent, per recipient", () => {
   it("tells a LINE failure apart from a person who is not registered", async () => {
     lineOk = false;
     const sato = (await store.getResident("sato"))!;
-    const [snow] = await runActions(sato, "call_4", "yellow", ["雪で玄関から出られない"], [{ type: "request", kind: "snow", to: ["snow_volunteer"] }]);
+    const [snow] = await runActions(sato, "call_4", "yellow", ["雪で玄関から出られない"], [{ type: "request", kind: "snow", to: ["snow_helper"] }]);
     expect(snow.sent).toBe(false);
-    expect(snow.deliveries).toMatchObject([{ role: "snow_volunteer", sent: false, registered: true }]);
+    expect(snow.deliveries).toMatchObject([{ role: "snow_helper", sent: false, registered: true }]);
     expect(snow.deliveries[0].button!.split(" / ")).toHaveLength(3);
     expect(snow).toMatchObject({ type: "request", kind: "snow" });
   });
 });
 
 describe("a help request nobody takes", () => {
-  const snow: Extract<Action, { type: "request" }> = { type: "request", kind: "snow", to: ["snow_volunteer"] };
+  const snow: Extract<Action, { type: "request" }> = { type: "request", kind: "snow", to: ["snow_helper"] };
   const save = (id: string, actions: object[]) =>
     store.saveCall({ id, resident_id: "sato", at: new Date().toISOString(), kind: "call", risk: "yellow", reasons: [], actions } as never);
   const checks = async () => (await store.listTasks()).filter((t) => t.kind === "request_check");

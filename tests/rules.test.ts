@@ -105,7 +105,7 @@ describe("escalation rules", () => {
   it("sends a snow request and stays yellow when snowed in", () => {
     const out = rules({ snowed_in: true });
     expect(out.risk).toBe("yellow");
-    expect(out.actions).toEqual([{ type: "request", kind: "snow", to: ["snow_volunteer"] }]);
+    expect(out.actions).toEqual([{ type: "request", kind: "snow", to: ["snow_helper"] }]);
   });
 
   it("makes snowed in with a heater problem red, with both actions", () => {
@@ -126,7 +126,7 @@ describe("escalation rules", () => {
     expect(out.reasons).toEqual(["転倒・痛みあり", "雪で玄関から出られない"]);
     expect(out.actions).toEqual([
       { type: "alert", to: ["helper", "second_contact"], reasonsByRole: { helper: out.reasons, second_contact: out.reasons } },
-      { type: "request", kind: "snow", to: ["snow_volunteer"] },
+      { type: "request", kind: "snow", to: ["snow_helper"] },
     ]);
   });
 });

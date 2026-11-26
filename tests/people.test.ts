@@ -42,12 +42,12 @@ describe("people in the store", () => {
   });
 
   it("reads a role whose person is gone as a vacant post", async () => {
-    await store.assign("suzuki", { snow_volunteer: "p_nobody" });
-    expect((await store.getResident("suzuki"))!.snow_volunteer).toEqual({ id: "p_nobody", name: "" });
+    await store.assign("suzuki", { snow_helper: "p_nobody" });
+    expect((await store.getResident("suzuki"))!.snow_helper).toEqual({ id: "p_nobody", name: "" });
     // Saving the resident for another reason keeps who was assigned, in case the person's file comes back.
     await store.updateResident("suzuki", (r) => ({ ...r, phone: r.phone }));
-    expect((await store.getResident("suzuki"))!.snow_volunteer.id).toBe("p_nobody");
-    await store.assign("suzuki", { snow_volunteer: "p_yamamoto" });
+    expect((await store.getResident("suzuki"))!.snow_helper.id).toBe("p_nobody");
+    await store.assign("suzuki", { snow_helper: "p_yamamoto" });
   });
 
   it("refuses to save a resident with a person typed into a role, since only the id is kept", async () => {
@@ -102,7 +102,7 @@ describe("people in the store", () => {
     vi.stubEnv("DATA_DIR", dir);
     const fresh = await import("@/lib/store");
     const sato = (await fresh.getResident("sato"))!;
-    expect(sato).toMatchObject({ phone: "+819011112222", facts: [{ text: "覚えていること" }], helper: { id: "p_tanaka" }, second_contact: { id: "p_yuki" } });
+    expect(sato).toMatchObject({ phone: "+819011112222", facts: [{ text: "覚えていること" }], helper: { id: "p_tanaka" }, second_contact: { id: "p_yuki" }, snow_helper: { id: "p_yamamoto" } });
     expect((await fresh.getResident("mine"))!.helper).toEqual({ name: "" });
     await fresh.updatePerson("p_tanaka", (p) => ({ ...p, line_id: "U_kept" }));
 
@@ -111,6 +111,24 @@ describe("people in the store", () => {
     expect((await again.getResident("sato"))!.helper.line_id).toBe("U_kept");
     expect((await again.getPerson("p_yuki"))!.family_of).toBe("sato");
     expect(JSON.parse(await readFile(path.join(dir, "residents", "sato.json"), "utf8")).helper).toBe("p_tanaka");
+    vi.unstubAllEnvs();
+  });
+
+  it("moves a snow helper saved under the role's old name, keeping who it is", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "yukimi-snow-"));
+    await cp(path.join(process.cwd(), "data/seed"), dir, { recursive: true });
+    const file = path.join(dir, "residents", "sato.json");
+    const { snow_helper, ...rest } = JSON.parse(await readFile(file, "utf8"));
+    expect(snow_helper).toBe("p_yamamoto");
+    await writeFile(file, JSON.stringify({ ...rest, snow_volunteer: "p_tanaka" }));
+
+    vi.resetModules();
+    vi.stubEnv("DATA_DIR", dir);
+    const fresh = await import("@/lib/store");
+    expect((await fresh.getResident("sato"))!.snow_helper.id).toBe("p_tanaka");
+    const saved = JSON.parse(await readFile(file, "utf8"));
+    expect(saved).toMatchObject({ snow_helper: "p_tanaka" });
+    expect("snow_volunteer" in saved).toBe(false);
     vi.unstubAllEnvs();
   });
 });
@@ -126,20 +144,20 @@ describe("managing people", () => {
     await actions.editPerson(form({ person_id: sasaki.id, name: "  " })); // a name is required
     expect((await store.getPerson(sasaki.id))!.name).toBe("佐々木 花");
 
-    await actions.assignRoles(form({ resident_id: "suzuki", helper: sasaki.id, second_contact: "p_takada", snow_volunteer: "" }));
+    await actions.assignRoles(form({ resident_id: "suzuki", helper: sasaki.id, second_contact: "p_takada", snow_helper: "" }));
     const suzuki = (await store.getResident("suzuki"))!;
-    expect([suzuki.helper.id, suzuki.second_contact.id, suzuki.snow_volunteer.name]).toEqual([sasaki.id, "p_takada", ""]);
+    expect([suzuki.helper.id, suzuki.second_contact.id, suzuki.snow_helper.name]).toEqual([sasaki.id, "p_takada", ""]);
     expect(suzuki.facts.length).toBeGreaterThan(0); // the rest of the file is untouched
 
     await actions.removePerson(form({ person_id: sasaki.id })); // serves Suzuki-san: refused
     expect(await store.getPerson(sasaki.id)).not.toBeNull();
-    await actions.assignRoles(form({ resident_id: "suzuki", helper: "p_tanaka", second_contact: "p_takada", snow_volunteer: "p_yamamoto" }));
+    await actions.assignRoles(form({ resident_id: "suzuki", helper: "p_tanaka", second_contact: "p_takada", snow_helper: "p_yamamoto" }));
     await expect(actions.removePerson(form({ person_id: sasaki.id }))).rejects.toThrow("redirect:/people");
     expect(await store.getPerson(sasaki.id)).toBeNull();
   });
 
   it("refuses to assign someone who isn't on file", async () => {
-    await actions.assignRoles(form({ resident_id: "sato", helper: "p_made_up", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" }));
+    await actions.assignRoles(form({ resident_id: "sato", helper: "p_made_up", second_contact: "p_yuki", snow_helper: "p_yamamoto" }));
     expect((await store.getResident("sato"))!.helper.id).toBe("p_tanaka");
   });
 
@@ -147,9 +165,9 @@ describe("managing people", () => {
     const before = (await store.getResident("sato"))!;
     // Suzuki-san's family (p_takada) can't become Sato-san's family or helper; someone else's helper can't be family.
     for (const roles of [
-      { helper: "p_tanaka", second_contact: "p_takada", snow_volunteer: "p_yamamoto" },
-      { helper: "p_takada", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" },
-      { helper: "p_tanaka", second_contact: "p_yamamoto", snow_volunteer: "p_yamamoto" },
+      { helper: "p_tanaka", second_contact: "p_takada", snow_helper: "p_yamamoto" },
+      { helper: "p_takada", second_contact: "p_yuki", snow_helper: "p_yamamoto" },
+      { helper: "p_tanaka", second_contact: "p_yamamoto", snow_helper: "p_yamamoto" },
     ]) await actions.assignRoles(form({ resident_id: "sato", ...roles }));
     const sato = (await store.getResident("sato"))!;
     expect([sato.helper.id, sato.second_contact.id]).toEqual([before.helper.id, before.second_contact.id]);
@@ -185,7 +203,7 @@ describe("managing people", () => {
       .rejects.toThrow("redirect:/people/p_");
     await started.promise;
     try {
-      await actions.assignRoles(form({ resident_id: "sato", helper: "p_tanaka", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" }));
+      await actions.assignRoles(form({ resident_id: "sato", helper: "p_tanaka", second_contact: "p_yuki", snow_helper: "p_yamamoto" }));
     } finally {
       resume.resolve();
     }

@@ -212,12 +212,12 @@ function VolunteerCard({
   calls: CallRecord[];
   t: Strings;
 }) {
-  const served = rows.filter(({ resident }) => volunteerKey(resident.snow_volunteer) === volunteer.key);
+  const served = rows.filter(({ resident }) => volunteerKey(resident.snow_helper) === volunteer.key);
   return (
     <div className="text-sm">
       <div className="flex items-center gap-3">
         <span className="text-lg font-medium">{volunteer.name}</span>
-        <span className="text-zinc-500">{t.role.snow_volunteer}</span>
+        <span className="text-zinc-500">{t.role.snow_helper}</span>
         {volunteer.id && (
           <Link href={`/people/${encodeURIComponent(volunteer.id)}`} className="ml-auto text-zinc-500 hover:underline">
             {t.openPerson}

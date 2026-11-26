@@ -5,7 +5,7 @@ import type { CallRecord, Resident } from "@/lib/types";
 const volunteer = { id: "p_v", name: "山本", line_id: "U_v", location: { lat: 43.1975, lng: 141.779 } };
 const resident = (id: string, extra: Partial<Resident> = {}): Resident => ({
   id, name: id, phone: "", call_time: "09:00", introducer: "", amedas_station: "15356", facts: [], recent_calls: [],
-  second_contact: { name: "family" }, helper: { name: "helper" }, snow_volunteer: volunteer,
+  second_contact: { name: "family" }, helper: { name: "helper" }, snow_helper: volunteer,
   location: { lat: 43.2, lng: 141.77 }, ...extra,
 });
 let clock = 0;
@@ -42,7 +42,7 @@ describe("rankedRows", () => {
 });
 
 describe("snowRequest", () => {
-  const snow = (sent: boolean) => [{ type: "request" as const, kind: "snow" as const, to: ["snow_volunteer" as const], sent }];
+  const snow = (sent: boolean) => [{ type: "request" as const, kind: "snow" as const, to: ["snow_helper" as const], sent }];
 
   it("reports not sent, sent and accepted, with the straight-line distance", () => {
     const a = resident("a");

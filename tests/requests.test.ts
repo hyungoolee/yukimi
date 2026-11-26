@@ -9,11 +9,11 @@ const nextDay = new Date("2026-11-27T09:30:00+09:00");
 
 const sato: Resident = {
   id: "sato", name: "佐藤", phone: "", call_time: "09:00", introducer: "", amedas_station: "15356", facts: [], recent_calls: [],
-  helper: { name: "田中" }, second_contact: { name: "ゆき" }, snow_volunteer: { name: "山本" },
+  helper: { name: "田中" }, second_contact: { name: "ゆき" }, snow_helper: { name: "山本" },
 };
 type Saved = CallRecord["actions"][number];
 const request = (kind: "snow" | "supplies", extra: Partial<Saved> = {}): Saved =>
-  ({ type: "request", kind, to: [kind === "snow" ? "snow_volunteer" : "second_contact"], sent: true, ...extra }) as Saved;
+  ({ type: "request", kind, to: [kind === "snow" ? "snow_helper" : "second_contact"], sent: true, ...extra }) as Saved;
 let n = 0;
 /** Each call is newer than the one before; pass them newest first. */
 const call = (actions: Saved[], extra: Partial<CallRecord> = {}): CallRecord => ({
