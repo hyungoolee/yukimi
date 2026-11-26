@@ -32,9 +32,9 @@ export async function POST(request: Request) {
       if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
-        // Whoever holds the role, or someone further down the line the request has been sent to.
+        // Whoever holds the role, or anyone else the request has been sent to, even if since taken out of the line.
         const person = resident && userId
-          ? askedHelpers(resident, await listCalls(resident.id), requestKind, id).find((c) => c.line_id === userId)
+          ? askedHelpers(resident, await listCalls(resident.id), requestKind, id, await listPeople()).find((c) => c.line_id === userId)
           : undefined;
         if (resident && userId && person) {
           const slot = /^\d{4}-\d\d-\d\d$/.test(date ?? "") && (part === "am" || part === "pm") ? { date, part } as const : undefined;
