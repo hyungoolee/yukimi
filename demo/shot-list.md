@@ -11,6 +11,20 @@ Target length: about 100 s. One resident, Sato-san (佐藤さん), on one snowy 
 - Record the dashboard in English (the **English** toggle) for a non-Japanese audience. LINE messages and the call stay in Japanese, so subtitle those.
 - No phone line needed: use **ブラウザで通話** for the call, **除雪のお願いを…で引き受ける（デモ）** for the helper's accept, and **除雪のお願いのお知らせをブラウザで（デモ）** for the news call. If LINE is set up, also film the real phones; if not, the dashboard's 送ったメッセージ list shows every message.
 - Leave Sato's phone number empty for the ladder beat. With no number, the ladder skips the second call and goes from 電話に出ない to 家族に確認 after 10 s.
+- Register everyone's LINE first. Until then, the list shows a red 「…一部の通知がだれにも届きません」 banner in every dashboard shot.
+
+## Recording the dashboard shots
+
+`demo/record.mts` drives the dashboard in Chrome (`pnpm dev` must be running) and saves 1920×1080 .mp4 takes in `demo/takes/`, with an animated cursor.
+
+| Command | Shots | Notes |
+|---|---|---|
+| `pnpm demo:record save` | | Run once, right after the live call in beat 2. Every later `after-call` take starts from this state, so retakes need no new call. |
+| `pnpm demo:record after-call` | 3a, 3b, and the accept | About 25 s: list → Sato's page → summary → messages sent → the デモ accept button. |
+| `pnpm demo:record no-answer` | 4b, 4c, 4f | About 50 s, running until the strip ends. It ends red unless Yuki taps 無事です on LINE during the take. |
+| `pnpm demo:record map` | 5a | About 12 s. Press デモをリセット first, or the map has no pins. |
+
+Add `--en` for the English dashboard. The news call (3f) and the phones are live, not scripted. The map tiles are drawn at 2× zoom, so they look a little soft.
 
 ## Cast
 
