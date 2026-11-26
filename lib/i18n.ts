@@ -50,6 +50,7 @@ const ja = {
       r.status === "not_sent" ? "送信できていません" : r.status === "sent" ? "返事待ち" : `${r.who}さんが引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
     }${r.status === "accepted" ? told(r, "ja") : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
+  newsCallDemo: (r: OpenRequest) => `${REQUESTS[r.kind].label.ja}のお知らせをブラウザで（デモ）`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
   messageUnregistered: "未送信：この方のLINEが未登録です",
@@ -217,6 +218,7 @@ const en: typeof ja = {
       r.status === "not_sent" ? "request could not be sent" : r.status === "sent" ? "asked, waiting for a reply" : `accepted${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
     }${r.status === "accepted" ? told(r, "en") : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
+  newsCallDemo: (r) => `${REQUESTS[r.kind].label.en}: news call in browser (demo)`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
   messageUnregistered: "not sent: this person has no LINE registered",
