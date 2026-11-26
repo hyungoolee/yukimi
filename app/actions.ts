@@ -7,7 +7,7 @@ import { browserCall, browserNewsCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
-import { isRequestKind, openRequests, REQUESTS, slotChoices } from "@/lib/requests";
+import { arranged, isRequestKind, openRequests, REQUESTS, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
 import { translateNote, translateToEnglish } from "@/lib/translate";
@@ -94,7 +94,8 @@ export async function startBrowserNewsCall(callId: string, kind: string) {
   const call = await getCall(callId);
   const resident = call && (await getResident(call.resident_id));
   const request = resident && openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === kind && r.callId === callId);
-  if (!DEMO_MODE || !resident || request?.status !== "accepted") return { error: "No accepted request to tell her about" };
+  // Accepted and its time not yet over: past that, newsStep would not call either.
+  if (!DEMO_MODE || !resident || !request || !arranged(request)) return { error: "No accepted request to tell her about" };
   return browserNewsCall(resident, newsText(request), { call_id: callId, request_kind: kind }).catch((e) => {
     console.error(e);
     return { error: e instanceof Error ? e.message : String(e) };
