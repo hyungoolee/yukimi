@@ -24,6 +24,9 @@ export default async function PeoplePage() {
     .sort((a, b) => rank[a.level] - rank[b.level]);
 
   const coordinators = everyone.filter((person) => person.coordinator);
+  const option = (person: Person) => (
+    <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
+  );
   const personRow = (person: Person) => {
     const state = reach(person);
     const { roles, residents: theirs } = served(person, residents);
@@ -32,7 +35,7 @@ export default async function PeoplePage() {
         <span className={`inline-block size-2 rounded-full ${DOT[state]}`} />
         <Link href={`/people/${person.id}`} className="font-medium hover:underline">{person.name}</Link>
         <span className="text-zinc-500">
-          {[...roles.map((role) => t.role[role]), ...(theirs.length || !person.coordinator ? [t.serves(theirs.length)] : []), t.reach[state]].join("・")}
+          {[...(person.kind === "business" ? [t.business] : []), ...roles.map((role) => t.role[role]), ...(theirs.length || !person.coordinator ? [t.serves(theirs.length)] : []), t.reach[state]].join("・")}
         </span>
         {state === "registered" && LINE_READY && (
           <span className="ml-auto">
@@ -120,6 +123,10 @@ export default async function PeoplePage() {
         <label className="flex flex-col gap-0.5">
           <span className="text-zinc-500">{t.personPhone}</span>
           <input name="phone" maxLength={60} className="rounded border border-zinc-300 px-2 py-1" />
+        </label>
+        <label className="flex items-center gap-1.5 py-1">
+          <input type="checkbox" name="business" />
+          {t.business}
         </label>
         <SubmitButton pending={t.saving}>{t.addPerson}</SubmitButton>
       </form>

@@ -5,7 +5,7 @@
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
 import { daysBefore, japanDate } from "./trends.ts";
-import type { CallRecord, Resident, Role, Slot, Told } from "./types";
+import type { CallRecord, Contact, Person, RequestRun, Resident, Role, Slot, Told } from "./types";
 
 type RequestDef = {
   /** Who is asked. */
@@ -47,6 +47,73 @@ export const REQUESTS = {
 export type RequestKind = keyof typeof REQUESTS;
 export const isRequestKind = (kind: string): kind is RequestKind => Object.hasOwn(REQUESTS, kind);
 
+/**
+ * The people who could do this, in the order they are asked. The first is whoever holds the role,
+ * even when that post is vacant, so a request that reaches nobody is still recorded against it.
+ * Snow clearing can have more people after them, volunteers or businesses (the resident's settings).
+ */
+export const helpers = (resident: Resident, kind: RequestKind): Contact[] => [
+  resident[REQUESTS[kind].role],
+  ...(kind === "snow" ? (resident.snow_next ?? []).filter((c) => c.id && c.name) : []),
+];
+
+/**
+ * Whether this person may be sent a request for this resident. A business may only when it was
+ * already marked as one the last time the resident's line was saved: ticking 事業者（有料） on someone
+ * who is in a line already must not turn them into paid help for that resident on its own.
+ * Checked when each person is asked, against today's settings, so withdrawn agreement counts at once.
+ */
+export const canAsk = (resident: Resident, who: Pick<Contact, "id" | "kind">) =>
+  who.kind !== "business" || (!!who.id && (resident.paid_ok ?? []).includes(who.id));
+
+/**
+ * A business charges, so the family is told when one is asked. Not for the family's own job
+ * (bringing supplies): they would be telling themselves.
+ */
+export const tellsFamily = (kind: RequestKind, who: Pick<Contact, "kind">) => who.kind === "business" && REQUESTS[kind].role !== "second_contact";
+
+/**
+ * Where a run stands, as one value a scheduled check carries. A check booked for another state is
+ * out of date: the run has moved on, or a new run has started, and whatever did that booked its own.
+ */
+export const stageKey = (run?: RequestRun) => (run ? `${run.id}:${run.at}:${run.ending ? "ending" : ""}` : "");
+
+/** A request a coordinator may start again from the top: not yet taken, and one that runs a line (snow clearing). */
+export const restartable = (r: OpenRequest) => r.status !== "accepted" && r.kind === "snow";
+
+/** What a 行けません button carries: the run and the turn it was sent for. A reminder keeps the turn. */
+export const turnToken = (run: RequestRun) => `${run.id}.${run.at}`;
+
+/**
+ * The half-days a helper is offered. Snow means she can't get out now, so only what is left of today;
+ * anyone who can't come today says so, and the request goes on to someone who can.
+ */
+export function choicesFor(kind: RequestKind, now = new Date()): Slot[] {
+  const all = slotChoices(now);
+  if (kind !== "snow") return all;
+  const today = all.filter((slot) => slot.date === japanDate(now));
+  return today.length ? today : all.slice(0, 1);
+}
+
+/**
+ * Who may answer a request's buttons: whoever holds the role, and anyone the request has actually been
+ * sent to, found among `people` by id: a run's line is fixed, so they may have left the roster since.
+ * `calls` are the resident's records.
+ */
+export function askedHelpers(resident: Resident, calls: CallRecord[], kind: RequestKind, requestId: string, people: Person[]): Contact[] {
+  const reached = new Set(
+    calls.flatMap((c) =>
+      c.actions.flatMap((a) =>
+        a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId
+          ? (a.deliveries ?? []).flatMap((d) => (d.sent && d.person ? [d.person] : []))
+          : [],
+      ),
+    ),
+  );
+  const holder = resident[REQUESTS[kind].role];
+  return [holder, ...people.filter((p) => reached.has(p.id) && p.id !== holder.id)];
+}
+
 /** 「山本さん」: some names are saved with their さん already (「隣の高田さん」). */
 export const san = (name: string) => (name.endsWith("さん") ? name : `${name}さん`);
 
@@ -80,6 +147,7 @@ export function slotLabel(slot: Slot, now = new Date(), lang: "ja" | "en" = "ja"
 
 export type OpenRequest = {
   kind: RequestKind;
+  residentId: string;
   /** The call that first asked: what the buttons carry. */
   requestId: string;
   /** The call whose record holds the request now (the newest reminder). */
@@ -89,8 +157,19 @@ export type OpenRequest = {
   since: string;
   /** The coordinators have been told that nobody has taken it. */
   escalated: boolean;
-  /** Who took it, or else who was asked. */
+  /** Who took it, or else who is being asked now. */
   who: string;
+  /** `who` is a business: named without さん. */
+  business: boolean;
+  /** The run under way, and the record it is kept on (a reminder points back to it). Absent on old records. */
+  run?: RequestRun;
+  runCallId: string;
+  /** The person whose turn it is, by id: who the 行けません button and the map follow. */
+  askedId?: string;
+  /** Everyone in this run's line has had their turn (or could not be asked) and nobody took it. `who` is then empty. */
+  exhausted: boolean;
+  /** See stageKey. */
+  stage: string;
   slot?: Slot;
   acceptedAt?: string;
   /** How the news that someone is coming reached her: the news call, or a check-in since the accept. */
@@ -119,6 +198,14 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       const records = calls.flatMap((c) =>
         c.actions.filter((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId).map((a) => ({ at: c.at, a })),
       );
+      // The run is kept on the newest record of this request that started one.
+      const runRecord = records.length ? calls.find((c) => c.actions.some((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId && a.run)) : undefined;
+      const runAction = runRecord?.actions.find((a) => a.type === "request" && a.kind === kind);
+      const run = runAction?.type === "request" ? runAction.run : undefined;
+      const turn = run && run.at < run.line.length ? run.line[run.at] : undefined;
+      // A record from before runs: the role holder had it, and nobody holding the role meant nobody to ask.
+      const legacy = run ? undefined : resident[REQUESTS[kind].role];
+      const exhausted = action.accepted_by === undefined && (run ? !turn : !legacy?.name);
       // A check-in since the accept passed the news on (help_status), so newsStep won't call; say so
       // instead of what the news call did or why it was skipped. An answered news call says it already.
       const acceptedAt = action.accepted_at;
@@ -126,13 +213,20 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         ? calls.findLast((c) => c.resident_id === resident.id && c.kind === "call" && c.at > acceptedAt) // the first one
         : undefined;
       return [{
+        residentId: resident.id,
         kind,
         requestId,
         callId: call.id,
+        run,
+        runCallId: runRecord?.id ?? call.id,
+        askedId: turn?.id,
+        exhausted,
+        stage: stageKey(run),
+        business: action.accepted_by !== undefined ? !!action.accepted_business : run ? !!turn?.business : legacy?.kind === "business",
         since: records.at(-1)?.at ?? call.at,
         escalated: records.some((r) => r.a.escalated_at),
         status: action.accepted_by !== undefined ? "accepted" as const : action.sent ? "sent" as const : "not_sent" as const,
-        who: action.accepted_by || resident[REQUESTS[kind].role].name,
+        who: action.accepted_by || (run ? turn?.name : legacy?.name) || "",
         slot: action.slot,
         acceptedAt: action.accepted_at,
         told: checkIn ? { at: checkIn.at, result: "check_in" as const } : action.told,
@@ -155,11 +249,12 @@ export function helpLine(resident: Resident, calls: CallRecord[], now = new Date
     const def = REQUESTS[r.kind];
     if (r.status === "not_sent") return [];
     if (r.status === "sent") return [`・${def.label.ja}：出したが、引き受ける人がまだ決まっていない。そう伝え、来る時間は約束しない。時間が決まったら電話で知らせると伝える。`];
-    if (!r.slot) return [`・${def.label.ja}：${san(r.who)}が引き受けた。そう伝え、来る時間は約束しない。`];
+    const who = r.business ? r.who : san(r.who); // a business is named as it is
+    if (!r.slot) return [`・${def.label.ja}：${who}が引き受けた。そう伝え、来る時間は約束しない。`];
     const when = slotLabel(r.slot, now);
     return passed(r.slot, now)
-      ? [`・${def.label.ja}：${san(r.who)}が${when}に${def.visit}だった。${def.check}`]
-      : [`・${def.label.ja}：${san(r.who)}が${when}に${def.visit}。そう伝える。`];
+      ? [`・${def.label.ja}：${who}が${when}に${def.visit}だった。${def.check}`]
+      : [`・${def.label.ja}：${who}が${when}に${def.visit}。そう伝える。`];
   });
   return lines.join(" ") || "なし";
 }

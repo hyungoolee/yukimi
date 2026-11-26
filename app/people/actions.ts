@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { eligible, ROLES } from "@/lib/coverage";
+import { eligible, ROLES, serves, SNOW_NEXT_SLOTS } from "@/lib/coverage";
 import { dashboardAccess } from "@/lib/env";
 import { push, text } from "@/lib/line";
 import { addPerson, assign, assignFamilyIfVacant, deletePerson, getPerson, getResident, listResidents, renewCode, updatePerson } from "@/lib/store";
@@ -20,7 +20,7 @@ export async function createPerson(formData: FormData) {
   await requireAccess();
   const name = field(formData, "name");
   if (!name) return;
-  const person = await addPerson(name, field(formData, "phone") || undefined);
+  const person = await addPerson(name, field(formData, "phone") || undefined, undefined, formData.get("business") === "on" ? "business" : undefined);
   redirect(`/people/${person.id}`);
 }
 
@@ -40,7 +40,8 @@ export async function editPerson(formData: FormData) {
   const name = field(formData, "name");
   if (!name) return;
   const coordinator = formData.get("coordinator") === "on" || undefined;
-  await updatePerson(field(formData, "person_id"), (p) => ({ ...p, name, phone: field(formData, "phone") || undefined, coordinator }));
+  const kind = formData.get("business") === "on" ? ("business" as const) : undefined;
+  await updatePerson(field(formData, "person_id"), (p) => ({ ...p, name, phone: field(formData, "phone") || undefined, coordinator, kind }));
   revalidatePath("/", "layout");
 }
 
@@ -48,14 +49,15 @@ export async function editPerson(formData: FormData) {
 export async function removePerson(formData: FormData) {
   await requireAccess();
   const id = field(formData, "person_id");
-  if ((await listResidents()).some((r) => ROLES.some((role) => r[role].id === id))) return;
+  if ((await listResidents()).some((r) => serves(r, id))) return;
   await deletePerson(id);
   redirect("/people");
 }
 
 /**
- * Who holds a resident's roles. Only the roles in the form change, so a page open since before someone
- * else filled a post doesn't clear it. An empty choice leaves the post vacant.
+ * Who holds a resident's roles, and who is asked to clear snow after the first person (snow_next_<place>).
+ * Only the roles and places in the form change, so a page open since before someone else filled a post
+ * doesn't clear it. An empty choice leaves the post vacant.
  * Returns whether it saved, since the menus save on change and have no button to show a failure.
  */
 export async function assignRoles(formData: FormData) {
@@ -70,7 +72,28 @@ export async function assignRoles(formData: FormData) {
     if (id && !(person && eligible(person, role, resident))) return false;
     roles[role] = id;
   }
-  await assign(resident.id, roles);
+  // A place in the snow line that changed: that place only, the rest kept as stored. Then in order,
+  // each person once, never the one first in line, and only someone who could hold the snow role for
+  // this resident (not another resident's family). An empty choice empties the place.
+  const places = Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => `snow_next_${i}`).filter((name) => formData.has(name));
+  if (!places.length) {
+    await assign(resident.id, roles);
+    revalidatePath("/", "layout");
+    return true;
+  }
+  const line = Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => resident.snow_next?.[i]?.id ?? "");
+  const chosen = roles.snow_volunteer ? [roles.snow_volunteer] : [];
+  for (const name of places) {
+    const id = field(formData, name);
+    const person = id ? await getPerson(id) : null;
+    if (id && !(person && eligible(person, "snow_volunteer", resident))) return false;
+    line[Number(name.slice("snow_next_".length))] = id;
+    if (id) chosen.push(id);
+  }
+  const first = roles.snow_volunteer ?? resident.snow_volunteer.id ?? "";
+  const snow_next = line.filter((id, i) => id && id !== first && line.indexOf(id) === i);
+  // Only who was chosen in this save counts as agreed to as paid help (lib/store.ts assign).
+  await assign(resident.id, { ...roles, snow_next }, chosen);
   revalidatePath("/", "layout");
   return true;
 }

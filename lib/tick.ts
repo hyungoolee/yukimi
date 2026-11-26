@@ -22,12 +22,30 @@ export async function runDue(now = Date.now()) {
   if (running) return;
   running = true;
   try {
-    const due = (await listTasks()).filter((t) => t.due <= now).sort((a, b) => a.due - b.due);
-    for (const task of due) {
-      await run(task).catch((e) => console.error(`Task ${task.id} failed`, e));
-      await deleteTask(task.id);
-    }
+    await runTasks(now);
     await placeDailyCalls(new Date(now)).catch((e) => console.error("Daily calls failed", e));
+  } finally {
+    running = false;
+  }
+}
+
+async function runTasks(now: number) {
+  const due = (await listTasks()).filter((t) => t.due <= now).sort((a, b) => a.due - b.due);
+  for (const task of due) {
+    await run(task).catch((e) => console.error(`Task ${task.id} failed`, e));
+    await deleteTask(task.id);
+  }
+}
+
+/**
+ * Runs the tasks due now, at once, for a step that has just booked one (a helper's 行けません). One at a
+ * time with the regular run: if that is under way, the task waits for its next pass, a few seconds on.
+ */
+export async function runDueTasksNow() {
+  if (running) return;
+  running = true;
+  try {
+    await runTasks(Date.now());
   } finally {
     running = false;
   }
