@@ -1,5 +1,5 @@
 import { MEASURES } from "./measures";
-import { REQUESTS, slotLabel, type OpenRequest } from "./requests";
+import { REQUESTS, san, slotLabel, type OpenRequest } from "./requests";
 import { SHORT_OF_SUPPLIES, UNCONFIRMED } from "./rules";
 import type { Resident } from "./types";
 
@@ -88,8 +88,10 @@ const ja = {
   captionYou: "あなた",
   captionWaiting: "通話中。ここに会話が表示されます…",
   noAnswerDemo: "電話に出ない（デモ）",
-  ladderStage: (stage: "retry" | "second_contact", contact: string) =>
-    stage === "retry" ? "電話に出ませんでした。もう一度かけます" : `電話に2回出ませんでした。${contact ? `${contact}さん` : "家族"}に様子を確認中`,
+  // The missed-call steps (lib/ladder.ts), as the resident's page shows them.
+  ladderSteps: (contact: string) => ["電話に出ない", "もう一度かける", `${contact ? san(contact) : "家族"}に確認`, "通報"],
+  ladderFine: "無事を確認",
+  seconds: "秒",
   resetDemo: "デモをリセット",
   callLog: "通話の記録",
   noCalls: "まだ通話がありません",
@@ -256,8 +258,9 @@ const en: typeof ja = {
   captionYou: "You",
   captionWaiting: "Call connected. The conversation will appear here…",
   noAnswerDemo: "No answer (demo)",
-  ladderStage: (stage, contact) =>
-    stage === "retry" ? "No answer; calling again" : `No answer twice; asking ${contact || "family"} how they are`,
+  ladderSteps: (contact) => ["No answer", "Calling again", `Asking ${contact || "family"}`, "Alert"],
+  ladderFine: "Confirmed fine",
+  seconds: " s",
   resetDemo: "Reset demo",
   callLog: "Call log",
   noCalls: "No calls yet",
