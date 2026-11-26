@@ -1,9 +1,18 @@
+import { canAsk } from "./requests";
 import type { Contact, Person, Resident, Role } from "./types";
 
 // Who would be told if something went wrong with a resident, and whether each of them can be reached.
 // Read-only: this describes what the alert code would do today; it sends nothing.
 
 export const ROLES: Role[] = ["helper", "second_contact", "snow_helper"];
+
+/** How many people can be put in line for snow clearing after the first (the resident's settings show this many menus). */
+export const SNOW_NEXT_SLOTS = 2;
+/** Everyone who could be asked to clear snow, in order. */
+export const snowLine = (resident: Resident): Contact[] => [resident.snow_helper, ...(resident.snow_next ?? [])];
+/** Whether this person holds any post for the resident, a place further down the snow line included. */
+export const serves = (resident: Resident, personId: string) =>
+  ROLES.some((role) => resident[role].id === personId) || (resident.snow_next ?? []).some((c) => c.id === personId);
 
 /** none: nobody on file. unregistered: a name, but no way to message them. registered: on LINE. */
 export type Reach = "none" | "unregistered" | "registered";
@@ -14,7 +23,8 @@ export type Gap =
   // Some alerts go to the helper alone: self-harm, and a call the app could not judge (needsReview).
   | "helper_unreachable"
   | "family_unreachable" // the missed-call check has nobody to ask; the ladder waits, then alerts
-  | "snow_unreachable"; // a snow-clearing request would reach nobody
+  | "snow_unreachable" // a snow-clearing request would reach nobody
+  | "paid_unconfirmed"; // someone in the snow line was marked as a business after the line was saved: not asked until it is saved again
 
 const CRITICAL: Gap[] = ["red_reaches_nobody", "helper_unreachable"];
 
@@ -32,7 +42,9 @@ export function coverage(resident: Resident) {
   if (redAlertReaches === 0) gaps.push("red_reaches_nobody");
   else if (!can("helper")) gaps.push("helper_unreachable");
   else if (!can("second_contact")) gaps.push("family_unreachable");
-  if (!can("snow_helper")) gaps.push("snow_unreachable");
+  // Anyone in the line for snow clearing will do.
+  if (!snowLine(resident).some((c) => reach(c) === "registered" && canAsk(resident, c))) gaps.push("snow_unreachable");
+  if (snowLine(resident).some((c) => c.name && !canAsk(resident, c))) gaps.push("paid_unconfirmed");
 
   const level = gaps.some((g) => CRITICAL.includes(g)) ? "critical" : gaps.length ? "warning" : "ok";
   return { redAlertReaches, gaps, level } as const;
@@ -52,6 +64,8 @@ export const eligible = (person: Person, role: Role, resident: Resident) =>
 
 /** Each person with the roles they hold and everyone they serve. */
 export function served(person: Person, residents: Resident[]) {
-  const roles = ROLES.filter((role) => residents.some((r) => r[role].id === person.id));
-  return { roles, residents: residents.filter((r) => ROLES.some((role) => r[role].id === person.id)) };
+  const roles = ROLES.filter((role) =>
+    residents.some((r) => r[role].id === person.id || (role === "snow_helper" && (r.snow_next ?? []).some((c) => c.id === person.id))),
+  );
+  return { roles, residents: residents.filter((r) => serves(r, person.id)) };
 }

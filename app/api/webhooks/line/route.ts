@@ -1,9 +1,10 @@
 import { env } from "@/lib/env";
 import { secondContactAnswered } from "@/lib/ladder";
-import { acceptRequest } from "@/lib/actions";
+import { acceptRequest, declineRequest } from "@/lib/actions";
+import { runDueTasksNow } from "@/lib/tick";
 import { reply, verifyLineSignature } from "@/lib/line";
-import { isRequestKind, openRequests, passed, REQUESTS, slotLabel } from "@/lib/requests";
-import { getCall, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
+import { askedHelpers, isRequestKind, openRequests, passed, slotLabel } from "@/lib/requests";
+import { getCall, getPerson, getResident, listCalls, listPeople, updateCall, updatePerson } from "@/lib/store";
 
 export async function POST(request: Request) {
   const raw = await request.text();
@@ -31,8 +32,11 @@ export async function POST(request: Request) {
       if ((kind === "accept" || kind === "snow_accept") && isRequestKind(requestKind)) {
         const call = await getCall(id);
         const resident = call && (await getResident(call.resident_id));
-        const person = resident?.[REQUESTS[requestKind].role];
-        if (resident && userId && person?.line_id === userId) {
+        // Whoever holds the role, or anyone else the request has been sent to, even if since taken out of the line.
+        const person = resident && userId
+          ? askedHelpers(resident, await listCalls(resident.id), requestKind, id, await listPeople()).find((c) => c.line_id === userId)
+          : undefined;
+        if (resident && userId && person) {
           const slot = /^\d{4}-\d\d-\d\d$/.test(date ?? "") && (part === "am" || part === "pm") ? { date, part } as const : undefined;
           // A later call may have sent a reminder: the answer goes on the newest record of this same request.
           const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === requestKind && r.requestId === id);
@@ -42,13 +46,34 @@ export async function POST(request: Request) {
             // The buttons were set when the message went out; that half-day is over now.
             await reply(event.replyToken, "その時間は過ぎています。ほかの時間を押してください。");
           } else {
-            const { mine, request } = await acceptRequest(open.callId, requestKind, person.name, slot);
+            const { mine, request } = await acceptRequest(open.callId, requestKind, person.name, slot, person.kind === "business");
             const when = request?.slot ? `${slotLabel(request.slot)}で` : "";
             await reply(
               event.replyToken,
               mine ? `${resident.name}さん宅、${when}承りました。ありがとうございます。` : "すでに引き受け済みです。ありがとうございます。",
             );
           }
+        }
+      } else if (kind === "decline" && isRequestKind(rest[0])) {
+        // "decline:<request>:<kind>:<run>.<turn>": the person asked can't come. Only theirs to say, and only for
+        // the turn and run the card was sent for.
+        const call = await getCall(id);
+        const resident = call && (await getResident(call.resident_id));
+        if (resident && userId) {
+          const open = openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === rest[0] && r.requestId === id);
+          const current = open && !open.exhausted && open.askedId ? await getPerson(open.askedId) : null;
+          const theirs = !!current && current.line_id === userId;
+          const passed = theirs && (await declineRequest(open!, String(rest[1] ?? "")));
+          // Ask the next person now, rather than at the scheduler's next pass.
+          if (passed) await runDueTasksNow();
+          await reply(
+            event.replyToken,
+            passed
+              ? "承知しました。ほかの方にお願いします。ありがとうございます。"
+              : open?.status === "accepted"
+                ? "すでに引き受け手が決まっています。ありがとうございます。"
+                : "この件はもう済んでいます。ありがとうございます。",
+          );
         }
       } else if (kind === "ack") {
         // Someone who was sent the red alert says they've seen it: stop sending it again.

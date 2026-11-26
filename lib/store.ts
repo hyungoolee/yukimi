@@ -121,8 +121,8 @@ export const listPeople = async () => (await readAll<Person>("people")).sort((a,
 export const deletePerson = (id: string) => rm(file("people", id), { force: true });
 const newCode = () => String(randomInt(1e8)).padStart(8, "0");
 /** A new person, with the code they register on LINE with. */
-export async function addPerson(name: string, phone?: string, family_of?: string) {
-  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, family_of, code: newCode() };
+export async function addPerson(name: string, phone?: string, family_of?: string, kind?: Person["kind"]) {
+  const person: Person = { id: `p_${randomInt(36 ** 6).toString(36)}`, name, phone, family_of, kind, code: newCode() };
   await write("people", person.id, person);
   return person;
 }
@@ -139,7 +139,7 @@ export function updatePerson(id: string, change: (person: Person) => Person | nu
 export const renewCode = (id: string) => updatePerson(id, (p) => ({ ...p, code: newCode() }));
 
 /** A resident as saved: each role holds a person's id, or "" when the post is vacant. */
-type Stored = Omit<Resident, Role> & Record<Role, string>;
+type Stored = Omit<Resident, Role | "snow_next"> & Record<Role, string> & { snow_next?: string[] };
 
 // The rest of the app reads a resident with the three people filled in.
 async function withPeople(stored: Stored): Promise<Resident> {
@@ -152,8 +152,9 @@ async function withPeople(stored: Stored): Promise<Resident> {
     return contact;
   };
   const [helper, second_contact, snow_helper] = await Promise.all(ROLES.map((role) => contact(stored[role])));
+  const snow_next = await Promise.all((stored.snow_next ?? []).map(contact));
   // Facts are brought to today's shape on every read (lib/resident.ts).
-  return normalizeResident({ ...stored, helper, second_contact, snow_helper });
+  return normalizeResident({ ...stored, helper, second_contact, snow_helper, snow_next });
 }
 
 export async function getResident(id: string) {
@@ -167,7 +168,8 @@ export function saveResident(r: Resident) {
     if (r[role].name && !r[role].id) throw new Error(`${role} of ${r.id} is not a saved person`);
   }
   const roles = Object.fromEntries(ROLES.map((role) => [role, r[role].id ?? ""]));
-  return write("residents", r.id, { ...r, ...roles });
+  const snow_next = (r.snow_next ?? []).flatMap((c) => c.id ?? []);
+  return write("residents", r.id, { ...r, ...roles, snow_next });
 }
 
 /**
@@ -185,10 +187,22 @@ export function updateResident(id: string, change: (resident: Resident) => Resid
   });
 }
 /** Puts a person in a role for a resident; an empty id leaves the post vacant. */
-export function assign(residentId: string, roles: Partial<Record<Role, string>>) {
+export function assign(residentId: string, roles: Partial<Record<Role, string>> & { snow_next?: string[] }, chosen?: string[]) {
   return queued(`residents/${residentId}`, async () => {
     const stored = await read<Stored>("residents", residentId);
-    if (stored) await write("residents", residentId, { ...stored, ...roles });
+    if (!stored) return;
+    const next = { ...stored, ...roles };
+    // Choosing someone for the snow line is the agreement to them as a business, as they are marked
+    // now. Only the people this save chose count (`chosen`, else everyone it set): a save of one place
+    // agrees nothing about the others, who keep whatever was agreed before.
+    if (roles.snow_helper !== undefined || roles.snow_next !== undefined) {
+      const saved = new Set(chosen ?? [...(roles.snow_helper ? [roles.snow_helper] : []), ...(roles.snow_next ?? [])]);
+      const was = new Set(stored.paid_ok ?? []);
+      const line = [next.snow_helper, ...(next.snow_next ?? [])].filter(Boolean);
+      const people = await Promise.all(line.map(getPerson));
+      next.paid_ok = people.flatMap((p) => (p?.kind === "business" && (saved.has(p.id) || was.has(p.id)) ? [p.id] : []));
+    }
+    await write("residents", residentId, next);
   });
 }
 export function assignFamilyIfVacant(residentId: string, personId: string) {
@@ -325,6 +339,8 @@ export type Task = {
   kind: "ladder_retry" | "ladder_confirm" | "alert_recheck" | "request_check" | "news_call";
   resident_id: string;
   call_id?: string; // request_check: the call that first asked; news_call: the record holding the request
+  record?: string; // for request_check: the call record the request stood on when this was booked
+  stage?: string; // for request_check: how far down the line it had got then (lib/actions.ts stageKey)
   request_kind?: RequestKind;
   round?: number;
   reasonsByRole?: AlertReasons; // for alert_recheck, even if the call record is missing

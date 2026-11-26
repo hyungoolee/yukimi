@@ -1184,9 +1184,14 @@ describe("help requests", () => {
 
     await heard("conv_h1", true, true);
     expect(await store.getCall("conv_h1")).toMatchObject({ risk: "yellow", reasons: ["雪で玄関から出られない", "食料・薬・灯油が足りない"] });
-    // The snow helper and the family are each asked, with three half-days to choose from.
+    // The snow helper and the family are each asked: the half-days they could come, and a way to say no.
+    // Snow is offered for today only; bringing supplies, for the next three half-days.
     expect(pushes().map((p) => p.to).sort()).toEqual(["U_family", "U_volunteer"]);
-    expect(pushes()[0].messages[0].template.actions).toHaveLength(3);
+    const { choicesFor } = await import("@/lib/requests");
+    const labels = (to: string) => pushes().find((p) => p.to === to)!.messages.at(-1)!.template.actions.map((a) => (a as { label?: string }).label);
+    expect(labels("U_volunteer")).toHaveLength(choicesFor("snow").length + 1);
+    expect(labels("U_family")).toHaveLength(4);
+    expect(labels("U_volunteer").at(-1)).toBe("行けません");
     expect(await helpStatus()).toContain("引き受ける人がまだ決まっていない");
 
     await tap(`accept:conv_h1:supplies:${first.date}:${first.part}`, "U_volunteer"); // the family's to take, not theirs
@@ -1385,6 +1390,27 @@ describe("help requests", () => {
     form.set("kind", "snow");
     await acceptDemo(form);
     expect((await requestsOf("conv_h6"))[0]).toMatchObject({ accepted_by: "山本", slot: { part: expect.any(String) } });
+  });
+
+  it("starts the news call in the browser once the request is accepted, in demo mode", async () => {
+    await closeRequests("suzuki");
+    await heard("conv_h13", true, false);
+    const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ token: "tok_news" })));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.ELEVENLABS_NEWS_AGENT_ID = "news_agent_test";
+    const { acceptDemo, startBrowserNewsCall } = await import("@/app/actions");
+    expect(await startBrowserNewsCall("conv_h13", "snow")).toEqual({ error: "No accepted request to tell her about" });
+    const form = new FormData();
+    form.set("call_id", "conv_h13");
+    form.set("kind", "snow");
+    await acceptDemo(form);
+    const started = await startBrowserNewsCall("conv_h13", "snow");
+    if ("error" in started) throw new Error(started.error);
+    expect(started.token).toBe("tok_news");
+    expect(String(fetchMock.mock.calls.at(-1)![0])).toContain("agent_id=news_agent_test");
+    // The variables the webhook reads to record the call on the request (purpose "news").
+    expect(started.variables).toMatchObject({ resident_id: "suzuki", purpose: "news", call_id: "conv_h13", request_kind: "snow", channel: "browser" });
+    expect(started.variables.news).toMatch(/^山本さんが.+に/);
   });
 
   it("reads a record from before requests had kinds", async () => {

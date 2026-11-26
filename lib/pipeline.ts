@@ -142,9 +142,14 @@ export async function processCall(
     await releaseClaims();
     throw error;
   });
-  // Only what was sent is added, so an answer that arrived meanwhile is kept.
+  // Only what was sent is added, so an answer that arrived meanwhile is kept. A request records its
+  // own messages as each goes out (lib/actions.ts), so its buttons work at once: those are kept as they are.
   await updateCall(callId, (c) => ({
-    actions: c.actions.map((a, i) => ({ ...a, sent: results[i].sent, deliveries: results[i].deliveries })),
+    actions: c.actions.map((a, i) => ({
+      ...a,
+      sent: results[i].sent,
+      deliveries: a.type === "request" && a.deliveries?.length ? a.deliveries : results[i].deliveries,
+    })),
   }));
 
   if (extraction) {

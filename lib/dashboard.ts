@@ -1,4 +1,5 @@
-import { openRequests, type OpenRequest } from "./requests";
+import { snowLine } from "./coverage";
+import { helpers, openRequests, type OpenRequest } from "./requests";
 import type { CallRecord, Contact, LatLng, Resident, Risk } from "./types";
 
 // What the helper list and the coordinator's map both show. One rule, so they can't disagree.
@@ -34,7 +35,13 @@ export function distanceKm(a: LatLng, b: LatLng) {
 export type SnowRequest = {
   residentId: string;
   status: "not_sent" | "sent" | "accepted";
+  /** Who took it, or else who the request has got to in the line. Empty once the line has run out. */
   volunteer: string;
+  business: boolean;
+  /** Everyone in line has had their turn and nobody took it. */
+  exhausted: boolean;
+  /** The coordinators have been told that nobody has taken it. */
+  escalated: boolean;
   from?: LatLng;
   to?: LatLng;
   km?: number;
@@ -45,11 +52,22 @@ export function snowRequest(resident: Resident, calls: CallRecord[]): SnowReques
   const request = openRequests(resident, calls).find((r) => r.kind === "snow");
   if (!request) return undefined;
   const from = resident.location;
-  const to = resident.snow_helper.location;
+  // Whoever took it, or else whoever the request has got to in the line.
+  const line = helpers(resident, "snow");
+  // Found by who they are: the line may have been reordered during their turn. The role holder on an old record.
+  const who =
+    request.status === "accepted" ? line.find((c) => c.name === request.who)
+    : request.askedId ? line.find((c) => c.id === request.askedId)
+    : request.run ? undefined : line[0];
+  // No line is drawn once everyone has been tried: nobody is on their way or being waited on.
+  const to = who?.location;
   return {
     residentId: resident.id,
     status: request.status,
-    volunteer: resident.snow_helper.name,
+    volunteer: request.who,
+    business: request.business,
+    exhausted: request.exhausted,
+    escalated: request.escalated,
     from,
     to,
     km: from && to ? distanceKm(from, to) : undefined,
@@ -65,16 +83,17 @@ export type MapData = {
   /** Residents with no location yet, so they are not silently missing from the map. */
   unplaced: number;
   /** key: volunteerKey, to select the pin. id: their person record, when they have one. */
-  volunteers: { key: string; id?: string; name: string; location: LatLng }[];
+  volunteers: { key: string; id?: string; name: string; business: boolean; location: LatLng }[];
   requests: SnowRequest[];
 };
 
 export function mapData(rows: Row[], calls: CallRecord[]): MapData {
   const volunteers = new Map<string, MapData["volunteers"][number]>();
   for (const { resident } of rows) {
-    const v = resident.snow_helper;
-    // The same volunteer sits in several residents' profiles: one pin each.
-    if (v.location) volunteers.set(volunteerKey(v), { key: volunteerKey(v), id: v.id, name: v.name, location: v.location });
+    for (const v of snowLine(resident)) {
+      // The same volunteer sits in several residents' profiles: one pin each.
+      if (v.location) volunteers.set(volunteerKey(v), { key: volunteerKey(v), id: v.id, name: v.name, business: v.kind === "business", location: v.location });
+    }
   }
   return {
     pins: rows.flatMap(({ resident, call }) =>
