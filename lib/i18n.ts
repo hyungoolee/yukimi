@@ -19,8 +19,8 @@ function told(r: OpenRequest, lang: "ja" | "en") {
   if (!r.told) return "";
   const time = new Date(r.told.at).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
   const text = {
-    ja: { placed: "お知らせの電話をかけています", answered: `${time}に電話でお伝えしました`, no_answer: "お知らせの電話に出ませんでした", no_phone: "電話番号がないためお知らせしていません", failed: "お知らせの電話をかけられませんでした" },
-    en: { placed: "calling with the news", answered: `told by phone ${time}`, no_answer: "news call not answered", no_phone: "not told: no phone number", failed: "news call could not be placed" },
+    ja: { placed: "お知らせの電話をかけています", answered: `${time}に電話でお伝えしました`, no_answer: "お知らせの電話に出ませんでした", no_phone: "電話番号がないためお知らせしていません", failed: "お知らせの電話をかけられませんでした", check_in: `${time}の見守りの電話でお伝えしました` },
+    en: { placed: "calling with the news", answered: `told by phone ${time}`, no_answer: "news call not answered", no_phone: "not told: no phone number", failed: "news call could not be placed", check_in: `told on the check-in call ${time}` },
   }[lang][r.told.result];
   return lang === "ja" ? `・${text}` : ` · ${text}`;
 }
@@ -89,6 +89,8 @@ const ja = {
   captionYou: "あなた",
   captionWaiting: "通話中。ここに会話が表示されます…",
   noAnswerDemo: "電話に出ない（デモ）",
+  ladderStage: (stage: "retry" | "second_contact", contact: string) =>
+    stage === "retry" ? "電話に出ませんでした。もう一度かけます" : `電話に2回出ませんでした。${contact ? `${contact}さん` : "家族"}に様子を確認中`,
   resetDemo: "デモをリセット",
   callLog: "通話の記録",
   noCalls: "まだ通話がありません",
@@ -264,6 +266,8 @@ const en: typeof ja = {
   captionYou: "You",
   captionWaiting: "Call connected. The conversation will appear here…",
   noAnswerDemo: "No answer (demo)",
+  ladderStage: (stage, contact) =>
+    stage === "retry" ? "No answer; calling again" : `No answer twice; asking ${contact || "family"} how they are`,
   resetDemo: "Reset demo",
   callLog: "Call log",
   noCalls: "No calls yet",

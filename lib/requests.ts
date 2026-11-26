@@ -171,7 +171,8 @@ export type OpenRequest = {
   stage: string;
   slot?: Slot;
   acceptedAt?: string;
-  told?: Told;
+  /** How the news that someone is coming reached her: the news call, or a check-in since the accept. */
+  told?: Told | { at: string; result: "check_in" };
 };
 
 // A request nobody closed stops being talked about after this long: the questions that close it are
@@ -204,6 +205,12 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       // A record from before runs: the role holder had it, and nobody holding the role meant nobody to ask.
       const legacy = run ? undefined : resident[REQUESTS[kind].role];
       const exhausted = action.accepted_by === undefined && (run ? !turn : !legacy?.name);
+      // A check-in since the accept passed the news on (help_status), so newsStep won't call; say so
+      // instead of what the news call did or why it was skipped. An answered news call says it already.
+      const acceptedAt = action.accepted_at;
+      const checkIn = acceptedAt && action.told?.result !== "answered"
+        ? calls.findLast((c) => c.resident_id === resident.id && c.kind === "call" && c.at > acceptedAt) // the first one
+        : undefined;
       return [{
         residentId: resident.id,
         kind,
@@ -221,7 +228,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         who: action.accepted_by || (run ? turn?.name : legacy?.name) || "",
         slot: action.slot,
         acceptedAt: action.accepted_at,
-        told: action.told,
+        told: checkIn ? { at: checkIn.at, result: "check_in" as const } : action.told,
       }];
     }
     return [];
