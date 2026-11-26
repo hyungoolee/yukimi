@@ -5,6 +5,7 @@ import { coverage, eligible, reach, ROLES } from "@/lib/coverage";
 import { assignRoles } from "../../people/actions";
 import { AddFamily } from "../../people/add-family";
 import { DEMO_MODE } from "@/lib/env";
+import { running } from "@/lib/ladder";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
 import { acceptDemo, deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
@@ -44,7 +45,8 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   const { id } = await params;
   const resident = await getResident(id);
   if (!resident) notFound();
-  const [calls, everyone, ladder] = await Promise.all([listCalls(id), listPeople(), getLadder(id)]);
+  const [calls, everyone, lastLadder] = await Promise.all([listCalls(id), listPeople(), getLadder(id)]);
+  const ladder = running(lastLadder) ? lastLadder : undefined; // the same rule the button's action uses
   const { lang, t } = await getStrings();
   const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
   const [nextSlot] = slotChoices();

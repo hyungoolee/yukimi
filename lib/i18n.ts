@@ -255,7 +255,7 @@ const en: typeof ja = {
   captionWaiting: "Call connected. The conversation will appear here…",
   noAnswerDemo: "No answer (demo)",
   ladderStage: (stage, contact) =>
-    stage === "retry" ? "No answer; calling again shortly" : `No answer twice; asking ${contact || "family"} how they are`,
+    stage === "retry" ? "No answer; calling again" : `No answer twice; asking ${contact || "family"} how they are`,
   resetDemo: "Reset demo",
   callLog: "Call log",
   noCalls: "No calls yet",
