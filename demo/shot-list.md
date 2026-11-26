@@ -51,13 +51,13 @@ A second ElevenLabs agent plays Sato-san and answers Yukimi's real browser call,
 | | Hears (microphone) | Speaks into (output) | How it is set |
 |---|---|---|---|
 | Window A: Yukimi, ブラウザで通話 on `/residents/sato` | BlackHole 2ch | Yukimi out | macOS Sound settings: input BlackHole 2ch, output Yukimi out. The app's page uses the system devices. |
-| Window B: `/demo/sato` | BlackHole 16ch | Sato out | The two pickers on the page. |
+| Window B: `/demo/sato` | BlackHole 16ch | Sato out | The two pickers on the page. They start on these if the names match; if Chrome doesn't list Sato out, pick BlackHole 2ch, and only Yukimi reaches the speakers. |
 
-Use two windows side by side, not two tabs. In the screen recorder, record audio from your speakers' output, or from an Aggregate Device of both BlackHoles, so both voices are on the track.
+Use two windows side by side, not two tabs. To get both voices on the video's sound track, make an Aggregate Device of BlackHole 2ch and BlackHole 16ch in Audio MIDI Setup and record audio from it in the screen recorder.
 
-**Each take:** デモをリセット, then **Start Sato-san** in window B (she waits silently), then ブラウザで通話 in window A. End the call in window A; end Sato-san in window B. For the news call (3f), start Sato-san again, then the お知らせをブラウザで（デモ） button in window A.
+**Each take:** デモをリセット, then **Start Sato-san** in window B, then ブラウザで通話 in window A within 30 seconds: after 30 s of silence she speaks up herself. End the call in window A; end Sato-san in window B. For the news call (3f), start Sato-san again, then the お知らせをブラウザで（デモ） button in window A.
 
-**Risks:** the agents can talk over each other or leave long pauses. Sato-san is set to wait patiently and never to fill a silence. Rehearse 5–10 takes and keep the best recorded take as the backup. If the AI Sato-san asks Yukimi something or wanders off script, tighten `demo/sato.md` and rerun `pnpm demo:sato`.
+**Risks:** the agents can talk over each other or leave long pauses. Sato-san is set to wait patiently before answering and to stay quiet through silences of up to 30 s. Rehearse 5–10 takes and keep the best recorded take as the backup. If either agent hears the other faintly or in pieces, Chrome's echo cancellation may be treating the other window's sound as echo: run window B in a different browser. If the AI Sato-san asks Yukimi something or wanders off script, tighten `demo/sato.md` and rerun `pnpm demo:sato`.
 
 Show the label on screen for the whole call: **Sato-san is played by AI; Yukimi is the real product.**
 
@@ -87,7 +87,7 @@ Split screen: Sato at the table on the left, the ブラウザで通話 live capt
 | 2d | Sato (smiling) | それがね、A判定だったのよ。 | He did. He got an A! |
 | 2e | Yukimi | まあ、よかったですね。 | Oh, that's wonderful. |
 | 2f | Yukimi | 先にいくつかだけ、確認させてくださいね。暖房は動いていて、今朝は玄関から出られそうですか？食料やお薬、灯油は足りていますか？ | First, a few quick checks. Is the heating working, and can you get out the front door this morning? Do you have enough food, medicine and kerosene? |
-| 2g | Sato | 暖房も食べ物も大丈夫。でもね、夜のうちにずいぶん積もって、玄関が開かないの。 | The heating and food are fine. But it piled up overnight, and I can't open the front door. |
+| 2g | Sato | ストーブもついてるし、食べ物も、薬も灯油も足りてるよ。でもね、夜のうちにずいぶん積もって、玄関が開かないの。 | The stove's on, and I have enough food, medicine and kerosene. But it piled up overnight, and I can't open the front door. |
 | 2h | Yukimi (**fixed** by the prompt) | 除雪をお願いしておきますね。来る時間が決まったら、お電話でお知らせしますね。 | I'll ask someone to clear the snow. I'll call you once we know when they're coming. |
 | 2i | | *(cut: health, sleep and meals)* | |
 | 2j | Yukimi | ありがとうございました。 | Thank you, Sato-san. |
