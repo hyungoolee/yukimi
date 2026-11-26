@@ -48,6 +48,7 @@ export function BrowserCall({ residentId, news, translate, labels }: {
   }, []);
 
   async function start() {
+    if (liveCall.on) return; // another call on this page has the microphone (the check-in or a news call)
     setError("");
     setCaptions([]);
     setState("connecting");

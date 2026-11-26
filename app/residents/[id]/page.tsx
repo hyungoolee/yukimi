@@ -19,7 +19,7 @@ import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { SaveOnChange } from "../../save-on-change";
 import { rankedRows } from "@/lib/dashboard";
-import { REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
+import { arranged, REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -105,8 +105,8 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                 </form>
               ))}
             {requests
-              // Accepted, and the news has not reached her yet (no phone line in a demo).
-              .filter((r) => r.status === "accepted" && r.told?.result !== "answered" && r.told?.result !== "check_in")
+              // Someone is still to come, and the news has not reached her and is not ringing her phone.
+              .filter((r) => arranged(r) && !["answered", "check_in", "placed"].includes(r.told?.result ?? ""))
               .map((r) => (
                 <BrowserCall
                   key={`news-${r.kind}`}
