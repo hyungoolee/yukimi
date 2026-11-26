@@ -13,6 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spokenTurns } from "../lib/audio-tags.ts";
 import { extract } from "../lib/extract.ts";
 import { unanswered } from "../lib/measures.ts";
+import { DEMO_CALL, NORMAL_CALL } from "../lib/call-length.ts";
 import { applyRules, UNCONFIRMED } from "../lib/rules.ts";
 import type { Resident, Weather } from "../lib/types.ts";
 const need = (name: string) => {
@@ -35,7 +36,7 @@ const variables = {
   weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
   winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
   help_status: "なし",
-  call_length: "ふつう",
+  call_length: NORMAL_CALL,
   greeting: "おはようございます",
 };
 
@@ -106,7 +107,7 @@ const scenarios: Record<string, Scenario> = {
   // The same story with the short demo-mode call: every required question must still be asked.
   "demo-short": {
     expectTool: false,
-    variables: { call_length: "短く" },
+    variables: { call_length: DEMO_CALL },
     opener: ["健太", "模試", "バラ", "受験", ...dayOpeners], // the short call keeps its one opening topic
     persona: `${base} 状況：雪で玄関の戸が開かない。きのう雪かき中に氷ですべって転び、腰が痛いが、ゆっくりなら歩ける。ストーブはついている。食べ物も薬も灯油もある。孫の健太は模試がよくできた。`,
   },
