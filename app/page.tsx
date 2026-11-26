@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { criticalCount } from "@/lib/coverage";
+import { criticalCount, snowLine } from "@/lib/coverage";
 import { mapData, rankedRows, snowRequest, volunteerKey, type MapData, type Row } from "@/lib/dashboard";
 import { DEMO_MODE, LINE_READY } from "@/lib/env";
 import type { Lang, Strings } from "@/lib/i18n";
@@ -153,7 +153,7 @@ function MapPanel({
           {DEMO_MODE && <p className="mt-1 text-zinc-600">{t.mapEmptyDemo}</p>}
         </div>
       )}
-      <MapView data={data} selected={selected} volunteer={helper?.key} volunteerLabel={t.volunteer("{name}")} />
+      <MapView data={data} selected={selected} volunteer={helper?.key} volunteerLabel={t.volunteer("{name}")} businessMark={t.businessMark} />
       {data.unplaced > 0 && data.pins.length > 0 && (
         <p className="mt-2 text-sm text-zinc-500">{t.unplaced(data.unplaced)}</p>
       )}
@@ -177,7 +177,7 @@ function MapPanel({
             </ResidentCard>
             {request && (
               <p className="mt-2 text-sm text-zinc-600">
-                {t.requestStatus(request.volunteer, request.status)}
+                {t.requestStatus(request)}
                 {request.km !== undefined && t.straightLine(request.km)}
               </p>
             )}
@@ -212,12 +212,12 @@ function VolunteerCard({
   calls: CallRecord[];
   t: Strings;
 }) {
-  const served = rows.filter(({ resident }) => volunteerKey(resident.snow_volunteer) === volunteer.key);
+  const served = rows.filter(({ resident }) => snowLine(resident).some((c) => volunteerKey(c) === volunteer.key));
   return (
     <div className="text-sm">
       <div className="flex items-center gap-3">
         <span className="text-lg font-medium">{volunteer.name}</span>
-        <span className="text-zinc-500">{t.role.snow_volunteer}</span>
+        <span className="text-zinc-500">{volunteer.business ? t.business : t.role.snow_volunteer}</span>
         {volunteer.id && (
           <Link href={`/people/${encodeURIComponent(volunteer.id)}`} className="ml-auto text-zinc-500 hover:underline">
             {t.openPerson}
@@ -233,7 +233,7 @@ function VolunteerCard({
               <Link href={`/?view=map&selected=${encodeURIComponent(resident.id)}`} scroll={false} className="hover:underline">
                 {t.name(resident)}
               </Link>
-              {request && <span className="ml-2 text-zinc-600">{t.requestStatus(request.volunteer, request.status)}</span>}
+              {request && <span className="ml-2 text-zinc-600">{t.requestStatus(request)}</span>}
             </li>
           );
         })}

@@ -22,7 +22,7 @@ export default async function PersonPage({ params }: PageProps<"/people/[id]">) 
     <main className="mx-auto w-full max-w-3xl p-6 text-sm">
       <Link href="/people" className="text-zinc-500 hover:underline">{t.backToPeople}</Link>
       <h1 className="mt-2 text-2xl font-semibold">{person.name}</h1>
-      <p className="mt-1 text-zinc-600">{roles.map((role) => t.role[role]).join(t.separator)}</p>
+      <p className="mt-1 text-zinc-600">{[...(person.kind === "business" ? [t.business] : []), ...roles.map((role) => t.role[role])].join(t.separator)}</p>
 
       <form action={editPerson} className="mt-4 flex flex-wrap items-end gap-3">
         {idField}
@@ -37,6 +37,10 @@ export default async function PersonPage({ params }: PageProps<"/people/[id]">) 
         <label className="flex items-center gap-1.5 py-1">
           <input type="checkbox" name="coordinator" defaultChecked={person.coordinator} />
           {t.coordinator}
+        </label>
+        <label className="flex items-center gap-1.5 py-1">
+          <input type="checkbox" name="business" defaultChecked={person.kind === "business"} />
+          {t.business}
         </label>
         <SubmitButton pending={t.saving}>{t.save}</SubmitButton>
       </form>

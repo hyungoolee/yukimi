@@ -5,7 +5,7 @@ import type { LayerGroup, Map as LeafletMap } from "leaflet";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { MapData } from "@/lib/dashboard";
-import { DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, RISK_COLOR, VOLUNTEER_COLOR } from "./map-style";
+import { BUSINESS_COLOR, DEFAULT_CENTER, GSI_OPTIONS, GSI_TILES, pinHtml, RISK_COLOR, VOLUNTEER_COLOR } from "./map-style";
 
 /** The coordinator's map: residents by risk, volunteers, and a line for each open snow request. */
 export function MapView({
@@ -13,6 +13,7 @@ export function MapView({
   selected,
   volunteer,
   volunteerLabel,
+  businessMark,
 }: {
   data: MapData;
   selected?: string;
@@ -20,6 +21,8 @@ export function MapView({
   volunteer?: string;
   /** The volunteer pin's hover text, with "{name}" where their name goes. */
   volunteerLabel: string;
+  /** Added after a business's name in its pin's hover text. */
+  businessMark: string;
 }) {
   const router = useRouter();
   const container = useRef<HTMLDivElement>(null);
@@ -76,8 +79,9 @@ export function MapView({
       }
       for (const v of data.volunteers) {
         L.marker([v.location.lat, v.location.lng], {
-          icon: icon(pinHtml(VOLUNTEER_COLOR, "diamond", v.key === volunteer)),
-          title: volunteerLabel.replace("{name}", v.name),
+          // A business is a square in its own colour, so paid help reads differently from a volunteer.
+          icon: icon(v.business ? pinHtml(BUSINESS_COLOR, "square", v.key === volunteer) : pinHtml(VOLUNTEER_COLOR, "diamond", v.key === volunteer)),
+          title: v.business ? `${v.name}${businessMark}` : volunteerLabel.replace("{name}", v.name),
         })
           .on("click", () => router.replace(`/?view=map&volunteer=${encodeURIComponent(v.key)}`, { scroll: false }))
           .addTo(group);
@@ -104,7 +108,7 @@ export function MapView({
     return () => {
       stale = true;
     };
-  }, [ready, data, selected, volunteer, router, volunteerLabel]);
+  }, [ready, data, selected, volunteer, router, volunteerLabel, businessMark]);
 
   // Bring the selected resident into view.
   const selectedPin = data.pins.find((p) => p.id === selected);

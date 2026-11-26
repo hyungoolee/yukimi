@@ -138,6 +138,32 @@ describe("managing people", () => {
     expect(await store.getPerson(sasaki.id)).toBeNull();
   });
 
+  it("saves one place in the snow line at a time, keeping the others and their agreement", async () => {
+    const a = await store.addPerson("除雪A", undefined, undefined, "business");
+    const b = await store.addPerson("除雪B");
+    // Place 2, then place 3: each menu saves on its own, as the page sends only the one that changed.
+    expect(await actions.assignRoles(form({ resident_id: "sato", snow_next_0: a.id }))).toBe(true);
+    expect(await actions.assignRoles(form({ resident_id: "sato", snow_next_1: b.id }))).toBe(true);
+    let sato = (await store.getResident("sato"))!;
+    expect(sato.snow_next!.map((c) => c.id)).toEqual([a.id, b.id]);
+    expect(sato.paid_ok).toEqual([a.id]); // chosen while marked as a business
+
+    // b is marked as a business afterwards. Changing place 2 must not count as agreeing to b.
+    await store.updatePerson(b.id, (p) => ({ ...p, kind: "business" }));
+    await actions.assignRoles(form({ resident_id: "sato", snow_next_0: "" }));
+    sato = (await store.getResident("sato"))!;
+    expect(sato.snow_next!.map((c) => c.id)).toEqual([b.id]);
+    expect(sato.paid_ok ?? []).toEqual([]);
+    // Choosing b again, in a place of its own, is the agreement.
+    await actions.assignRoles(form({ resident_id: "sato", snow_next_0: b.id }));
+    expect((await store.getResident("sato"))!.paid_ok).toEqual([b.id]);
+    // Someone first in line is not repeated after them, and another resident's family is refused.
+    expect(await actions.assignRoles(form({ resident_id: "sato", snow_next_1: "p_yamamoto" }))).toBe(true);
+    expect((await store.getResident("sato"))!.snow_next!.map((c) => c.id)).toEqual([b.id]);
+    expect(await actions.assignRoles(form({ resident_id: "sato", snow_next_1: "p_takada" }))).toBe(false);
+    await actions.assignRoles(form({ resident_id: "sato", snow_next_0: "" }));
+  });
+
   it("refuses to assign someone who isn't on file", async () => {
     await actions.assignRoles(form({ resident_id: "sato", helper: "p_made_up", second_contact: "p_yuki", snow_volunteer: "p_yamamoto" }));
     expect((await store.getResident("sato"))!.helper.id).toBe("p_tanaka");
