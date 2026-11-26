@@ -1,13 +1,15 @@
+import { JAPAN_TZ } from "./env.ts";
 import { MEASURES } from "./measures.ts";
 import type { AlertReasons, Observations, Risk, Role, RulesOutput } from "./types";
 
-export const japanDate = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+export const japanDate = (d = new Date()) => d.toLocaleDateString("sv-SE", { timeZone: JAPAN_TZ });
 
 /** The Japan date `n` days before `date` ("YYYY-MM-DD"). */
 export function daysBefore(date: string, n: number) {
-  const d = new Date(`${date}T12:00:00+09:00`);
+  // Calendar arithmetic on the date alone, so it holds in any zone JAPAN_TZ is set to.
+  const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - n);
-  return japanDate(d);
+  return d.toISOString().slice(0, 10);
 }
 
 export type Day = { date: string; observations: Observations };

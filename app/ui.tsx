@@ -1,3 +1,4 @@
+import { JAPAN_TZ } from "@/lib/env";
 import type { Lang, Strings } from "@/lib/i18n";
 import type { CallRecord, Risk } from "@/lib/types";
 
@@ -16,7 +17,7 @@ export function RiskBadge({ call, t }: { call?: CallRecord; t: Strings }) {
 
 export const japanTime = (iso: string, lang: Lang) =>
   new Date(iso).toLocaleString(lang === "ja" ? "ja-JP" : "en-GB", {
-    timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+    timeZone: JAPAN_TZ, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 
 /** A left edge in the risk's colour while an alert is open, so urgent rows stand out at a glance. */
