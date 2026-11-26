@@ -1,4 +1,5 @@
 import { placeCall } from "./elevenlabs";
+import { JAPAN_TZ } from "./env";
 import { callsInProgress, getLadder, pendingCalls, listCalls, listResidents, saveCall, updateResident } from "./store";
 import { daysBefore, japanDate } from "./trends";
 import type { Resident } from "./types";
@@ -9,7 +10,7 @@ export const UNPLACED = "今日の見守り電話をかけられませんでし�
 
 const toMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 const japanMinutes = (now: Date) =>
-  toMinutes(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" }));
+  toMinutes(now.toLocaleTimeString("en-GB", { timeZone: JAPAN_TZ, hour: "2-digit", minute: "2-digit" }));
 
 /** No call went out today. Shown on the visit list; no one is told the resident "didn't answer", because nobody rang. */
 const unplaced = (resident: Resident, now: Date) =>
