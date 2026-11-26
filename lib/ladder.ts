@@ -2,13 +2,17 @@ import { anySent, sendRedAlert } from "./actions";
 import { placeCall } from "./elevenlabs";
 import { DEMO_MODE } from "./env";
 import { buttons, push } from "./line";
-import { callsInProgress, clearLadder, getLadder, getResident, saveCall, saveLadder, schedule } from "./store";
+import { callsInProgress, clearLadder, getLadder, getResident, saveCall, saveLadder, schedule, type LadderState } from "./store";
 import type { CallRecord, Resident } from "./types";
 
 // Demo mode runs the ladder in under a minute. Each later step is a task on disk (see lib/tick.ts),
 // so a server restart delays it by a few seconds instead of dropping it.
 const RETRY_MS = DEMO_MODE ? 20_000 : 30 * 60_000;
 const CONFIRM_MS = DEMO_MODE ? 20_000 : 10 * 60_000;
+
+/** A ladder still under way. An older file was left behind (a lost webhook, a restart) and is ignored. */
+export const running = (ladder: LadderState | null | undefined): ladder is LadderState =>
+  !!ladder && Date.now() - ladder.at < RETRY_MS + CONFIRM_MS + 60_000;
 
 const record = (resident: Resident, id: string, fields: Pick<CallRecord, "kind" | "risk" | "reasons" | "actions">) =>
   saveCall({ id, resident_id: resident.id, at: new Date().toISOString(), ...fields });
@@ -33,8 +37,7 @@ export async function missed(residentId: string, attempt: number) {
   if (attempt === 1) {
     // A ladder is already running (an extra manual call, or a double click): let it finish, don't restart it.
     // Only while it is fresh, though: a file left behind by a restart must not block alerts for good.
-    const active = await getLadder(residentId);
-    if (active && Date.now() - active.at < RETRY_MS + CONFIRM_MS + 60_000) return;
+    if (running(await getLadder(residentId))) return;
     const at = Date.now();
     await saveLadder(residentId, { stage: "retry", at });
     await schedule({ kind: "ladder_retry", resident_id: residentId, ladder_at: at, due: at + RETRY_MS });
