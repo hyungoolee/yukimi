@@ -7,6 +7,7 @@ Target length: about 100 s. One resident, Sato-san (佐藤さん), on one snowy 
 - `.env`: `DEMO_MODE=1`, `WEATHER_SOURCE=saved`. The saved weather is 30 cm of new snow, 62 cm on the ground, and a low of -12 °C, so the call includes the winter checks (heating, front door, food, medicine, kerosene).
 - Press **デモをリセット** on the dashboard before each take. It puts residents, calls, ladders and tasks back to the seed state.
 - Set `DEMO_JAPAN_HOUR=9` and start the server just before you record. The app's Japan clock then reads 9 o'clock, so the agent greets with おはようございます and the snow helper gets both 今日の午前 and 今日の午後 buttons. You have until the clock reaches 11:00, when the greeting turns to こんにちは; restart the server to set it back to 9.
+- The agent itself still knows the real Japan time (`timezone` in `agent/setup.ts` puts it in its prompt). If it says something that doesn't fit a morning, retake.
 - Record the dashboard in English (the **English** toggle) for a non-Japanese audience. LINE messages and the call stay in Japanese, so subtitle those.
 - No phone line needed: use **ブラウザで通話** for the call, **除雪のお願いを…で引き受ける（デモ）** for the helper's accept, and **除雪のお願いのお知らせをブラウザで（デモ）** for the news call. If LINE is set up, also film the real phones; if not, the dashboard's 送ったメッセージ list shows every message.
 - Leave Sato's phone number empty for the ladder beat. With no number, the ladder skips the second call and goes from 電話に出ない to 家族に確認 after 10 s.

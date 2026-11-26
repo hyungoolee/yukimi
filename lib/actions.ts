@@ -282,11 +282,9 @@ const NEWS_FROM = 8;
 const NEWS_UNTIL = 20;
 const WAIT_MS = 10 * 60_000;
 
-/** The next NEWS_FROM o'clock in Japan (UTC+9, no daylight saving), as epoch ms. */
+/** The next NEWS_FROM o'clock in JAPAN_TZ, as epoch ms. Called only outside news hours. JAPAN_TZ is whole hours off UTC. */
 function nextMorning(now: Date) {
-  const japan = new Date(now.getTime() + 9 * 3600_000);
-  const morning = Date.UTC(japan.getUTCFullYear(), japan.getUTCMonth(), japan.getUTCDate(), NEWS_FROM) - 9 * 3600_000;
-  return morning > now.getTime() ? morning : morning + 24 * 3600_000;
+  return Math.floor(now.getTime() / 3600_000) * 3600_000 + ((NEWS_FROM - japanHour(now) + 24) % 24) * 3600_000;
 }
 
 /** What the resident hears: 「山本さんが今日の午後に雪かきに伺います。」 */
