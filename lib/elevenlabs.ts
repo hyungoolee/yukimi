@@ -70,23 +70,37 @@ export async function placeCall(resident: Resident, attempt = 1) {
  * A short call that only tells the resident that someone is coming (lib/actions.ts newsStep), placed by
  * the news agent (agent/news.md). `purpose: "news"` tells the post-call webhook this is not a check-in.
  */
-export async function placeNewsCall(resident: Resident, news: string, request: { call_id: string; request_kind: string }) {
-  const variables = { resident_id: resident.id, name: resident.name, news, purpose: "news", ...request };
+type NewsRequest = { call_id: string; request_kind: string };
+const newsVariables = (resident: Resident, news: string, request: NewsRequest) =>
+  ({ resident_id: resident.id, name: resident.name, news, purpose: "news", ...request });
+
+export async function placeNewsCall(resident: Resident, news: string, request: NewsRequest) {
+  const variables = newsVariables(resident, news, request);
   const id = await outboundCall(resident, { dynamic_variables: variables }, env("ELEVENLABS_NEWS_AGENT_ID"));
   // Counted as a call in progress, so no other call rings her phone at the same time.
   await savePending(id, { resident_id: resident.id, attempt: 1, news: request });
   return id;
 }
 
-/** A one-time token and the call's variables, for a call taken in the browser instead of on a phone. */
-export async function browserCall(resident: Resident) {
+/** A one-time token for a call taken in the browser instead of on a phone. */
+async function browserToken(agentId: string) {
   const res = await fetch(
-    `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${env("ELEVENLABS_AGENT_ID")}`,
+    `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`,
     { headers: { "xi-api-key": env("ELEVENLABS_API_KEY") } },
   );
   const body = await res.json();
   if (!res.ok || !body.token) throw new Error(`ElevenLabs token request failed (${res.status})`);
-  return { token: body.token as string, variables: { ...(await callVariables(resident, 1)), channel: "browser" } };
+  return body.token as string;
+}
+
+/** The check-in call, taken in the browser: a token and the call's variables. */
+export async function browserCall(resident: Resident) {
+  return { token: await browserToken(env("ELEVENLABS_AGENT_ID")), variables: { ...(await callVariables(resident, 1)), channel: "browser" } };
+}
+
+/** The news call (placeNewsCall), taken in the browser. The webhook records it on the request, as for a phone. */
+export async function browserNewsCall(resident: Resident, news: string, request: NewsRequest) {
+  return { token: await browserToken(env("ELEVENLABS_NEWS_AGENT_ID")), variables: { ...newsVariables(resident, news, request), channel: "browser" } };
 }
 
 /** Checks the ElevenLabs-Signature header ("t=<unix>,v0=<hex hmac>"). Throws if invalid. */

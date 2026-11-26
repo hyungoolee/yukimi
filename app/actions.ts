@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { acceptRequest, restartRequest } from "@/lib/actions";
-import { browserCall, placeCall } from "@/lib/elevenlabs";
+import { acceptRequest, newsText, restartRequest } from "@/lib/actions";
+import { browserCall, browserNewsCall, placeCall } from "@/lib/elevenlabs";
 import { DEMO_MODE, dashboardAccess } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
-import { isRequestKind, openRequests, REQUESTS, restartable, slotChoices } from "@/lib/requests";
+import { arranged, isRequestKind, openRequests, REQUESTS, restartable, slotChoices } from "@/lib/requests";
 import { japanDate } from "@/lib/trends";
 import type { Resident } from "@/lib/types";
 import { translateNote, translateToEnglish } from "@/lib/translate";
@@ -85,6 +85,20 @@ export async function startBrowserCall(residentId: string) {
   // A thrown error reaches the browser with its message removed in production. The reason is returned
   // instead, so the page can say what is wrong (a missing key, a refused request).
   return browserCall(resident).catch((e) => {
+    console.error(e);
+    return { error: e instanceof Error ? e.message : String(e) };
+  });
+}
+
+/** Demo only: the call telling her someone is coming (lib/actions.ts newsStep), taken in this tab instead of on her phone. */
+export async function startBrowserNewsCall(callId: string, kind: string) {
+  await requireAccess();
+  const call = await getCall(callId);
+  const resident = call && (await getResident(call.resident_id));
+  const request = resident && openRequests(resident, await listCalls(resident.id)).find((r) => r.kind === kind && r.callId === callId);
+  // Accepted and its time not yet over: past that, newsStep would not call either.
+  if (!DEMO_MODE || !resident || !request || !arranged(request)) return { error: "No accepted request to tell her about" };
+  return browserNewsCall(resident, newsText(request), { call_id: callId, request_kind: kind }).catch((e) => {
     console.error(e);
     return { error: e instanceof Error ? e.message : String(e) };
   });
