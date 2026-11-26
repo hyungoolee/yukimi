@@ -93,7 +93,8 @@ export type OpenRequest = {
   who: string;
   slot?: Slot;
   acceptedAt?: string;
-  told?: Told;
+  /** How the news that someone is coming reached her: the news call, or a check-in since the accept. */
+  told?: Told | { at: string; result: "check_in" };
 };
 
 // A request nobody closed stops being talked about after this long: the questions that close it are
@@ -118,6 +119,12 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
       const records = calls.flatMap((c) =>
         c.actions.filter((a) => a.type === "request" && a.kind === kind && (a.request_id ?? c.id) === requestId).map((a) => ({ at: c.at, a })),
       );
+      // A check-in since the accept passed the news on (help_status), so newsStep won't call; say so
+      // instead of what the news call did or why it was skipped. An answered news call says it already.
+      const acceptedAt = action.accepted_at;
+      const checkIn = acceptedAt && action.told?.result !== "answered"
+        ? calls.findLast((c) => c.resident_id === resident.id && c.kind === "call" && c.at > acceptedAt) // the first one
+        : undefined;
       return [{
         kind,
         requestId,
@@ -128,7 +135,7 @@ export function openRequests(resident: Resident, calls: CallRecord[], now = new 
         who: action.accepted_by || resident[REQUESTS[kind].role].name,
         slot: action.slot,
         acceptedAt: action.accepted_at,
-        told: action.told,
+        told: checkIn ? { at: checkIn.at, result: "check_in" as const } : action.told,
       }];
     }
     return [];

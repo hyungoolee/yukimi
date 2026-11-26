@@ -57,6 +57,19 @@ describe("open requests", () => {
     expect(openRequests(sato, [call([request("snow")], { resident_id: "suzuki" })])).toEqual([]);
   });
 
+  it("counts the news as told by the first check-in after the accept, unless the news call was answered", () => {
+    const accepted = call([request("snow", { accepted_by: "山本", accepted_at: "2026-11-26T00:30:00.000Z", told: { at: "2026-11-26T00:31:00.000Z", result: "no_phone" } })]);
+    const told = (...calls: CallRecord[]) => openRequests(sato, [...calls, accepted])[0].told;
+    expect(told()).toEqual({ at: "2026-11-26T00:31:00.000Z", result: "no_phone" });
+    const first = call([], { at: "2026-11-26T01:00:00.000Z" });
+    const second = call([], { at: "2026-11-26T02:00:00.000Z" });
+    expect(told(second, first)).toEqual({ at: first.at, result: "check_in" });
+    // A missed call or another resident's call told her nothing.
+    expect(told(call([], { at: first.at, kind: "missed" }), call([], { at: first.at, resident_id: "suzuki" }))?.result).toBe("no_phone");
+    const answered = call([request("snow", { accepted_by: "山本", accepted_at: "2026-11-26T00:30:00.000Z", told: { at: "2026-11-26T00:31:00.000Z", result: "answered" } })]);
+    expect(openRequests(sato, [first, answered])[0].told?.result).toBe("answered");
+  });
+
   it("counts as arranged until the half-day is over", () => {
     const [am] = slotChoices(morning);
     const open = (slot?: typeof am) => openRequests(sato, [call([request("snow", { accepted_by: "山本", slot })])])[0];
