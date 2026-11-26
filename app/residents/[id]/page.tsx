@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getResident, listCalls, listPeople } from "@/lib/store";
+import { getLadder, getResident, listCalls, listPeople } from "@/lib/store";
 import { coverage, eligible, reach, ROLES } from "@/lib/coverage";
 import { assignRoles } from "../../people/actions";
 import { AddFamily } from "../../people/add-family";
@@ -44,7 +44,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   const { id } = await params;
   const resident = await getResident(id);
   if (!resident) notFound();
-  const [calls, everyone] = await Promise.all([listCalls(id), listPeople()]);
+  const [calls, everyone, ladder] = await Promise.all([listCalls(id), listPeople(), getLadder(id)]);
   const { lang, t } = await getStrings();
   const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
   const [nextSlot] = slotChoices();
@@ -67,6 +67,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </span>
         </div>
         <CallStatus resident={resident} call={current} requests={requests} lang={lang} t={t} />
+        {ladder && <p className="mt-1 text-sm font-medium text-amber-700">{t.ladderStage(ladder.stage, resident.second_contact.name)}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <CallNowButton resident={resident} t={t} />
           {!resident.phone && (
@@ -94,7 +95,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-dashed border-zinc-300 p-2 text-sm">
             <form action={simulateNoAnswer}>
               <input type="hidden" name="resident_id" value={resident.id} />
-              <SubmitButton pending={t.calling}>{t.noAnswerDemo}</SubmitButton>
+              <SubmitButton disabled={resident.active === false || !!ladder} pending={t.calling}>{t.noAnswerDemo}</SubmitButton>
             </form>
             {requests
               .filter((r) => r.status !== "accepted")
