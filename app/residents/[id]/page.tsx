@@ -51,6 +51,14 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
   const [nextSlot] = slotChoices();
   const { gaps, level } = coverage(resident);
+  const callLabels = {
+    connecting: t.connecting,
+    end: t.endCall,
+    micError: t.micError,
+    agent: t.captionAgent,
+    you: t.captionYou,
+    waiting: t.captionWaiting,
+  };
 
   return (
     <main className="mx-auto w-full max-w-3xl p-6">
@@ -77,19 +85,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
               {t.addPhone}
             </a>
           )}
-          <BrowserCall
-            residentId={resident.id}
-            translate={lang === "en"}
-            labels={{
-              start: t.browserCall,
-              connecting: t.connecting,
-              end: t.endCall,
-              micError: t.micError,
-              agent: t.captionAgent,
-              you: t.captionYou,
-              waiting: t.captionWaiting,
-            }}
-          />
+          <BrowserCall residentId={resident.id} translate={lang === "en"} labels={{ ...callLabels, start: t.browserCall }} />
           <MarkHandledButton call={current} t={t} />
         </div>
         {DEMO_MODE && (
@@ -107,6 +103,18 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                   <input type="hidden" name="kind" value={r.kind} />
                   <SubmitButton pending={t.saving}>{t.acceptDemo(r, slotLabel(nextSlot, new Date(), lang))}</SubmitButton>
                 </form>
+              ))}
+            {requests
+              // Accepted, and the news has not reached her yet (no phone line in a demo).
+              .filter((r) => r.status === "accepted" && r.told?.result !== "answered" && r.told?.result !== "check_in")
+              .map((r) => (
+                <BrowserCall
+                  key={`news-${r.kind}`}
+                  residentId={resident.id}
+                  news={{ callId: r.callId, kind: r.kind }}
+                  translate={lang === "en"}
+                  labels={{ ...callLabels, start: t.newsCallDemo(r) }}
+                />
               ))}
           </div>
         )}
