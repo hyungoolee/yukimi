@@ -38,7 +38,7 @@ Yukimi phones each resident every morning in Japanese, and turns what they say i
 
 - **Voice calls:** ElevenLabs Conversational AI, with a Japanese voice and a fast Claude model as the agent's LLM. Calls go over the phone through Twilio, or in the browser for demos. The agent has an emergency tool that triggers an immediate alert.
 - **After the call:** ElevenLabs sends a webhook to the app. Claude (Anthropic API) extracts structured observations, against a Zod schema, and proposes memory changes. Rules in TypeScript set the risk level and decide who to alert.
-- **Messaging:** the LINE Messaging API, with tap-to-respond buttons for volunteers and family. The app works through each resident's list of volunteers and sends reminders when nobody responds.
+- **Messaging:** the LINE Messaging API, with tap-to-respond buttons for volunteers and family. If a volunteer can't come or doesn't answer within an hour, the app asks the next one on the resident's list, and tells the coordinators if nobody is left.
 - **Data sources:** JMA AMeDAS live observations (snowfall, snow depth, low temperature) and the GSI (国土地理院) map tiles.
 - **App:** Next.js and TypeScript, with data stored as JSON files on a persistent disk, deployed with Docker.
 - **Quality:**
