@@ -94,7 +94,7 @@ export async function startBrowserCall(residentId: string) {
 export async function simulateNoAnswer(formData: FormData) {
   await requireAccess();
   if (DEMO_MODE) await missed(String(formData.get("resident_id")), 1);
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // the resident's page shows the ladder's stage
 }
 
 /** Demo only: act as if the person asked had tapped the first time slot, to show the rest without a phone in hand. */

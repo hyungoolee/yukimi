@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { DEMO_MODE, env } from "./env";
 import { briefingLine } from "./briefing";
+import { DEMO_CALL, NORMAL_CALL } from "./call-length";
 import { careNotesLine, factsLine, followUpsLine, threadsLine } from "./memory";
 import { helpLine } from "./requests";
 import { listCalls, savePending } from "./store";
@@ -28,8 +29,8 @@ async function callVariables(resident: Resident, attempt: number) {
     threads: threadsLine(resident),
     briefing: calls ? briefingLine(calls) : "なし",
     help_status: calls ? helpLine(resident, calls) : "なし",
-    // A demo runs the same checks in a minute or two (agent/prompt.md, 電話の長さ).
-    call_length: DEMO_MODE ? "短く" : "ふつう",
+    // A demo runs the same checks in a minute or two.
+    call_length: DEMO_MODE ? DEMO_CALL : NORMAL_CALL,
     greeting: greeting(),
     ...describeWeather(await getWeather(resident.amedas_station)),
   };
