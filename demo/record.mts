@@ -1,6 +1,6 @@
 // Records the dashboard shots for the demo video (demo/shot-list.md, beats 3–5) into demo/takes/.
 //
-//   pnpm demo:record save         right after the live call: keep the data so `after-call` can be retaken
+//   pnpm demo:record save         after a new live call: replace the post-call state that `after-call` takes start from
 //   pnpm demo:record after-call   beat 3: the list, Sato's page after the call, the snow helper accepting
 //   pnpm demo:record no-answer    beat 4: the missed-call ladder, to its end
 //   pnpm demo:record map          beat 5: the map
@@ -24,7 +24,8 @@ const shots: Record<string, (page: Page) => Promise<void>> = {
     await pause(page, 3);
     await click(page.getByRole("link", { name: /佐藤|Sato/ }).first());
     await pause(page, 3);
-    const accept = page.getByRole("button", { name: /引き受ける（デモ）|accept for .* \(demo\)/ });
+    // Snow only: the call may also have raised a supplies request, with its own accept button.
+    const accept = page.getByRole("button", { name: /^除雪のお願いを.+引き受ける（デモ）$|^Snow clearing: accept for .+ \(demo\)$/ });
     if (!(await accept.count())) throw new Error("Sato has no open snow request. Do the live call first (shot-list beat 2).");
     await scrollTo(page, page.getByText(/^(まとめ|Summary)$/).first());
     await pause(page, 4);
@@ -42,6 +43,8 @@ const shots: Record<string, (page: Page) => Promise<void>> = {
     const button = page.getByRole("button", { name: /電話に出ない（デモ）|No answer \(demo\)/ });
     if (await button.isDisabled()) throw new Error("A missed-call ladder is already running, or Sato is paused. Wait a minute or press デモをリセット.");
     await click(button);
+    // The running step first: the last take's ended strip stays on the page for half an hour.
+    await page.locator("li span.bg-amber-100").waitFor();
     // 10 s to the family check, 20 s more to the end, unless the family taps 無事です on LINE first.
     await page.locator("li span.bg-red-600, li span.bg-green-600").waitFor({ timeout: 90_000 });
     await pause(page, 5);
@@ -118,9 +121,17 @@ if (shot === "save") {
   await cp(DATA, SNAPSHOT, { recursive: true });
   console.log(`Saved ${DATA} to ${SNAPSHOT}. Each after-call take starts from it.`);
 } else if (shots[shot]) {
-  if (shot === "after-call" && (await exists(SNAPSHOT))) {
-    await rm(DATA, { recursive: true, force: true });
-    await cp(SNAPSHOT, DATA, { recursive: true });
+  if (shot === "after-call") {
+    if (await exists(SNAPSHOT)) {
+      await rm(DATA, { recursive: true, force: true });
+      await cp(SNAPSHOT, DATA, { recursive: true });
+      // Timed steps saved with it are past due by now and would fire at once (a helper or coordinator messaged mid-take).
+      await rm(path.join(DATA, "tasks"), { recursive: true, force: true });
+      console.log(`Restored ${SNAPSHOT} into ${DATA}`);
+    } else {
+      // The first take accepts the request: keep the state before it, or the next take needs a new call.
+      await cp(DATA, SNAPSHOT, { recursive: true });
+    }
   }
   await record(shot);
 } else {

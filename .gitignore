@@ -44,5 +44,5 @@ next-env.d.ts
 /.data
 !.env.example
 
-# demo recordings (demo/record.ts)
+# demo recordings (demo/record.mts)
 /demo/takes
