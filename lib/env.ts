@@ -27,7 +27,8 @@ export const DEMO_MODE = process.env.DEMO_MODE === "1";
 export const JAPAN_TZ = (() => {
   const hour = Number(process.env.DEMO_JAPAN_HOUR);
   if (!DEMO_MODE || !process.env.DEMO_JAPAN_HOUR || !(hour >= 0 && hour < 24)) return "Asia/Tokyo";
-  let offset = (((Math.floor(hour) - new Date().getUTCHours()) % 24) + 24) % 24;
+  // From the process start, not the module load: each server bundle loads its own copy of this module.
+  let offset = (((Math.floor(hour) - new Date(performance.timeOrigin).getUTCHours()) % 24) + 24) % 24;
   if (offset > 14) offset -= 24; // Etc/GMT zones run from -12 to +14
   // Etc/GMT names are sign-inverted: UTC+5 is Etc/GMT-5.
   return offset === 0 ? "Etc/GMT" : `Etc/GMT${offset > 0 ? "-" : "+"}${Math.abs(offset)}`;
