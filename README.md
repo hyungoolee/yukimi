@@ -2,6 +2,8 @@
 
 Winter check-in calls for older residents of Hokkaido. Hackathon MVP; all residents are fictional.
 
+What it does and why: [WRITEUP.md](WRITEUP.md).
+
 ```bash
 cp .env.example .env   # copy, don't rename: the template stays in the repo
 pnpm install
