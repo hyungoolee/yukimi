@@ -3,7 +3,7 @@
 import { Conversation } from "@elevenlabs/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { startBrowserCall, translateCaption } from "../../actions";
+import { startBrowserCall, startBrowserNewsCall, translateCaption } from "../../actions";
 import { liveCall } from "../../refresh";
 import { stripAudioTags } from "@/lib/audio-tags";
 
@@ -11,11 +11,16 @@ type Labels = { start: string; connecting: string; end: string; micError: string
 type Caption = { key: string; fromAgent: boolean; text: string; english?: string };
 
 /**
- * Takes the check-in call in this tab, using its microphone and speaker as the resident's phone.
- * While the call runs it shows what each side said as captions, with English underneath when
- * `translate` is on.
+ * Takes the check-in call in this tab, using its microphone and speaker as the resident's phone; with
+ * `news`, the call telling her someone is coming instead. While the call runs it shows what each side
+ * said as captions, with English underneath when `translate` is on.
  */
-export function BrowserCall({ residentId, translate, labels }: { residentId: string; translate: boolean; labels: Labels }) {
+export function BrowserCall({ residentId, news, translate, labels }: {
+  residentId: string;
+  news?: { callId: string; kind: string };
+  translate: boolean;
+  labels: Labels;
+}) {
   const router = useRouter();
   const call = useRef<Conversation | null>(null);
   const [state, setState] = useState<"idle" | "connecting" | "live">("idle");
@@ -54,7 +59,7 @@ export function BrowserCall({ residentId, translate, labels }: { residentId: str
       });
       probe.getTracks().forEach((track) => track.stop());
 
-      const started = await startBrowserCall(residentId);
+      const started = news ? await startBrowserNewsCall(news.callId, news.kind) : await startBrowserCall(residentId);
       if ("error" in started) throw new Error(started.error);
       const { token, variables } = started;
       call.current = await Conversation.startSession({
