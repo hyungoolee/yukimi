@@ -7,8 +7,21 @@ import type { CallRecord, Resident } from "./types";
 
 // Demo mode runs the ladder in under a minute. Each later step is a task on disk (see lib/tick.ts),
 // so a server restart delays it by a few seconds instead of dropping it.
-const RETRY_MS = DEMO_MODE ? 20_000 : 30 * 60_000;
+const RETRY_MS = DEMO_MODE ? 10_000 : 30 * 60_000;
 const CONFIRM_MS = DEMO_MODE ? 20_000 : 10 * 60_000;
+
+/** When the current step is due to move on: shown as a countdown on the resident's page. */
+export const nextStepAt = (ladder: LadderState) => ladder.at + (ladder.stage === "retry" ? RETRY_MS : CONFIRM_MS);
+
+/**
+ * How a ladder that just ended came out, from the resident's newest call: the alert it raised ("red")
+ * or the second contact's all-clear ("green"). Kept for half an hour, and until the alert is handled.
+ */
+export function endedLadder(call: CallRecord | undefined, now = Date.now()) {
+  if (!call || call.handled || now - Date.parse(call.at) > 30 * 60_000) return undefined;
+  if (call.kind === "missed" && call.risk === "red") return "red" as const; // not the yellow "no call went out today"
+  if (call.kind === "confirmed_ok") return "green" as const;
+}
 
 /** A ladder still under way. An older file was left behind (a lost webhook, a restart) and is ignored. */
 export const running = (ladder: LadderState | null | undefined): ladder is LadderState =>
