@@ -3,6 +3,7 @@
 // Field names are checked against the ElevenLabs API reference, but this has not yet run
 // against the live API: read any error it prints on first use.
 import { readFileSync } from "node:fs";
+import { NORMAL_CALL } from "../lib/call-length.ts";
 
 const need = (name: string) => {
   const v = process.env[name];
@@ -75,7 +76,7 @@ const agentConfig = {
           weather: "今朝の最低気温は-12℃、この24時間の降雪は30センチ、積雪は62センチ",
           winter_check: "必要。暖房が動いているか、玄関から出られるか、食料・薬・灯油が足りているかを必ず確認する。",
           help_status: "なし",
-          call_length: "ふつう",
+          call_length: NORMAL_CALL,
           greeting: "おはようございます",
         },
       },
