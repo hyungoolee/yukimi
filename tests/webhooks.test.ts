@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MEASURES } from "@/lib/measures";
 import { daysBefore, japanDate } from "@/lib/trends";
-import type { Extraction, Observations } from "@/lib/types";
+import type { CallRecord, Extraction, Observations } from "@/lib/types";
 
 // The model call is replaced; everything else (routes, rules, store, LINE requests) is real.
 const extraction: Extraction = {
@@ -520,9 +520,34 @@ describe("calls without a phone line", () => {
     const data = new FormData();
     data.set("resident_id", "takahashi");
     await store.clearLadder("takahashi");
+    const phone = (await store.getResident("takahashi"))!.phone;
+    await store.saveResident({ ...(await store.getResident("takahashi"))!, phone: "" });
     await simulateNoAnswer(data);
-    expect(await store.getLadder("takahashi")).toMatchObject({ stage: "retry" });
+    const ladder = (await store.getLadder("takahashi"))!;
+    expect(ladder).toMatchObject({ stage: "retry" });
+    const { nextStepAt } = await import("@/lib/ladder");
+    expect(nextStepAt(ladder) - ladder.at).toBe(10_000); // the page counts down to this
+    // No phone number: the retry, 10 s in, goes straight to asking the second contact.
+    await after(11);
+    const asking = (await store.getLadder("takahashi"))!;
+    expect(asking).toMatchObject({ stage: "second_contact" });
+    expect(nextStepAt(asking) - asking.at).toBe(20_000);
     await store.clearLadder("takahashi");
+    await store.saveResident({ ...(await store.getResident("takahashi"))!, phone });
+  });
+
+  it("shows how a ladder just ended: the alert or the all-clear, for half an hour and until handled", async () => {
+    const { endedLadder } = await import("@/lib/ladder");
+    const now = Date.parse("2026-11-26T01:00:00.000Z");
+    const call = (kind: CallRecord["kind"], risk: CallRecord["risk"], extra: Partial<CallRecord> = {}): CallRecord =>
+      ({ id: "x", resident_id: "suzuki", at: "2026-11-26T00:50:00.000Z", kind, risk, reasons: [], actions: [], ...extra });
+    expect(endedLadder(call("missed", "red"), now)).toBe("red");
+    expect(endedLadder(call("confirmed_ok", "green"), now)).toBe("green");
+    expect(endedLadder(call("missed", "yellow"), now)).toBeUndefined(); // no call went out today: not a ladder
+    expect(endedLadder(call("call", "red"), now)).toBeUndefined();
+    expect(endedLadder(call("missed", "red", { handled: true }), now)).toBeUndefined();
+    expect(endedLadder(call("missed", "red", { at: "2026-11-26T00:29:00.000Z" }), now)).toBeUndefined();
+    expect(endedLadder(undefined, now)).toBeUndefined();
   });
 });
 
