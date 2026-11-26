@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { arranged, helpLine, openRequests, slotChoices, slotLabel } from "@/lib/requests";
 import { applyRules, SHORT_OF_SUPPLIES } from "@/lib/rules";
 import type { CallRecord, Resident, Signals } from "@/lib/types";
@@ -14,10 +14,16 @@ const sato: Resident = {
 type Saved = CallRecord["actions"][number];
 const request = (kind: "snow" | "supplies", extra: Partial<Saved> = {}): Saved =>
   ({ type: "request", kind, to: [kind === "snow" ? "snow_helper" : "second_contact"], sent: true, ...extra }) as Saved;
+// openRequests and friends default `now` to the real clock (staleness is three days), so pin it.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(afternoon);
+});
+afterEach(() => vi.useRealTimers());
 let n = 0;
-/** Each call is newer than the one before; pass them newest first. */
+/** Each call is newer than the one before; pass them newest first. Default times are 09:nn in Japan, whatever the machine's zone. */
 const call = (actions: Saved[], extra: Partial<CallRecord> = {}): CallRecord => ({
-  id: `c${++n}`, resident_id: "sato", at: new Date(2026, 10, 26, 9, n).toISOString(), kind: "call", risk: "yellow", reasons: [], actions, ...extra,
+  id: `c${++n}`, resident_id: "sato", at: new Date(Date.UTC(2026, 10, 26, 0, n)).toISOString(), kind: "call", risk: "yellow", reasons: [], actions, ...extra,
 });
 
 describe("time slots", () => {
@@ -60,7 +66,7 @@ describe("open requests", () => {
   });
 
   it("counts the news as told by the first check-in after the accept, unless the news call was answered", () => {
-    const accepted = call([request("snow", { accepted_by: "山本", accepted_at: "2026-11-26T00:30:00.000Z", told: { at: "2026-11-26T00:31:00.000Z", result: "no_phone" } })]);
+    const accepted = call([request("snow", { accepted_by: "山本", accepted_at: "2026-11-26T00:30:00.000Z", told: { at: "2026-11-26T00:31:00.000Z", result: "no_phone" } })], { at: "2026-11-26T00:20:00.000Z" });
     const told = (...calls: CallRecord[]) => openRequests(sato, [...calls, accepted])[0].told;
     expect(told()).toEqual({ at: "2026-11-26T00:31:00.000Z", result: "no_phone" });
     const first = call([], { at: "2026-11-26T01:00:00.000Z" });
@@ -68,7 +74,7 @@ describe("open requests", () => {
     expect(told(second, first)).toEqual({ at: first.at, result: "check_in" });
     // A missed call or another resident's call told her nothing.
     expect(told(call([], { at: first.at, kind: "missed" }), call([], { at: first.at, resident_id: "suzuki" }))?.result).toBe("no_phone");
-    const answered = call([request("snow", { accepted_by: "山本", accepted_at: "2026-11-26T00:30:00.000Z", told: { at: "2026-11-26T00:31:00.000Z", result: "answered" } })]);
+    const answered = call([request("snow", { accepted_by: "山本", accepted_at: "2026-11-26T00:30:00.000Z", told: { at: "2026-11-26T00:31:00.000Z", result: "answered" } })], { at: "2026-11-26T00:20:00.000Z" });
     expect(openRequests(sato, [first, answered])[0].told?.result).toBe("answered");
   });
 

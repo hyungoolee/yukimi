@@ -5,7 +5,8 @@ import { coverage, eligible, reach, ROLES, SNOW_NEXT_SLOTS } from "@/lib/coverag
 import { assignRoles } from "../../people/actions";
 import { AddFamily } from "../../people/add-family";
 import { DEMO_MODE } from "@/lib/env";
-import { running } from "@/lib/ladder";
+import { endedLadder, nextStepAt, running } from "@/lib/ladder";
+import { LadderStrip } from "./ladder-strip";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
 import { acceptDemo, deleteFollowUp, restartLine, setActive, simulateNoAnswer } from "../../actions";
@@ -51,6 +52,9 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
   const [nextSlot] = slotChoices();
   const { gaps, level } = coverage(resident);
+  const ladderEnd = ladder ? undefined : endedLadder(calls[0]); // the newest call, not the one the list ranks first
+  const ladderSteps = t.ladderSteps(resident.second_contact.name);
+  if (ladderEnd === "green") ladderSteps[3] = t.ladderFine;
   const callLabels = {
     connecting: t.connecting,
     end: t.endCall,
@@ -77,7 +81,10 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
           </span>
         </div>
         <CallStatus resident={resident} call={current} requests={requests} lang={lang} t={t} />
-        {ladder && <p className="mt-1 text-sm font-medium text-amber-700">{t.ladderStage(ladder.stage, resident.second_contact.name)}</p>}
+        {ladder && (
+          <LadderStrip steps={ladderSteps} current={ladder.stage === "retry" ? 1 : 2} nextAt={nextStepAt(ladder)} units={t.countdown} />
+        )}
+        {ladderEnd && <LadderStrip steps={ladderSteps} current={3} end={ladderEnd} units={t.countdown} />}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <CallNowButton resident={resident} t={t} />
           {!resident.phone && (
