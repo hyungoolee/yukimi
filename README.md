@@ -10,6 +10,8 @@ pnpm dev
 
 - `pnpm test`: rules and webhook replays, with the model call mocked.
 - `pnpm eval`: scripted calls and a multi-day trend through the real extraction and rules. Requires `ANTHROPIC_API_KEY` and makes one model call per scripted conversation.
+- `pnpm simulate [scenario…]`: scripted text conversations with the live ElevenLabs agent, each transcript then run through extraction and rules. Uses ElevenLabs credit and one model call per scenario; options are in the header of `evals/simulate.ts`.
+- `pnpm demo:record <shot>`: records the dashboard shots of the demo video. See [demo/shot-list.md](demo/shot-list.md).
 
 The resident page shows observations across seven Japan dates. A meal trend alerts the helper and family on its first qualifying day and every third qualifying observation day thereafter, once per Japan date. Persistent alert tasks retain the reasons intended for each recipient.
 
@@ -27,11 +29,12 @@ Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set
    **More than one snow helper:** a snow request offers only what is left of today, since she can't get out now. Each resident can have up to three people in line for snow clearing, asked in order; when one taps 行けません (can't come), or doesn't take the request in an hour, the next is asked, and the coordinators hear when the line runs out. Tick 事業者（有料） on a person's page for a business that charges. Put a business in a resident's line, in the resident's settings, only once the family has agreed to it; choosing it there is the agreement, per resident. Someone already in a line who is ticked as a business afterwards is not asked for that resident until they are chosen again in that resident's settings, and the settings say so. Once agreed, it is asked like anyone else when its turn comes, and the family gets a LINE message saying so. When it accepts, the family's usual message about who is coming names it as paid. The price is settled between the family and the business; the app handles no payment. Each request works through the line as it stood when it started, so a change to the line applies to the next request; to make it count for one already under way, press 「今の順番で最初から頼み直す」 on the resident's page.
 7. **Phone number:** open a resident on the dashboard and save the number to call, in international format (`+81…`).
 8. **First call:** press 今すぐ電話.
-9. **Map (optional):** the dashboard's 地図 view shows residents and snow volunteers. Place each pin from the resident's page, under 地図上の位置. The base map is 国土地理院's tiles; keep the credit visible.
+9. **Daily calls:** set `DAILY_CALLS=1` to phone every active resident at their call time each day. It is off by default because the calls cost money and ring real phones. `MAX_CONCURRENT_CALLS` (default 5) should match your ElevenLabs/Twilio plan's limit.
+10. **Map (optional):** the dashboard's 地図 view shows residents and snow volunteers. Place each pin from the resident's page under 設定: 自宅 for the home, and 除雪の拠点 and each person in the snow line for the helpers. The base map is 国土地理院's tiles; keep the credit visible.
 
 No phone line yet? Skip steps 4 and 7: open a resident and press ブラウザで通話 to take the call in the browser tab. With `DEMO_MODE=1`, 電話に出ない（デモ） starts the missed-call ladder as if the call rang out.
 
-For the demo, set `DEMO_MODE=1` (the missed-call ladder runs in under a minute) and `WEATHER_SOURCE=saved` (uses `data/seed/weather.json`). To record a morning at any hour, also set `DEMO_JAPAN_HOUR=9`: the app reads Japan time as 9 o'clock when the server starts, and the clock runs on from there. Never set `DEMO_MODE=1` on a deployment that calls real residents: every call becomes a short demo call with a lighter health check.
+For the demo, set `DEMO_MODE=1` (the missed-call ladder runs in under a minute) and `WEATHER_SOURCE=saved` (uses `data/seed/weather.json`). To record a morning at any hour, also set `DEMO_JAPAN_HOUR=9`: the app reads Japan time as 9 o'clock when the server starts, and the clock runs on from there. デモをリセット on the dashboard puts residents, calls, ladders and tasks back to the seed state. The shot list for the demo video is in [demo/shot-list.md](demo/shot-list.md). Never set `DEMO_MODE=1` on a deployment that calls real residents: every call becomes a short demo call with a lighter health check.
 
 ## License
 
