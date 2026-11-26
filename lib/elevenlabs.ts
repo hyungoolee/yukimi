@@ -83,7 +83,7 @@ export async function placeNewsCall(resident: Resident, news: string, request: N
 }
 
 /** A one-time token for a call taken in the browser instead of on a phone. */
-async function browserToken(agentId: string) {
+export async function browserToken(agentId: string) {
   const res = await fetch(
     `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`,
     { headers: { "xi-api-key": env("ELEVENLABS_API_KEY") } },

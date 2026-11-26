@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { acceptRequest, newsText, restartRequest } from "@/lib/actions";
-import { browserCall, browserNewsCall, placeCall } from "@/lib/elevenlabs";
-import { DEMO_MODE, dashboardAccess } from "@/lib/env";
+import { browserCall, browserNewsCall, browserToken, placeCall } from "@/lib/elevenlabs";
+import { DEMO_MODE, dashboardAccess, env } from "@/lib/env";
 import { missed } from "@/lib/ladder";
 import { addFact, deleteFact, editFact, removeFollowUp, restoreFact, retireFact, setCareNotes } from "@/lib/memory";
 import { arranged, isRequestKind, openRequests, REQUESTS, restartable, slotChoices } from "@/lib/requests";
@@ -102,6 +102,17 @@ export async function startBrowserNewsCall(callId: string, kind: string) {
     console.error(e);
     return { error: e instanceof Error ? e.message : String(e) };
   });
+}
+
+/** Demo only: a token for the AI Sato-san (demo/sato-setup.ts), who answers Yukimi's browser call from /demo/sato. */
+export async function startSatoCall() {
+  await requireAccess();
+  if (!DEMO_MODE) return { error: "Demo only" };
+  try {
+    return { token: await browserToken(env("ELEVENLABS_SATO_AGENT_ID")) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** Demo only: act as if today's call rang out, to show the missed-call ladder without a phone. */

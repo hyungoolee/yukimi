@@ -30,10 +30,36 @@ Add `--en` for the English dashboard. The news call (3f) and the phones are live
 
 | Role | In the app | Who plays them |
 |---|---|---|
-| Sato-san, lives alone | `sato` | An older Japanese speaker, with their consent. Voice and hands on camera; the face is optional. |
+| Sato-san, lives alone | `sato` | The AI Sato-san (below), or an older Japanese speaker with their consent. Hands on camera; the face is optional. |
 | Yuki, her daughter in Sapporo | `p_yuki` (family) | Anyone. Their phone and hands are on camera. |
 | Yamamoto, snow helper | `p_yamamoto` | Anyone. Their phone, a shovel and boots are on camera. |
 | Yukimi | ElevenLabs voice "Hiyori" | The app |
+
+## AI Sato-san: two agents talking
+
+A second ElevenLabs agent plays Sato-san and answers Yukimi's real browser call, so the whole call is live and the app processes it like any other. Her character and her answers to the shot list's questions are in `demo/sato.md`.
+
+**Set up once**
+1. **Voice:** in ElevenLabs, Voice Design. Description: *An 80-year-old Japanese woman from rural Hokkaido, warm and gentle, speaking slowly with a soft, slightly hoarse voice and natural pauses, as if on the phone at her kitchen table.* Preview text: 「あら、おはようございます。それがね、夜のうちにずいぶん積もって、玄関が開かないのよ。」 Pick one by ear, save it, and put its ID in `.env` as `ELEVENLABS_SATO_VOICE_ID`.
+2. **Agent:** `pnpm demo:sato`, then add the `ELEVENLABS_SATO_AGENT_ID` it prints to `.env` and restart the dev server. Run it again after editing `demo/sato.md`.
+3. **Audio:** install BlackHole 2ch and BlackHole 16ch. In Audio MIDI Setup, make two Multi-Output Devices, so each voice also reaches the speakers:
+   - **Yukimi out:** BlackHole 16ch + speakers.
+   - **Sato out:** BlackHole 2ch + speakers.
+
+**Routing**
+
+| | Hears (microphone) | Speaks into (output) | How it is set |
+|---|---|---|---|
+| Window A: Yukimi, ブラウザで通話 on `/residents/sato` | BlackHole 2ch | Yukimi out | macOS Sound settings: input BlackHole 2ch, output Yukimi out. The app's page uses the system devices. |
+| Window B: `/demo/sato` | BlackHole 16ch | Sato out | The two pickers on the page. |
+
+Use two windows side by side, not two tabs. In the screen recorder, record audio from your speakers' output, or from an Aggregate Device of both BlackHoles, so both voices are on the track.
+
+**Each take:** デモをリセット, then **Start Sato-san** in window B (she waits silently), then ブラウザで通話 in window A. End the call in window A; end Sato-san in window B. For the news call (3f), start Sato-san again, then the お知らせをブラウザで（デモ） button in window A.
+
+**Risks:** the agents can talk over each other or leave long pauses. Sato-san is set to wait patiently and never to fill a silence. Rehearse 5–10 takes and keep the best recorded take as the backup. If the AI Sato-san asks Yukimi something or wanders off script, tighten `demo/sato.md` and rerun `pnpm demo:sato`.
+
+Show the label on screen for the whole call: **Sato-san is played by AI; Yukimi is the real product.**
 
 ## Shots
 
@@ -44,7 +70,7 @@ The agent's lines are generated live, so the Yukimi lines below are what the pro
 | Shot | Picture | Sound / text |
 |---|---|---|
 | 1a | Snow-covered houses, a buried front door (stock footage or a real street) | Wind. Text: **Hokkaido. -12 °C. 30 cm of snow overnight.** |
-| 1b | A kitchen: a kotatsu, a radio, a clock reading 8:59 | Text: **Sato-san, 82, lives alone.** |
+| 1b | A kitchen: a kotatsu, a radio, a clock reading 8:59 | Text: **Sato-san, 80, lives alone.** |
 | 1c | The phone on the table lights up | Ring, then cut to 2a |
 
 Add one sourced statistic about older people living alone in Japan here if you have it. Don't use an unsourced number.
@@ -111,4 +137,4 @@ Keep the 国土地理院 map credit visible in 5a.
 - Burn in English subtitles. Show Japanese LINE text on screen as it is, with the English below.
 - Speed-ramp 4b–4c: the 30-second ladder plays in about 6 seconds.
 - Music: quiet piano. Drop it out completely at 4a so the unanswered ring stands alone, and bring it back at 4f.
-- Caption the AI voice once, in 2a: *Yukimi is an AI voice. It says so if asked.*
+- Caption the AI voice once, in 2a: *Yukimi is an AI voice. It says so if asked.* With the AI Sato-san, use the label above instead.
