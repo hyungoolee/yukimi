@@ -31,7 +31,7 @@ Deploy the `Dockerfile` on a host with a persistent disk mounted at `/data`. Set
 
 No phone line yet? Skip steps 4 and 7: open a resident and press ブラウザで通話 to take the call in the browser tab. With `DEMO_MODE=1`, 電話に出ない（デモ） starts the missed-call ladder as if the call rang out.
 
-For the demo, set `DEMO_MODE=1` (the missed-call ladder runs in under a minute) and `WEATHER_SOURCE=saved` (uses `data/seed/weather.json`). Never set `DEMO_MODE=1` on a deployment that calls real residents: every call becomes a short demo call with a lighter health check.
+For the demo, set `DEMO_MODE=1` (the missed-call ladder runs in under a minute) and `WEATHER_SOURCE=saved` (uses `data/seed/weather.json`). To record a morning at any hour, also set `DEMO_JAPAN_HOUR=9`: the app reads Japan time as 9 o'clock when the server starts, and the clock runs on from there. Never set `DEMO_MODE=1` on a deployment that calls real residents: every call becomes a short demo call with a lighter health check.
 
 ## License
 

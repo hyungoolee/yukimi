@@ -4,6 +4,7 @@
 // the resident says the problem is gone. One row per kind; the wording is fixed, never generated.
 // To add a kind: a row here, the rule that raises it (lib/rules.ts), and a persona in evals/personas.json.
 import type { MeasureField } from "./measures.ts";
+import { JAPAN_TZ } from "./env.ts";
 import { daysBefore, japanDate } from "./trends.ts";
 import type { CallRecord, Contact, Person, RequestRun, Resident, Role, Slot, Told } from "./types";
 
@@ -117,7 +118,7 @@ export function askedHelpers(resident: Resident, calls: CallRecord[], kind: Requ
 /** 「山本さん」: some names are saved with their さん already (「隣の高田さん」). */
 export const san = (name: string) => (name.endsWith("さん") ? name : `${name}さん`);
 
-export const japanHour = (now: Date) => Number(now.toLocaleTimeString("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit" }));
+export const japanHour = (now: Date) => Number(now.toLocaleTimeString("en-GB", { timeZone: JAPAN_TZ, hour: "2-digit" }));
 const parts = ["am", "pm"] as const;
 const index = (slot: Slot) => slot.date + (slot.part === "am" ? "0" : "1"); // sorts in time order
 
