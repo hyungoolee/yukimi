@@ -68,7 +68,7 @@ describe("mapData", () => {
   });
 
   it("draws a volunteer shared by several residents once", () => {
-    expect(mapData(rankedRows(people, []), []).volunteers).toEqual([{ key: volunteerKey(volunteer), id: volunteer.id, name: "山本", location: volunteer.location }]);
+    expect(mapData(rankedRows(people, []), []).volunteers).toEqual([{ key: volunteerKey(volunteer), id: volunteer.id, name: "山本", business: false, location: volunteer.location }]);
   });
 });
 

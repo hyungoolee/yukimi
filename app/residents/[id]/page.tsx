@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLadder, getResident, listCalls, listPeople } from "@/lib/store";
-import { coverage, eligible, reach, ROLES } from "@/lib/coverage";
+import { coverage, eligible, reach, ROLES, SNOW_NEXT_SLOTS } from "@/lib/coverage";
 import { assignRoles } from "../../people/actions";
 import { AddFamily } from "../../people/add-family";
 import { DEMO_MODE } from "@/lib/env";
 import { running } from "@/lib/ladder";
 import { reasonText, type Lang, type Strings } from "@/lib/i18n";
 import type { Extraction } from "@/lib/types";
-import { acceptDemo, deleteFollowUp, setActive, simulateNoAnswer } from "../../actions";
+import { acceptDemo, deleteFollowUp, restartLine, setActive, simulateNoAnswer } from "../../actions";
 import { getStrings } from "../../lang";
 import { BrowserCall } from "./browser-call";
 import { CallNowButton, CallStatus, MarkHandledButton } from "../../resident-card";
@@ -19,7 +19,7 @@ import { MemoryEditor } from "./memory-editor";
 import { PhoneForm } from "./phone-form";
 import { SaveOnChange } from "../../save-on-change";
 import { rankedRows } from "@/lib/dashboard";
-import { arranged, REQUESTS, slotChoices, slotLabel } from "@/lib/requests";
+import { arranged, REQUESTS, restartable, slotChoices, slotLabel } from "@/lib/requests";
 import { WeekGrid } from "./week-grid";
 import { openFollowUps } from "@/lib/memory";
 import { dailyObservations, japanDate, lastWeek } from "@/lib/trends";
@@ -86,6 +86,14 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             </a>
           )}
           <BrowserCall residentId={resident.id} translate={lang === "en"} labels={{ ...callLabels, start: t.browserCall }} />
+          {/* Who is in line is fixed for a request under way; this makes a change to the line count for it now. */}
+          {requests.filter(restartable).map((r) => (
+            <form key={`restart-${r.kind}`} action={restartLine}>
+              <input type="hidden" name="resident_id" value={resident.id} />
+              <input type="hidden" name="kind" value={r.kind} />
+              <SubmitButton pending={t.saving}>{t.restartLine(r)}</SubmitButton>
+            </form>
+          ))}
           <MarkHandledButton call={current} t={t} />
         </div>
         {DEMO_MODE && (
@@ -172,10 +180,10 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
                           <div>{t.messageNotRecorded}</div>
                         </li>,
                       ]
-                    : a.deliveries.map((d) => (
-                        <li key={`${a.type}-${d.role}`} className="rounded border border-zinc-200 p-2">
+                    : a.deliveries.map((d, i) => (
+                        <li key={`${a.type}-${d.role}-${i}`} className="rounded border border-zinc-200 p-2">
                           <div className="text-zinc-500">
-                            → {resident[d.role].name}
+                            → {d.name ?? resident[d.role].name}
                             <span className={d.sent ? "ml-2 text-emerald-700" : "ml-2 text-amber-700"}>
                               {d.sent ? t.messageDelivered : d.registered ? t.messageFailed : t.messageUnregistered}
                             </span>
@@ -258,7 +266,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             >
               <option value="">{t.vacant}</option>
               {everyone.filter((person) => eligible(person, role, resident)).map((person) => (
-                <option key={person.id} value={person.id}>{person.name}</option>
+                <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
               ))}
             </select>
             <span className={reach(resident[role]) === "registered" ? "text-zinc-500" : "text-red-700"}>
@@ -266,6 +274,32 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
             </span>
           </div>
         ))}
+        {/* Who is asked to clear snow when the first person doesn't take it, in order. Each place saves on its own. */}
+        {Array.from({ length: SNOW_NEXT_SLOTS }, (_, i) => {
+          const next = resident.snow_next?.[i];
+          return (
+            <div key={`snow_next_${i}`} className="flex flex-wrap items-center gap-2">
+              <label htmlFor={`snow_next_${i}`} className="w-32 text-zinc-500">{t.snowNext(i + 2)}</label>
+              <select
+                key={next?.id ?? ""}
+                id={`snow_next_${i}`}
+                name={`snow_next_${i}`}
+                defaultValue={next?.id ?? ""}
+                className="w-48 rounded border border-zinc-300 bg-white py-1 pr-8 pl-2"
+              >
+                <option value="">{t.vacant}</option>
+                {/* Not whoever is first in line already: they would be asked twice. */}
+                {everyone.filter((person) => person.id !== resident.snow_volunteer.id && eligible(person, "snow_volunteer", resident)).map((person) => (
+                  <option key={person.id} value={person.id}>{person.name}{person.kind === "business" ? t.businessMark : ""}</option>
+                ))}
+              </select>
+              {next && (
+                <span className={reach(next) === "registered" ? "text-zinc-500" : "text-red-700"}>{t.reach[reach(next)]}</span>
+              )}
+            </div>
+          );
+        })}
+        <p className="text-zinc-500 sm:pl-34">{t.snowLineHelp}</p>
       </SaveOnChange>
       {gaps.length > 0 && (
         <ul className={`mt-2 list-disc pl-5 text-sm ${level === "critical" ? "font-medium text-red-700" : "text-zinc-700"}`}>
@@ -282,6 +316,16 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         initial={resident.snow_volunteer.location}
         labels={t.picker}
       />
+      {(resident.snow_next ?? []).map((c, i) => (
+        <LocationPicker
+          key={c.id}
+          residentId={resident.id}
+          who={`snow_next_${i}`}
+          label={c.kind === "business" ? `${c.name}${t.businessMark}` : t.volunteer(c.name)}
+          initial={c.location}
+          labels={t.picker}
+        />
+      ))}
       <form action={setActive} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
         <input type="hidden" name="resident_id" value={resident.id} />
         <input type="hidden" name="active" value={resident.active === false ? "1" : "0"} />
