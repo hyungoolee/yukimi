@@ -91,9 +91,10 @@ const ja = {
   captionWaiting: "通話中。ここに会話が表示されます…",
   noAnswerDemo: "電話に出ない（デモ）",
   // The missed-call steps (lib/ladder.ts), as the resident's page shows them.
-  ladderSteps: (contact: string) => ["電話に出ない", "もう一度かける", `${contact ? san(contact) : "家族"}に確認`, "通報"],
+  // Not 通報: that reads as calling 110/119. The last step is a LINE alert to the helper and family.
+  ladderSteps: (contact: string) => ["電話に出ない", "もう一度かける", `${contact ? san(contact) : "家族"}に確認`, "緊急連絡"],
   ladderFine: "無事を確認",
-  seconds: "秒",
+  countdown: { s: "秒", min: "分" },
   resetDemo: "デモをリセット",
   callLog: "通話の記録",
   noCalls: "まだ通話がありません",
@@ -272,7 +273,7 @@ const en: typeof ja = {
   noAnswerDemo: "No answer (demo)",
   ladderSteps: (contact) => ["No answer", "Calling again", `Asking ${contact || "family"}`, "Alert"],
   ladderFine: "Confirmed fine",
-  seconds: " s",
+  countdown: { s: " s", min: " min" },
   resetDemo: "Reset demo",
   callLog: "Call log",
   noCalls: "No calls yet",

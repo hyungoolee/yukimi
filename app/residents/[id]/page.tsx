@@ -52,7 +52,7 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
   const { call: current, requests = [] } = rankedRows([resident], calls)[0]; // the same call the list shows
   const [nextSlot] = slotChoices();
   const { gaps, level } = coverage(resident);
-  const ladderEnd = ladder ? undefined : endedLadder(current);
+  const ladderEnd = ladder ? undefined : endedLadder(calls[0]); // the newest call, not the one the list ranks first
   const ladderSteps = t.ladderSteps(resident.second_contact.name);
   if (ladderEnd === "green") ladderSteps[3] = t.ladderFine;
   const callLabels = {
@@ -82,9 +82,9 @@ export default async function ResidentPage({ params }: PageProps<"/residents/[id
         </div>
         <CallStatus resident={resident} call={current} requests={requests} lang={lang} t={t} />
         {ladder && (
-          <LadderStrip steps={ladderSteps} current={ladder.stage === "retry" ? 1 : 2} nextAt={nextStepAt(ladder)} unit={t.seconds} />
+          <LadderStrip steps={ladderSteps} current={ladder.stage === "retry" ? 1 : 2} nextAt={nextStepAt(ladder)} units={t.countdown} />
         )}
-        {ladderEnd && <LadderStrip steps={ladderSteps} current={3} end={ladderEnd} unit={t.seconds} />}
+        {ladderEnd && <LadderStrip steps={ladderSteps} current={3} end={ladderEnd} units={t.countdown} />}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <CallNowButton resident={resident} t={t} />
           {!resident.phone && (
