@@ -1,4 +1,5 @@
 import { MEASURES } from "./measures";
+import type { SnowRequest } from "./dashboard";
 import { REQUESTS, slotLabel, type OpenRequest } from "./requests";
 import { SHORT_OF_SUPPLIES, UNCONFIRMED } from "./rules";
 import type { Resident } from "./types";
@@ -47,9 +48,10 @@ const ja = {
   badge: { red: "すぐ確認", yellow: "訪問リスト", green: "問題なし", none: "通話なし" },
   request: (r: OpenRequest) =>
     `${REQUESTS[r.kind].label.ja}：${
-      r.status === "not_sent" ? "送信できていません" : r.status === "sent" ? "返事待ち" : `${r.who}さんが引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
+      r.status === "not_sent" ? "送信できていません" : r.exhausted ? "順番の全員に頼みましたが、引き受け手がいません" : r.status === "sent" ? `${r.who}${r.business ? "" : "さん"}の返事待ち` : `${r.who}${r.business ? "" : "さん"}が引き受けました${r.slot ? `（${slotLabel(r.slot)}）` : ""}`
     }${r.status === "accepted" ? told(r, "ja") : `（${waited(r, "ja")}${r.escalated ? "・コーディネーターに連絡済み" : ""}）`}`,
   acceptDemo: (r: OpenRequest, when: string) => `${REQUESTS[r.kind].label.ja}を${when}で引き受ける（デモ）`,
+  restartLine: (r: OpenRequest) => `${REQUESTS[r.kind].label.ja}を、今の順番で最初から頼み直す`,
   newsCallDemo: (r: OpenRequest) => `${REQUESTS[r.kind].label.ja}のお知らせをブラウザで（デモ）`,
   messagesSent: "送ったメッセージ",
   messageDelivered: "LINEで送信済み",
@@ -140,8 +142,12 @@ const ja = {
   noLocation: "この方の位置はまだ登録されていません。",
   placeHome: "自宅を地図で登録",
   openPerson: "詳しく見る",
-  requestStatus: (volunteer: string, status: "not_sent" | "sent" | "accepted") =>
-    `${volunteer}さんへ：${{ not_sent: "送信できていません", sent: "送信済み・返事待ち", accepted: "引き受け済み" }[status]}`,
+  requestStatus: (r: SnowRequest) =>
+    r.status === "not_sent"
+      ? "除雪のお願い：送信できていません"
+      : r.exhausted
+        ? `除雪のお願い：順番の全員に頼みましたが、引き受け手がいません（${r.escalated ? "コーディネーターに連絡済み" : "コーディネーターには未連絡"}）`
+        : `${r.volunteer}${r.business ? "" : "さん"}へ：${{ sent: "送信済み・返事待ち", accepted: "引き受け済み" }[r.status]}`,
   straightLine: (km: number) => `（直線で約${km.toFixed(1)} km）`,
   home: "自宅",
   volunteer: (name: string) => `除雪ボランティア ${name}さん`,
@@ -159,8 +165,13 @@ const ja = {
     helper_unreachable: "民生委員に連絡できません（民生委員だけに送る通知、判定できなかった通話の知らせが届きません）",
     family_unreachable: "家族に連絡できません（不在時の確認ができません）",
     snow_unreachable: "除雪の協力員に連絡できません",
+    paid_unconfirmed: "除雪の順番に、あとから事業者（有料）になった人がいます。ご家族の了承を確かめて、この方の設定でその人を選び直すまで、その人にはお願いしません",
   },
   role: { helper: "民生委員", second_contact: "家族", snow_volunteer: "除雪" },
+  snowNext: (n: number) => `除雪（${n}番目に頼む）`,
+  business: "事業者（有料）",
+  businessMark: "（有料）",
+  snowLineHelp: "除雪は上から順にお願いします。引き受け手がないと次の人へ。順番を変えても、お願い中の件はそのままです（すぐ反映するには「今の順番で最初から頼み直す」）。事業者（有料）は、ご家族の了承を得てから入れてください。お願いしたときは、家族にLINEで知らせます。",
   reach: { none: "未定", unregistered: "LINE未登録", registered: "LINE登録済み" },
   coordinator: "コーディネーター（引き受け手のないお願いの連絡先）",
   coordinatorShort: "コーディネーター",
@@ -215,9 +226,10 @@ const en: typeof ja = {
   badge: { red: "Check now", yellow: "Visit list", green: "All fine", none: "No calls" },
   request: (r) =>
     `${REQUESTS[r.kind].label.en}: ${
-      r.status === "not_sent" ? "request could not be sent" : r.status === "sent" ? "asked, waiting for a reply" : `accepted${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
+      r.status === "not_sent" ? "request could not be sent" : r.exhausted ? "everyone in line was asked and nobody took it" : r.status === "sent" ? `${r.who} asked, waiting for a reply` : `accepted by ${r.who}${r.slot ? `, coming ${slotLabel(r.slot, new Date(), "en")}` : ""}`
     }${r.status === "accepted" ? told(r, "en") : ` (${waited(r, "en")}${r.escalated ? ", coordinator told" : ""})`}`,
   acceptDemo: (r, when) => `${REQUESTS[r.kind].label.en}: accept for ${when} (demo)`,
+  restartLine: (r) => `${REQUESTS[r.kind].label.en}: ask again from the top, in today’s order`,
   newsCallDemo: (r) => `${REQUESTS[r.kind].label.en}: news call in browser (demo)`,
   messagesSent: "Messages sent",
   messageDelivered: "sent by LINE",
@@ -308,8 +320,12 @@ const en: typeof ja = {
   noLocation: "This resident has no location yet.",
   placeHome: "Place their home",
   openPerson: "Open their page",
-  requestStatus: (_volunteer, status) =>
-    `Snow volunteer: ${{ not_sent: "request could not be sent", sent: "asked, waiting for a reply", accepted: "accepted" }[status]}`,
+  requestStatus: (r) =>
+    r.status === "not_sent"
+      ? "Snow clearing: request could not be sent"
+      : r.exhausted
+        ? `Snow clearing: everyone in line was asked and nobody took it (${r.escalated ? "coordinator told" : "coordinator not told yet"})`
+        : `${r.volunteer}: ${{ sent: "asked, waiting for a reply", accepted: "accepted" }[r.status]}`,
   straightLine: (km) => ` (about ${km.toFixed(1)} km in a straight line)`,
   home: "Home",
   volunteer: () => "Snow volunteer",
@@ -327,8 +343,13 @@ const en: typeof ja = {
     helper_unreachable: "The helper can't be reached (alerts sent only to the helper, and notices about calls the app couldn't judge, reach nobody)",
     family_unreachable: "The family contact can't be reached (nobody to ask after a missed call)",
     snow_unreachable: "The snow helper can't be reached",
+    paid_unconfirmed: "Someone in the snow line was marked as a business (paid) after being put in line. They are not asked until the family has agreed and they are chosen again in this resident’s settings",
   },
   role: { helper: "Helper", second_contact: "Family", snow_volunteer: "Snow helper" },
+  snowNext: (n) => `Snow helper (asked ${n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`})`,
+  business: "Business (charges)",
+  businessMark: " (paid)",
+  snowLineHelp: "Snow helpers are asked in order; if nobody takes the request it moves to the next. A change here applies to the next request; to use it for one under way, press “ask again from the top”. Add a business (paid) only once the family has agreed; when it is asked, the family is told on LINE.",
   reach: { none: "Nobody assigned", unregistered: "Not on LINE", registered: "On LINE" },
   coordinator: "Coordinator (told when a help request has nobody on it)",
   coordinatorShort: "Coordinators",
