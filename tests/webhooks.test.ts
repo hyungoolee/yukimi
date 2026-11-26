@@ -1392,6 +1392,27 @@ describe("help requests", () => {
     expect((await requestsOf("conv_h6"))[0]).toMatchObject({ accepted_by: "山本", slot: { part: expect.any(String) } });
   });
 
+  it("starts the news call in the browser once the request is accepted, in demo mode", async () => {
+    await closeRequests("suzuki");
+    await heard("conv_h13", true, false);
+    const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ token: "tok_news" })));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.ELEVENLABS_NEWS_AGENT_ID = "news_agent_test";
+    const { acceptDemo, startBrowserNewsCall } = await import("@/app/actions");
+    expect(await startBrowserNewsCall("conv_h13", "snow")).toEqual({ error: "No accepted request to tell her about" });
+    const form = new FormData();
+    form.set("call_id", "conv_h13");
+    form.set("kind", "snow");
+    await acceptDemo(form);
+    const started = await startBrowserNewsCall("conv_h13", "snow");
+    if ("error" in started) throw new Error(started.error);
+    expect(started.token).toBe("tok_news");
+    expect(String(fetchMock.mock.calls.at(-1)![0])).toContain("agent_id=news_agent_test");
+    // The variables the webhook reads to record the call on the request (purpose "news").
+    expect(started.variables).toMatchObject({ resident_id: "suzuki", purpose: "news", call_id: "conv_h13", request_kind: "snow", channel: "browser" });
+    expect(started.variables.news).toMatch(/^山本さんが.+に/);
+  });
+
   it("reads a record from before requests had kinds", async () => {
     const { writeFileSync } = await import("node:fs");
     const old = { id: "conv_old", resident_id: "suzuki", at: "2026-11-20T00:00:00.000Z", kind: "call", risk: "yellow", reasons: [],
