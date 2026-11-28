@@ -1,5 +1,7 @@
 # Yukimi
 
+Demo Video: https://www.youtube.com/watch?v=V_D5jwYFZCE
+
 Winter check-in calls for older residents of Hokkaido. Hackathon MVP; all residents are fictional.
 
 ```bash
